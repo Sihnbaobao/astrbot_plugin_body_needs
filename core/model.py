@@ -44,7 +44,11 @@ SKIN_SLEEP = 0.55
 SKIN_PERIOD_EXTRA = 0.8
 SKIN_PUBERTY_EXTRA = 0.15
 PUBERTY_END = 18
-MENARCHE_AGE = 13
+MENARCHE_MIN = 10.0
+MENARCHE_SPAN = 5.0
+MENOPAUSE_AGE = 50
+PAD_HOURS = 4.0
+PAD_RESTOCK = 20
 ORAL_AWAKE = 2.8
 ORAL_SLEEP = 1.3
 SLEEP_DEBT_AWAKE = 0.55
@@ -166,6 +170,9 @@ class BodyState:
     period_length: int = 5
     cycle_phase: str = ""
     cycle_start: str = ""
+    pads: int = 12
+    pad_hours: float = 0.0
+    last_supply_at: float = 0.0
     last_eat_at: float = 0.0
     last_drink_at: float = 0.0
     last_shower_at: float = 0.0
@@ -204,6 +211,9 @@ class BodyState:
             "period_length": self.period_length,
             "cycle_phase": self.cycle_phase,
             "cycle_start": self.cycle_start,
+            "pads": self.pads,
+            "pad_hours": self.pad_hours,
+            "last_supply_at": self.last_supply_at,
             "last_eat_at": self.last_eat_at,
             "last_drink_at": self.last_drink_at,
             "last_shower_at": self.last_shower_at,
@@ -299,6 +309,9 @@ class BodyState:
         state.period_length = int(_number(data.get("period_length"), 5))
         state.cycle_phase = str(data.get("cycle_phase") or "")
         state.cycle_start = str(data.get("cycle_start") or "")
+        state.pads = max(0, int(_number(data.get("pads"), 12)))
+        state.pad_hours = max(0.0, _number(data.get("pad_hours"), 0.0))
+        state.last_supply_at = _number(data.get("last_supply_at"), 0.0)
         state.last_meal_kind = str(data.get("last_meal_kind") or "")
         events = data.get("events")
         if isinstance(events, list):
@@ -333,6 +346,11 @@ class CycleView:
     lh: float
     puberty: bool = False
     cycle_length: int = 28
+    anovulatory: bool = False
+    breast: int = 0
+    headache: int = 0
+    backache: int = 0
+    discharge: int = 0
 
 
 @dataclass(frozen=True)
@@ -354,6 +372,7 @@ ACTION_LABELS = {
     "brush": "刷了牙",
     "toilet": "去了厕所",
     "nap": "小睡了一会儿",
+    "supplies": "补了卫生用品",
     "intimacy": "亲密过后",
 }
 METER_TEXT = {
@@ -407,9 +426,31 @@ def sleep_seconds_between(
     return min(total, (end - start).total_seconds())
 
 
-def _is_pubertal(age: int | None) -> bool:
-    """Return whether an age still sits inside the puberty band."""
+def _is_pubertal(age: float | None) -> bool:
+    """Return whether a human-equivalent age sits inside the puberty band."""
     return age is not None and age < PUBERTY_END
+
+
+def _menarche_age(persona_id: str) -> float:
+    """Return the age of first menstruation for one persona.
+
+    Real menarche spreads over roughly ten to fifteen years of age, so each
+    persona gets a stable point in that range instead of a hard cut-off.
+    """
+    return MENARCHE_MIN + _roll(persona_id, "menarche") * MENARCHE_SPAN
+
+
+def _anovulatory_chance(age: float | None) -> float:
+    """Return how often a cycle skips ovulation at this age."""
+    if age is None:
+        return 0.08
+    if age < 16:
+        return 0.55
+    if age < 20:
+        return 0.25
+    if age < 45:
+        return 0.08
+    return 0.35
 
 
 def _cycle_length_for(
@@ -509,9 +550,26 @@ def _ensure_anchor(
     return anchor
 
 
-def _hormones(day: int, length: int, period: int) -> tuple[float, float, float]:
+def _hormones(
+    day: int,
+    length: int,
+    period: int,
+    anovulatory: bool = False,
+) -> tuple[float, float, float]:
     """Return simplified estrogen, progesterone and LH for one cycle day."""
     ovulation = length // 2 + 1
+    if anovulatory:
+        # No corpus luteum: estrogen rises and falls again, progesterone and
+        # LH stay flat and the bleeding that follows is a withdrawal bleed.
+        if day <= period:
+            estrogen = 15.0 + 8.0 * math.sin(math.pi * day / max(1, period))
+        elif day < ovulation:
+            progress = (day - period) / max(1, ovulation - period)
+            estrogen = 20.0 + 45.0 * progress
+        else:
+            progress = (day - ovulation) / max(1, length - ovulation)
+            estrogen = 65.0 - 45.0 * progress
+        return _clamp(estrogen), 5.0, 12.0
     if day <= period:
         estrogen = 15.0 + 8.0 * math.sin(math.pi * day / max(1, period))
         progesterone = 5.0
@@ -543,9 +601,12 @@ def cycle_view(
     if not settings.enable_cycle or profile.gender != "female":
         return None
 
-    age = profile.age
+    age = profile.physio_age
     pubertal = _is_pubertal(age)
-    if age is not None and age < MENARCHE_AGE:
+    if age is None:
+        # An unknown age is treated as adult: no puberty, no menopause.
+        pass
+    elif age < _menarche_age(profile.persona_id):
         return CycleView(
             cycle_start=now.date(),
             day=0,
@@ -561,6 +622,24 @@ def cycle_view(
             lh=6.0,
             puberty=True,
             cycle_length=max(21, profile.cycle_length),
+            discharge=1,
+        )
+    elif age >= MENOPAUSE_AGE:
+        return CycleView(
+            cycle_start=now.date(),
+            day=0,
+            phase="menopause",
+            flow=0,
+            cramps=0,
+            mood=0,
+            appetite=0,
+            days_to_next=0,
+            note="已经绝经，周期停了",
+            estrogen=12.0,
+            progesterone=3.0,
+            lh=35.0,
+            cycle_length=max(21, profile.cycle_length),
+            discharge=0,
         )
 
     anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
@@ -574,8 +653,13 @@ def cycle_view(
     length = max(1, length)
     period = max(1, min(profile.period_length, length - 1))
     ovulation_day = length // 2 + 1
+    anovulatory = _roll(
+        profile.persona_id, start.isoformat(), "ovulation"
+    ) < _anovulatory_chance(age)
     if day <= period:
         phase = "menstrual"
+    elif anovulatory:
+        phase = "luteal" if day > ovulation_day + 1 else "follicular"
     elif abs(day - ovulation_day) <= 1:
         phase = "ovulation"
     elif day > ovulation_day + 1:
@@ -583,25 +667,33 @@ def cycle_view(
     else:
         phase = "follicular"
 
-    estrogen, progesterone, lh = _hormones(day, length, period)
+    estrogen, progesterone, lh = _hormones(day, length, period, anovulatory)
     rng = random.Random(int(_roll(profile.persona_id, start.isoformat()) * 1_000_000))
     flow = 0
     cramps = 0
     mood = 0
     appetite = 0
+    breast = 0
+    headache = 0
+    backache = 0
     note = ""
     if phase == "menstrual":
         flow = 3 if day <= 2 else (2 if day <= 4 else 1)
         cramps = min(3, 1 + (1 if day <= 2 else 0) + rng.randint(0, 1))
         if pubertal and rng.random() < 0.35:
             cramps = min(3, cramps + 1)
+        backache = rng.choice([0, 1, 2]) if cramps >= 2 else rng.randint(0, 1)
         mood = -1 if day <= 2 else 0
         appetite = rng.choice([-1, 0, 0, 1])
         note = "小腹坠胀，腰有点酸" if cramps >= 2 else "小腹有点坠"
     elif phase == "luteal":
         days_left = max(1, length - day + 1)
+        premenstrual = days_left <= 7
         cramps = rng.choice([0, 0, 1]) if days_left <= 4 else 0
-        mood = -1 - (1 if progesterone > 45 else 0)
+        breast = rng.choice([0, 1, 1, 2]) if premenstrual else 0
+        headache = rng.choice([0, 0, 1, 2]) if days_left <= 5 else 0
+        backache = rng.choice([0, 1, 2]) if days_left <= 4 else 0
+        mood = -1 - (1 if progesterone > 45 else 0) - (1 if breast >= 2 else 0)
         if pubertal:
             mood = max(-3, mood - 1)
         appetite = 1
@@ -609,13 +701,25 @@ def cycle_view(
             note = "经期快到了，情绪起伏比平时大，胃口也大一点"
         elif days_left <= 6:
             note = "经期快到了，容易烦躁，胃口也大一点"
+        elif anovulatory:
+            note = "这个周期没有排卵，身体还是在照常准备"
         else:
             note = "排卵后，身体开始为经期做准备"
     elif phase == "ovulation":
         mood = 1
-        note = "排卵期，精力比前几天好"
+        breast = 1
+        note = "精力比前几天好"
     else:
         note = "经期后，身体轻快"
+
+    mood = max(-3, mood)
+    if phase in ("menstrual", "ovulation"):
+        discharge = 3
+    elif phase == "follicular":
+        soon = not anovulatory and (ovulation_day - day) <= 3
+        discharge = 2 if soon else 1
+    else:
+        discharge = 2 if (length - day) > 7 else 1
 
     return CycleView(
         cycle_start=start,
@@ -632,6 +736,11 @@ def cycle_view(
         lh=lh,
         puberty=pubertal,
         cycle_length=length,
+        anovulatory=anovulatory,
+        breast=breast,
+        headache=headache,
+        backache=backache,
+        discharge=discharge,
     )
 
 
@@ -657,7 +766,7 @@ def _advance_cycle_events(
     view: CycleView | None,
 ) -> None:
     """Record period and phase transitions without duplicating them."""
-    if view is None or view.phase == "premenarche":
+    if view is None or view.phase in ("premenarche", "menopause"):
         state.cycle_phase = ""
         state.cycle_start = ""
         return
@@ -690,7 +799,7 @@ def _advance_cycle_events(
 def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> float:
     """Return the daily desire increase for the current profile."""
     if profile.gender == "male":
-        age = profile.age or 30
+        age = profile.physio_age or 30
         if age < 20:
             return 2.0
         if age < 30:
@@ -708,7 +817,7 @@ def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> 
     return rate
 
 
-def _emission_age_factor(age: int) -> float:
+def _emission_age_factor(age: float) -> float:
     """Return the age multiplier applied to nocturnal-emission odds.
 
     Emissions peak in the late teens and early twenties and become rare from
@@ -734,7 +843,7 @@ def _emission_age_factor(age: int) -> float:
     return 0.1
 
 
-def _morning_age_factor(age: int) -> float:
+def _morning_age_factor(age: float) -> float:
     """Return the age multiplier for morning-erection odds.
 
     Morning erections are most frequent in the late teens and twenties and
@@ -784,7 +893,9 @@ def _advance_male_events(
                 days = (night.timestamp() - state.last_release_at) / 86400
                 sleep_bonus = max(0.0, state.sleep_debt - 6.0) * 0.008
                 base = max(0.0, (days - 2) * 0.10 + sleep_bonus)
-                chance = min(0.65, base * _emission_age_factor(profile.age or 30))
+                chance = min(
+                    0.65, base * _emission_age_factor(profile.physio_age or 30)
+                )
                 if (
                     days >= 2
                     and _roll(profile.persona_id, current.isoformat(), "wet") < chance
@@ -811,7 +922,7 @@ def _advance_male_events(
         if start_ts < morning.timestamp() <= now.timestamp():
             key = f"morning:{current.isoformat()}"
             base = 0.22 + max(0.0, 1.0 - state.sleep_debt / 12.0) * 0.14
-            chance = min(0.5, base * _morning_age_factor(profile.age or 30))
+            chance = min(0.5, base * _morning_age_factor(profile.physio_age or 30))
             if (
                 not state.flags.get(key)
                 and _roll(profile.persona_id, current.isoformat(), "morning") < chance
@@ -987,11 +1098,28 @@ def advance(
         else:
             state.desire = 0.0
 
+        if in_period:
+            state.pad_hours += step_hours * awake_fraction
+            while state.pad_hours >= PAD_HOURS:
+                state.pad_hours -= PAD_HOURS
+                if state.pads > 0:
+                    state.pads -= 1
+        else:
+            state.pad_hours = 0.0
+
         cursor = chunk_end
         remaining -= step_seconds
 
     _recompute_primary(state, now, profile, settings, in_period)
     _advance_cycle_events(state, now, profile, view)
+    if in_period and state.pads <= 0:
+        _add_event(
+            state,
+            now,
+            "supplies",
+            "卫生用品用完了，只能先凑合",
+            key=f"pads-empty:{now.date().isoformat()}",
+        )
     _advance_male_events(state, state.updated_at, now, profile, settings)
     state.updated_at = now_ts
     state.cycle_length = profile.cycle_length
@@ -1083,6 +1211,9 @@ def apply_action(
     elif action == "nap":
         state.sleep_debt = _clamp(state.sleep_debt - 2.5, 0.0, 24.0)
         state.last_nap_at = now_ts
+    elif action == "supplies":
+        state.pads += PAD_RESTOCK
+        state.last_supply_at = now_ts
     elif action == "intimacy":
         state.desire = 0.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.4, 0.0, 24.0)

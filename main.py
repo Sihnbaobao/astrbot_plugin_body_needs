@@ -60,6 +60,9 @@ ACTION_ALIASES = {
     "休息": "nap",
     "亲密": "intimacy",
     "舒缓": "intimacy",
+    "补货": "supplies",
+    "卫生巾": "supplies",
+    "卫生用品": "supplies",
 }
 
 # Page-editable config: key -> (Settings attribute, type).
@@ -67,6 +70,7 @@ CONFIG_SPEC: dict[str, tuple[str, type]] = {
     "ENABLED": ("enabled", bool),
     "GENDER": ("gender", str),
     "AGE": ("age", int),
+    "LIFESPAN": ("lifespan", int),
     "PERSONA_ID": ("persona_id", str),
     "TIMEZONE": ("timezone", str),
     "SLEEP_WINDOW": ("sleep_window", str),
@@ -91,7 +95,8 @@ CONFIG_OPTIONS: dict[str, tuple[str, ...]] = {
     "INTENSITY": ("subtle", "natural", "strong"),
 }
 CONFIG_RANGES: dict[str, tuple[int, int]] = {
-    "AGE": (0, 120),
+    "AGE": (0, 100000),
+    "LIFESPAN": (0, 100000),
     "CYCLE_LENGTH": (18, 45),
     "PERIOD_LENGTH": (2, 10),
     "EVENT_KEEP_DAYS": (1, 30),
@@ -509,6 +514,8 @@ class BodyNeedsPlugin(Star):
         actions = ["eat", "snack", "drink", "toilet", "nap"]
         if self.settings.enable_hygiene:
             actions.extend(["shower", "brush"])
+        if profile.gender == "female" and self.settings.enable_cycle:
+            actions.append("supplies")
         if private and profile.adult and self.settings.enable_intimate:
             actions.append("intimacy")
         tools = ToolSet()
@@ -526,7 +533,9 @@ class BodyNeedsPlugin(Star):
                 description=(
                     "记录自己真的做了一件照顾身体的事：吃饭、吃零食、喝水、"
                     + ("洗澡、刷牙、" if self.settings.enable_hygiene else "")
-                    + "上厕所、小睡。只有角色真的做了才调用，不要为了把数值清零而调用。"
+                    + "上厕所、小睡"
+                    + ("、补卫生用品" if profile.gender == "female" else "")
+                    + "。只有角色真的做了才调用，不要为了把数值清零而调用。"
                 ),
                 parameters={
                     "type": "object",
@@ -741,7 +750,7 @@ class BodyNeedsPlugin(Star):
         return (
             "身体指令：\n"
             "/身体 状态\n"
-            "/身体 喂 | 零食 | 喝水 | 洗澡 | 刷牙 | 上厕所 | 小睡\n"
+            "/身体 喂 | 零食 | 喝水 | 洗澡 | 刷牙 | 上厕所 | 小睡 | 补货\n"
             "/身体 经期 [状态|开始|延后 N|提前 N|设置 YYYY-MM-DD]\n"
             "/身体 重置\n"
             "改身体状态需要管理员权限；群聊里只看得到基础状态。"

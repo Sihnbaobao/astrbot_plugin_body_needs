@@ -9,10 +9,12 @@ import pytest
 
 from core.config import Settings
 from core.model import (
+    PAD_RESTOCK,
     BodyState,
     _cycle_length_for,
     _desire_rate,
     _emission_age_factor,
+    _menarche_age,
     _morning_age_factor,
     advance,
     apply_action,
@@ -221,6 +223,96 @@ def test_male_desire_rate_falls_with_age() -> None:
     ]
     assert rates == [2.0, 1.8, 1.4, 1.0]
     assert rates == sorted(rates, reverse=True)
+
+
+def test_menarche_varies_between_personas() -> None:
+    ages = {_menarche_age(pid) for pid in ("a", "b", "c", "d", "e", "f")}
+    assert len(ages) > 1
+    assert all(10.0 <= value <= 15.0 for value in ages)
+
+
+def test_menarche_is_not_a_fixed_cutoff() -> None:
+    now = datetime(2026, 11, 19, 9, 0, tzinfo=TZ)
+    phases = set()
+    for index in range(20):
+        pid = f"kid{index}"
+        state = make_state(now)
+        state.cycle_anchor = "2026-11-01"
+        profile = Profile(pid, "kid", "female", 12, True, 28, 5)
+        phases.add(cycle_view(state, now, profile, Settings()).phase)
+    assert "premenarche" in phases
+    assert any(phase != "premenarche" for phase in phases)
+
+
+def test_menopause_stops_the_cycle() -> None:
+    now = datetime(2026, 11, 19, 9, 0, tzinfo=TZ)
+    state = make_state(now)
+    view = cycle_view(state, now, make_profile(age=55), Settings())
+    assert view is not None
+    assert view.phase == "menopause"
+    assert view.flow == 0
+
+
+def test_long_lived_species_scale_to_human_age() -> None:
+    now = datetime(2026, 11, 19, 9, 0, tzinfo=TZ)
+    elf = Profile(
+        "elf",
+        "elf",
+        "female",
+        300,
+        True,
+        28,
+        5,
+        race="精灵",
+        lifespan=1200,
+    )
+    assert elf.physio_age == 20.0
+    # A human-scale age keeps its literal meaning even for a long-lived race.
+    girl = Profile("g", "g", "female", 17, True, 28, 5, race="精灵", lifespan=1200)
+    assert girl.physio_age == 17.0
+    view = cycle_view(make_state(now), now, elf, Settings())
+    assert view is not None
+    assert view.phase not in ("premenarche", "menopause")
+
+
+def test_anovulatory_cycle_never_reports_ovulation() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    checked = 0
+    for index in range(30):
+        pid = f"anov{index}"
+        profile = Profile(pid, "t", "female", 15, True, 28, 5)
+        state = make_state(start)
+        state.cycle_anchor = "2026-11-01"
+        view = cycle_view(state, start, profile, settings)
+        if not view.anovulatory:
+            continue
+        checked += 1
+        for offset in range(view.cycle_length):
+            moment = start + timedelta(days=offset)
+            scan = cycle_view(state, moment, profile, settings)
+            assert scan.phase != "ovulation"
+    assert checked > 0
+
+
+def test_supplies_are_used_during_a_period() -> None:
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=TZ)
+    profile = make_profile(age=25)
+    state = make_state(now - timedelta(hours=12))
+    state.cycle_anchor = "2026-11-01"
+    state.pads = 5
+    advance(state, now, profile, Settings())
+    assert state.pads < 5
+
+
+def test_supplies_action_restocks() -> None:
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=TZ)
+    profile = make_profile(age=25)
+    state = make_state(now)
+    state.cycle_anchor = "2026-11-01"
+    state.pads = 0
+    apply_action(state, "supplies", now, profile, Settings())
+    assert state.pads == PAD_RESTOCK
 
 
 def test_morning_odds_fall_with_age() -> None:

@@ -47,8 +47,24 @@ _GENDER_HINTS = (
     (re.compile(r"(?:性别|gender)\s*[:：=]?\s*(?:男|male)", re.IGNORECASE), "male"),
 )
 _AGE_PATTERNS = (
-    re.compile(r"(?<!\d)(\d{1,2})\s*(?:岁|歲)"),
-    re.compile(r"(?:年龄|年齡|age)\s*[:：=]?\s*(\d{1,2})", re.IGNORECASE),
+    re.compile(r"(?<!\d)(\d{1,5})\s*(?:岁|歲)"),
+    re.compile(r"(?:年龄|年齡|age)\s*[:：=]?\s*(\d{1,5})", re.IGNORECASE),
+)
+# Lifespan of one ordinary human year, used to map fantasy ages onto the human
+# curves: an elf of 300 in a 1200-year species is physiologically about 20.
+HUMAN_LIFESPAN = 80
+# Ages at or below this stay literal: a prompt saying "精灵少女，17岁" means a
+# seventeen-year-old, not a toddler of the same species. Only ages that no
+# human could have are mapped onto the species lifespan.
+PHYSIO_SCALE_ABOVE = 100
+_RACE_HINTS = (
+    (("神族", "神明", "半神", "deity", "goddess"), "神族", 8000),
+    (("龙族", "龙人", "dragon"), "龙族", 5000),
+    (("恶魔", "魅魔", "魔女", "demon", "succubus"), "恶魔", 3000),
+    (("吸血鬼", "vampire"), "吸血鬼", 2000),
+    (("精灵", "elf"), "精灵", 1200),
+    (("天使", "angel"), "天使", 1000),
+    (("矮人", "dwarf"), "矮人", 250),
 )
 
 
@@ -65,6 +81,9 @@ class Profile:
         adult: Whether adult-only physiology is allowed.
         cycle_length: Cycle length in days from settings.
         period_length: Menstrual days from settings.
+        race: Detected species label, for display only.
+        lifespan: Species lifespan in years; the physiology curves are driven
+            by the human-equivalent age, not the raw one.
     """
 
     persona_id: str
@@ -74,6 +93,22 @@ class Profile:
     adult: bool
     cycle_length: int
     period_length: int
+    race: str = "人类"
+    lifespan: int = HUMAN_LIFESPAN
+
+    @property
+    def physio_age(self) -> float | None:
+        """Return the human-equivalent age used by every age curve.
+
+        Ages up to PHYSIO_SCALE_ABOVE are taken at face value so a written
+        number keeps its meaning; only longer spans are compressed onto the
+        species lifespan.
+        """
+        if self.age is None:
+            return None
+        if self.age <= PHYSIO_SCALE_ABOVE or self.lifespan <= HUMAN_LIFESPAN:
+            return float(self.age)
+        return self.age * HUMAN_LIFESPAN / max(1, self.lifespan)
 
 
 def gender_label(gender: str) -> str:
@@ -95,9 +130,25 @@ def detect_age(text: str) -> int | None:
     for pattern in _AGE_PATTERNS:
         for match in pattern.finditer(text):
             value = int(match.group(1))
-            if 1 <= value <= 120:
+            if 1 <= value <= 100000:
                 return value
     return None
+
+
+def detect_race(text: str) -> tuple[str, int]:
+    """Guess the species and its lifespan from a persona prompt.
+
+    Args:
+        text: The persona system prompt.
+
+    Returns:
+        A (label, lifespan) pair; humans when nothing matches.
+    """
+    lowered = (text or "").lower()
+    for words, label, span in _RACE_HINTS:
+        if any(word.lower() in lowered for word in words):
+            return label, span
+    return "人类", HUMAN_LIFESPAN
 
 
 def detect_gender(text: str) -> str:
@@ -156,6 +207,10 @@ def detect_profile(
     if age is None and settings.age > 0:
         age = settings.age
 
+    race, lifespan = detect_race(prompt)
+    if settings.lifespan > 0:
+        race, lifespan = "自定义", settings.lifespan
+
     # Age no longer participates in this decision: any persona whose gender can
     # be resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
     # check decide what actually reaches the model.
@@ -169,4 +224,6 @@ def detect_profile(
         adult=adult,
         cycle_length=settings.cycle_length,
         period_length=settings.period_length,
+        race=race,
+        lifespan=lifespan,
     )

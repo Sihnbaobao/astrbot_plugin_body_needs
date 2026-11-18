@@ -16,7 +16,8 @@ const CONFIG_FIELDS = [
     fields: [
       { key: "ENABLED", label: "启用身体系统", type: "bool", hint: "总开关；关闭后不再注入提示词，已有状态保留。" },
       { key: "GENDER", label: "生理性别", type: "select", options: ["auto", "female", "male", "none"], optionLabels: { auto: "自动识别", female: "女性", male: "男性", none: "不区分" }, hint: "auto 从人格正文判断；判断不准时手动指定。" },
-      { key: "AGE", label: "年龄兜底", type: "number", min: 0, max: 120, hint: "0 = 从人格读；人格里写明的年龄优先。" },
+      { key: "AGE", label: "年龄兜底", type: "number", min: 0, max: 100000, hint: "0 = 从人格读；只影响生理曲线，不限制功能。" },
+      { key: "LIFESPAN", label: "种族寿命", type: "number", min: 0, max: 100000, hint: "0 = 从人格认（精灵/恶魔/吸血鬼/矮人/龙族/天使/神族）；人类按 80 年。" },
       { key: "PERSONA_ID", label: "固定人格", type: "persona", hint: "留空 = 跟随当前会话；插件页显示 AstrBot 默认人格。选一个 = 固定这个人的身体。" },
       { key: "TIMEZONE", label: "时区", type: "text", hint: "如 Asia/Shanghai；留空用 AstrBot 全局时区。" },
     ],
@@ -242,9 +243,22 @@ function renderCycle(persona) {
   const host = el("cycleBody");
   host.replaceChildren();
 
-  if (cycle.phase === "premenarche") {
-    el("cyclePhase").textContent = cycle.phase_label || "未初潮";
-    host.appendChild(make("p", "cycle-note", cycle.note || "还没来初潮"));
+  if (cycle.phase === "premenarche" || cycle.phase === "menopause") {
+    el("cyclePhase").textContent = cycle.phase_label || "周期";
+    host.appendChild(make("p", "cycle-note", cycle.note || ""));
+    const raceRow = cycle.race
+      ? [["种族", cycle.race + (cycle.physio_age ? "（约人类 " + cycle.physio_age + " 岁）" : "")]]
+      : [];
+    if (raceRow.length) {
+      const facts = make("dl", "facts");
+      raceRow.forEach(function (pair) {
+        const row = document.createElement("div");
+        row.appendChild(make("dt", "", pair[0]));
+        row.appendChild(make("dd", "", pair[1]));
+        facts.appendChild(row);
+      });
+      host.appendChild(facts);
+    }
     return;
   }
 
@@ -257,11 +271,18 @@ function renderCycle(persona) {
   host.appendChild(hero);
 
   const facts = make("dl", "facts");
+  const symptomBits = [];
+  if (cycle.breast) symptomBits.push("乳房胀");
+  if (cycle.headache) symptomBits.push("头痛");
+  if (cycle.backache) symptomBits.push("腰酸");
   const rows = [
     ["下次", "约 " + cycle.days_to_next + " 天后"],
     ["经量", cycle.flow_label || "—"],
     ["小腹", crampText(cycle.cramps)],
     ["周期", cycle.cycle_length + " 天"],
+    ["分泌物", cycle.discharge_label || "—"],
+    ["经前", symptomBits.length ? symptomBits.join("、") : "—"],
+    ["用品", typeof cycle.pads === "number" ? cycle.pads + " 片" : "—"],
   ];
   rows.forEach(function (pair) {
     const row = document.createElement("div");

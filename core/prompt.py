@@ -48,8 +48,10 @@ PHASE_LABELS = {
     "ovulation": "排卵期",
     "luteal": "黄体期",
     "premenarche": "未初潮",
+    "menopause": "已绝经",
 }
 FLOW_LABELS = {1: "量少", 2: "量中等", 3: "量多"}
+DISCHARGE_LABELS = {0: "干爽", 1: "少量", 2: "偏多", 3: "蛋清样拉丝"}
 
 
 def hunger_label(value: float) -> str:
@@ -290,10 +292,30 @@ def _internal_line(state: BodyState, now: datetime) -> str:
     )
 
 
+def _symptom_text(view: CycleView) -> str:
+    """Return the premenstrual symptoms that are actually present."""
+    bits = []
+    if view.breast >= 2:
+        bits.append("乳房发胀")
+    elif view.breast == 1:
+        bits.append("胸口有点胀")
+    if view.headache >= 2:
+        bits.append("头痛")
+    elif view.headache == 1:
+        bits.append("头有点沉")
+    if view.backache >= 2:
+        bits.append("腰酸")
+    elif view.backache == 1:
+        bits.append("腰有点软")
+    return "、".join(bits)
+
+
 def _cycle_text(view: CycleView) -> str:
     """Build the one-line cycle description used in prompts and cards."""
     if view.phase == "premenarche":
         return f"青春期：{view.note}"
+    if view.phase == "menopause":
+        return f"妇科：{view.note}"
     if view.phase == "menstrual":
         flow = FLOW_LABELS.get(view.flow, "")
         detail = "，".join(part for part in (flow, view.note) if part)
@@ -304,9 +326,27 @@ def _cycle_text(view: CycleView) -> str:
         text = f"周期：排卵期，{view.note}；距下次约 {view.days_to_next} 天"
     else:
         text = f"周期：第 {view.day} 天（经期后），距下次约 {view.days_to_next} 天"
+    symptoms = _symptom_text(view) if view.phase != "menstrual" else ""
+    if symptoms:
+        text += f"；{symptoms}"
+    if view.phase != "menstrual":
+        label = DISCHARGE_LABELS.get(view.discharge, "")
+        if label:
+            text += f"；分泌物{label}"
+    if view.anovulatory:
+        text += "；本周期无排卵"
     if view.puberty:
         text += "（青春期，周期还不太规律）"
     return text
+
+
+def _supply_text(state: BodyState, view: CycleView | None) -> str:
+    """Return the sanitary-supply line, only while it matters."""
+    if view is None or view.phase != "menstrual":
+        return ""
+    if state.pads <= 0:
+        return "卫生用品：已经用完了"
+    return f"卫生用品：还剩 {state.pads} 片"
 
 
 def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
@@ -416,6 +456,9 @@ def build_prompt_block(
         lines.append(_internal_line(state, now))
     if view is not None and (show_private or full_group):
         lines.append(_cycle_text(view))
+        supply = _supply_text(state, view) if show_private else ""
+        if supply:
+            lines.append(supply)
     if show_private and settings.enable_intimate and profile.adult:
         male = _male_text(state, now, profile)
         if male:
@@ -618,6 +661,17 @@ def build_web_state(
             "cramps": view.cramps,
             "mood": view.mood,
             "appetite": view.appetite,
+            "anovulatory": view.anovulatory,
+            "breast": view.breast,
+            "headache": view.headache,
+            "backache": view.backache,
+            "discharge": view.discharge,
+            "discharge_label": DISCHARGE_LABELS.get(view.discharge, ""),
+            "pads": state.pads,
+            "race": profile.race,
+            "physio_age": (
+                round(profile.physio_age, 1) if profile.physio_age is not None else None
+            ),
             "note": view.note,
             "start": view.cycle_start.isoformat(),
             "progress": round(view.day / max(1, view.cycle_length), 3),

@@ -63,8 +63,9 @@ class Settings:
     Attributes:
         enabled: Master switch; when false the plugin does nothing.
         gender: "auto" reads the persona prompt, otherwise forces a body type.
-        age: Fallback age for the male physiology curves; 0 means read the
-            persona prompt only.
+        age: Fallback age for the physiology curves; 0 means read the persona
+            prompt only.
+        lifespan: Species lifespan in years; 0 means detect it from the prompt.
         persona_id: Fixed persona whose body is used; empty follows the chat.
         timezone: IANA time zone; empty means use AstrBot's configured zone.
         sleep_window: Local HH:MM-HH:MM window used for slower metabolism.
@@ -88,6 +89,7 @@ class Settings:
     enabled: bool = True
     gender: str = "auto"
     age: int = 0
+    lifespan: int = 0
     persona_id: str = ""
     timezone: str = ""
     sleep_window: str = "00:00-08:00"
@@ -143,7 +145,8 @@ class Settings:
         return cls(
             enabled=_as_bool(get("ENABLED", True), True),
             gender=_choice(get("GENDER", "auto"), GENDERS, "auto"),
-            age=max(0, min(120, _as_int(get("AGE", 0), 0))),
+            age=max(0, min(100000, _as_int(get("AGE", 0), 0))),
+            lifespan=max(0, min(100000, _as_int(get("LIFESPAN", 0), 0))),
             persona_id=str(get("PERSONA_ID", "")).strip(),
             timezone=str(get("TIMEZONE", "")).strip(),
             sleep_window=sleep_window,
