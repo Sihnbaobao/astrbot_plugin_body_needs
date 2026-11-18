@@ -24,7 +24,6 @@ TZ = ZoneInfo("Asia/Shanghai")
 def make_profile(
     *,
     gender: str = "female",
-    age: int | None = 25,
     adult: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
@@ -32,7 +31,6 @@ def make_profile(
         persona_id="test",
         name="test",
         gender=gender,
-        age=age,
         adult=adult,
         cycle_length=28,
         period_length=5,
@@ -198,11 +196,11 @@ def test_intimacy_is_adult_only_and_sets_refractory() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)
     settings = Settings()
-    minor = make_profile(age=17, adult=False)
+    gated = make_profile(adult=False)
     with pytest.raises(ValueError):
-        apply_action(state, "intimacy", now, minor, settings)
+        apply_action(state, "intimacy", now, gated, settings)
 
-    male = make_profile(gender="male", age=25, adult=True)
+    male = make_profile(gender="male")
     apply_action(state, "intimacy", now, male, settings)
     assert state.desire == 0
     assert state.refractory_until > now.timestamp()
@@ -217,10 +215,10 @@ def test_sleep_window_crosses_midnight() -> None:
     assert seconds == pytest.approx(8 * 3600, abs=1)
 
 
-def test_minor_profile_never_adult() -> None:
-    settings = Settings(age=30)
-    profile = detect_profile(
-        "kid", "kid", "她今年17岁，是一个女孩子。", settings
-    )
-    assert profile.age == 17
-    assert profile.adult is False
+def test_adult_follows_detected_gender() -> None:
+    male = detect_profile("doc", "doc", "一个冷静的医生。", Settings(gender="male"))
+    assert male.adult is True
+
+    unknown = detect_profile("anon", "anon", "一个普通的助手。", Settings())
+    assert unknown.gender == "none"
+    assert unknown.adult is False

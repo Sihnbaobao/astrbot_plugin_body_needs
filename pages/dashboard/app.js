@@ -163,7 +163,6 @@ function renderHero(persona, now) {
       ? persona.gender_label + "性"
       : "性别未知";
   bits.push(gender);
-  bits.push(persona.age_text || "年龄未知");
   el("profileLine").textContent = bits.join(" · ");
   el("clock").textContent = now ? clockText(now) : "—";
   el("subtitle").textContent = (persona.name || persona.id) + " · " + (persona.summary || "");
@@ -470,8 +469,7 @@ function updateSettingsHint() {
     return;
   }
   const name = persona.name || persona.id;
-  const age = persona.age ? " · " + persona.age + " 岁" : "";
-  hint.textContent = "当前人格：" + name + age;
+  hint.textContent = "当前人格：" + name;
 }
 
 function renderSettings(values) {

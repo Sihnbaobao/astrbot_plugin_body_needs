@@ -324,13 +324,6 @@ def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
     return ""
 
 
-def _age_text(profile: Profile) -> str:
-    """Describe the resolved age for status cards."""
-    if profile.age is None:
-        return "年龄未知"
-    return f"{profile.age} 岁"
-
-
 def build_prompt_block(
     state: BodyState,
     now: datetime,
@@ -472,10 +465,7 @@ def build_status_text(
     """
     view = cycle_view(state, now, profile, settings)
     lines = [f"{profile.name} · 身体"]
-    if private:
-        lines.append(f"现在 {now:%H:%M} · {_age_text(profile)}")
-    else:
-        lines.append(f"现在 {now:%H:%M}")
+    lines.append(f"现在 {now:%H:%M}")
     if private:
         lines.extend(
             [
@@ -669,9 +659,7 @@ def build_web_state(
         "name": profile.name,
         "gender": profile.gender,
         "gender_label": gender_label(profile.gender),
-        "age": profile.age,
         "adult": profile.adult,
-        "age_text": _age_text(profile),
         "summary": summary,
         "meters": meters,
         "details": details,

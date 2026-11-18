@@ -1,14 +1,14 @@
 """Body needs: a small, persistent physiology for the active Persona.
 
 The plugin gives the bot hunger, thirst, bladder pressure, hygiene, fatigue and
-(for adult personas) a reproductive cycle. State advances lazily from wall-clock
-time on every LLM request, so there is no background timer and no message is
-sent by the plugin itself.
+a reproductive cycle. State advances lazily from wall-clock time on every LLM
+request, so there is no background timer and no message is sent by the plugin
+itself.
 
 Design boundaries:
 - It never sends a message. Delivery stays with AstrBot and the persona plugin.
 - It only contributes a prompt block and two tools.
-- Minors never receive adult state; the age gate is enforced in Profile.
+- Adult-only state still requires ENABLE_INTIMATE and a private chat.
 """
 
 from __future__ import annotations
@@ -127,7 +127,6 @@ class BodyNeedsPlugin(Star):
         self.tz = self._build_timezone(self.settings.timezone)
         self._lock = asyncio.Lock()
         self._profiles: dict[str, tuple[str, Profile]] = {}
-        self._logged_profiles: set[str] = set()
 
     # ── 生命周期与配置 ──
 
@@ -366,15 +365,6 @@ class BodyNeedsPlugin(Star):
         self._profiles[persona_id] = (key, profile)
         if len(self._profiles) > 64:
             self._profiles.pop(next(iter(self._profiles)))
-        if profile.age is not None and not profile.adult:
-            marker = f"{persona_id}:{profile.age}"
-            if marker not in self._logged_profiles:
-                self._logged_profiles.add(marker)
-                logger.debug(
-                    "[body] 人格 %s 的年龄为 %s",
-                    name,
-                    profile.age,
-                )
         return profile
 
     async def _identity(self, event: AstrMessageEvent) -> tuple[str, Profile, datetime]:
@@ -482,10 +472,9 @@ class BodyNeedsPlugin(Star):
                 req.extra_user_content_parts = parts
             if self.settings.debug:
                 logger.info(
-                    "[body] 注入 %s：gender=%s age=%s adult=%s chars=%d",
+                    "[body] 注入 %s：gender=%s adult=%s chars=%d",
                     persona_id,
                     profile.gender,
-                    profile.age,
                     profile.adult,
                     len(block),
                 )

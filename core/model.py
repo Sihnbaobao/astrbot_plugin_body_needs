@@ -591,12 +591,7 @@ def _advance_cycle_events(
 def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> float:
     """Return the daily desire increase for the current profile."""
     if profile.gender == "male":
-        age = profile.age or 30
-        if age < 30:
-            return 1.8
-        if age < 45:
-            return 1.4
-        return 1.0
+        return 1.4
     rate = 0.9
     if view is not None:
         rate += view.estrogen / 100.0 * 0.5
@@ -630,11 +625,8 @@ def _advance_male_events(
             key = f"wet:{current.isoformat()}"
             if not state.flags.get(key):
                 days = (night.timestamp() - state.last_release_at) / 86400
-                age_bonus = 0.03 if (profile.age or 30) < 30 else 0.0
                 sleep_bonus = max(0.0, state.sleep_debt - 6.0) * 0.008
-                chance = min(
-                    0.65, max(0.0, (days - 2) * 0.10 + age_bonus + sleep_bonus)
-                )
+                chance = min(0.65, max(0.0, (days - 2) * 0.10 + sleep_bonus))
                 if (
                     days >= 2
                     and _roll(profile.persona_id, current.isoformat(), "wet") < chance

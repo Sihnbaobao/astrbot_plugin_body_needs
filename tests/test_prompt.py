@@ -16,7 +16,6 @@ TZ = ZoneInfo("Asia/Shanghai")
 def make_profile(
     *,
     gender: str = "female",
-    age: int | None = 25,
     adult: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
@@ -24,7 +23,6 @@ def make_profile(
         persona_id="test",
         name="test",
         gender=gender,
-        age=age,
         adult=adult,
         cycle_length=28,
         period_length=5,
@@ -74,7 +72,7 @@ def test_minor_block_has_no_adult_state() -> None:
     block = build_prompt_block(
         state,
         now,
-        make_profile(age=17, adult=False),
+        make_profile(adult=False),
         Settings(),
         private=True,
     )
@@ -135,16 +133,16 @@ def test_status_card_hides_male_events_when_intimate_off() -> None:
     assert "欲望" not in text
 
 
-def test_group_status_card_hides_age() -> None:
+def test_status_card_has_no_age_line() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     text = build_status_text(
         make_state(now),
         now,
-        make_profile(age=17, adult=False),
+        make_profile(),
         Settings(),
-        private=False,
+        private=True,
     )
-    assert "17 岁" not in text
+    assert "岁" not in text
     assert "未成年" not in text
 
 

@@ -21,21 +21,19 @@ def test_detect_gender_from_persona_prompt() -> None:
     assert detect_gender("一个普通的助手") == "none"
 
 
-def test_detect_profile_respects_minor_gate() -> None:
+def test_detect_profile_does_not_gate_on_stated_age() -> None:
     settings = Settings(age=30)
     profile = detect_profile(
         "kid", "kid", "她今年17岁，是一个女孩子。", settings
     )
     assert profile.gender == "female"
-    assert profile.age == 17
-    assert profile.adult is False
+    assert profile.adult is True
 
 
-def test_detect_profile_uses_config_for_unknown_age() -> None:
+def test_detect_profile_uses_config_gender() -> None:
     settings = Settings(gender="male", age=30)
     profile = detect_profile("doc", "doc", "一个冷静的医生。", settings)
     assert profile.gender == "male"
-    assert profile.age == 30
     assert profile.adult is True
 
 
