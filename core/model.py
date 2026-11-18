@@ -47,7 +47,12 @@ PUBERTY_END = 18
 MENARCHE_MIN = 10.0
 MENARCHE_SPAN = 5.0
 MENOPAUSE_AGE = 50
-PAD_HOURS = 4.0
+LUTEAL_DAYS = 14
+CONCEPTION_BASE = 0.18
+PREGNANCY_DAYS = 280
+CONTRACEPTION_FACTOR = {"none": 1.0, "condom": 0.02, "pill": 0.01}
+PAD_INTERVAL = {3: 2.0, 2: 4.0, 1: 6.0}
+PAD_WAKING_HOURS = 16.0
 PAD_RESTOCK = 20
 ORAL_AWAKE = 2.8
 ORAL_SLEEP = 1.3
@@ -170,8 +175,11 @@ class BodyState:
     period_length: int = 5
     cycle_phase: str = ""
     cycle_start: str = ""
+    pregnant: bool = False
+    conceived_at: float = 0.0
     pads: int = 12
     pad_hours: float = 0.0
+    last_pad_day: str = ""
     last_supply_at: float = 0.0
     last_eat_at: float = 0.0
     last_drink_at: float = 0.0
@@ -211,8 +219,11 @@ class BodyState:
             "period_length": self.period_length,
             "cycle_phase": self.cycle_phase,
             "cycle_start": self.cycle_start,
+            "pregnant": self.pregnant,
+            "conceived_at": self.conceived_at,
             "pads": self.pads,
             "pad_hours": self.pad_hours,
+            "last_pad_day": self.last_pad_day,
             "last_supply_at": self.last_supply_at,
             "last_eat_at": self.last_eat_at,
             "last_drink_at": self.last_drink_at,
@@ -309,8 +320,11 @@ class BodyState:
         state.period_length = int(_number(data.get("period_length"), 5))
         state.cycle_phase = str(data.get("cycle_phase") or "")
         state.cycle_start = str(data.get("cycle_start") or "")
+        state.pregnant = bool(data.get("pregnant"))
+        state.conceived_at = _number(data.get("conceived_at"), 0.0)
         state.pads = max(0, int(_number(data.get("pads"), 12)))
         state.pad_hours = max(0.0, _number(data.get("pad_hours"), 0.0))
+        state.last_pad_day = str(data.get("last_pad_day") or "")
         state.last_supply_at = _number(data.get("last_supply_at"), 0.0)
         state.last_meal_kind = str(data.get("last_meal_kind") or "")
         events = data.get("events")
@@ -347,6 +361,8 @@ class CycleView:
     puberty: bool = False
     cycle_length: int = 28
     anovulatory: bool = False
+    fertile: bool = False
+    weeks: int = 0
     breast: int = 0
     headache: int = 0
     backache: int = 0
@@ -440,8 +456,10 @@ def _menarche_age(persona_id: str) -> float:
     return MENARCHE_MIN + _roll(persona_id, "menarche") * MENARCHE_SPAN
 
 
-def _anovulatory_chance(age: float | None) -> float:
-    """Return how often a cycle skips ovulation at this age."""
+def _anovulatory_chance(age: float | None, pcos: bool = False) -> float:
+    """Return how often a cycle skips ovulation."""
+    if pcos:
+        return 0.85
     if age is None:
         return 0.08
     if age < 16:
@@ -457,7 +475,9 @@ def _cycle_length_for(
     base: int,
     index: int,
     persona_id: str,
-    pubertal: bool,
+    span: float,
+    period: int = 5,
+    stress: float = 1.0,
 ) -> int:
     """Return the length of one cycle, jittered while the body is still growing.
 
@@ -468,16 +488,22 @@ def _cycle_length_for(
         base: Configured cycle length in days.
         index: Zero-based cycle number counted from the anchor.
         persona_id: Seed, so one persona keeps a stable sequence.
-        pubertal: Whether to apply the puberty drift.
+        span: Half-width of the drift in days; zero keeps every cycle equal.
+        period: Bleeding days at the start of the cycle.
+        stress: Follicular stretch factor; illness or sleep debt delays
+            ovulation and therefore lengthens the whole cycle.
 
     Returns:
         A cycle length in days.
     """
     length = max(1, int(base))
-    if not pubertal:
+    if span <= 0 and stress <= 1.0:
         return length
-    drift = (_roll(persona_id, "cycle-length", str(index)) * 2.0 - 1.0) * 5.0
-    return max(18, min(45, int(round(length + drift))))
+    follicular = max(6.0, float(length - period - LUTEAL_DAYS)) * max(1.0, stress)
+    if span > 0:
+        follicular += (_roll(persona_id, "cycle-length", str(index)) * 2.0 - 1.0) * span
+    total = period + follicular + LUTEAL_DAYS
+    return max(18, min(120, int(round(total))))
 
 
 def cycle_position(
@@ -486,7 +512,9 @@ def cycle_position(
     cycle_length: int,
     *,
     persona_id: str = "",
-    pubertal: bool = False,
+    jitter: float = 0.0,
+    period: int = 5,
+    stress: float = 1.0,
 ) -> tuple[int, date, int]:
     """Return the cycle day, the current cycle's start and its length.
 
@@ -495,13 +523,15 @@ def cycle_position(
         today: The date to place.
         cycle_length: Configured length in days.
         persona_id: Seed used when lengths are jittered.
-        pubertal: Whether the current cycle lengths are irregular.
+        jitter: Half-width of the per-cycle drift in days.
+        period: Bleeding days at the start of the cycle.
+        stress: Follicular stretch factor.
 
     Returns:
         A (day, start, length) tuple, with a 1-based day.
     """
     length = max(1, int(cycle_length))
-    if not pubertal or today <= anchor:
+    if (jitter <= 0 and stress <= 1.0) or today < anchor:
         offset = max(0, (today - anchor).days)
         index = offset // length
         start = anchor + timedelta(days=index * length)
@@ -509,7 +539,7 @@ def cycle_position(
 
     cursor = anchor
     for index in range(600):
-        span = _cycle_length_for(length, index, persona_id, True)
+        span = _cycle_length_for(length, index, persona_id, jitter, period, stress)
         following = cursor + timedelta(days=span)
         if today < following:
             return (today - cursor).days + 1, cursor, span
@@ -601,6 +631,25 @@ def cycle_view(
     if not settings.enable_cycle or profile.gender != "female":
         return None
 
+    if state.pregnant:
+        weeks = max(0, int((now.timestamp() - state.conceived_at) // (7 * 86400)))
+        return CycleView(
+            cycle_start=now.date(),
+            day=0,
+            phase="pregnant",
+            flow=0,
+            cramps=0,
+            mood=0,
+            appetite=0,
+            days_to_next=0,
+            note=f"怀孕第 {weeks} 周",
+            estrogen=75.0,
+            progesterone=80.0,
+            lh=8.0,
+            weeks=weeks,
+            cycle_length=max(21, profile.cycle_length),
+        )
+
     age = profile.physio_age
     pubertal = _is_pubertal(age)
     if age is None:
@@ -642,20 +691,33 @@ def cycle_view(
             discharge=0,
         )
 
+    span = 0.0
+    if pubertal:
+        span = 5.0
+    if profile.pcos:
+        span = max(span, 12.0)
+
+    # Sleep debt is the stress proxy: a stretched follicular phase delays
+    # ovulation and therefore pushes the next period back.
+    stress = 1.0 + min(0.35, max(0.0, state.sleep_debt - 6.0) / 24.0 * 0.6)
     anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
     day, start, length = cycle_position(
         anchor,
         now.date(),
         profile.cycle_length,
         persona_id=profile.persona_id,
-        pubertal=pubertal,
+        jitter=span,
+        period=profile.period_length,
+        stress=stress,
     )
     length = max(1, length)
     period = max(1, min(profile.period_length, length - 1))
-    ovulation_day = length // 2 + 1
+    # The luteal phase is a fixed 14 days, so ovulation sits 14 days before the
+    # next period instead of at the arithmetic midpoint.
+    ovulation_day = max(period + 1, length - LUTEAL_DAYS)
     anovulatory = _roll(
         profile.persona_id, start.isoformat(), "ovulation"
-    ) < _anovulatory_chance(age)
+    ) < _anovulatory_chance(age, profile.pcos)
     if day <= period:
         phase = "menstrual"
     elif anovulatory:
@@ -668,6 +730,9 @@ def cycle_view(
         phase = "follicular"
 
     estrogen, progesterone, lh = _hormones(day, length, period, anovulatory)
+    if profile.pcos:
+        # Chronically elevated LH is the usual endocrine signature.
+        lh = min(100.0, lh * 1.8)
     rng = random.Random(int(_roll(profile.persona_id, start.isoformat()) * 1_000_000))
     flow = 0
     cramps = 0
@@ -713,6 +778,13 @@ def cycle_view(
         note = "经期后，身体轻快"
 
     mood = max(-3, mood)
+    # Sperm survive about five days and the egg one, so the fertile window is
+    # the five days before ovulation plus the day itself.
+    fertile = (
+        not anovulatory
+        and phase != "menstrual"
+        and (ovulation_day - 5) <= day <= (ovulation_day + 1)
+    )
     if phase in ("menstrual", "ovulation"):
         discharge = 3
     elif phase == "follicular":
@@ -737,11 +809,50 @@ def cycle_view(
         puberty=pubertal,
         cycle_length=length,
         anovulatory=anovulatory,
+        fertile=fertile,
         breast=breast,
         headache=headache,
         backache=backache,
         discharge=discharge,
     )
+
+
+def _account_supplies(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> None:
+    """Spend sanitary supplies once per completed period day.
+
+    Heavier days are changed more often, so a five day period no longer costs
+    the same as a two day one.
+
+    Args:
+        state: State to update.
+        now: Current instant; only days before it are settled.
+        profile: Resolved profile.
+        settings: Plugin settings.
+    """
+    if profile.gender != "female" or not settings.enable_cycle:
+        return
+    today = now.date()
+    cursor = today
+    if state.last_pad_day:
+        try:
+            cursor = date.fromisoformat(state.last_pad_day) + timedelta(days=1)
+        except ValueError:
+            cursor = today
+    budget = 0
+    while cursor < today and budget < 400:
+        budget += 1
+        moment = datetime.combine(cursor, time(12, 0), tzinfo=now.tzinfo)
+        day_view = cycle_view(state, moment, profile, settings)
+        if day_view is not None and day_view.phase == "menstrual":
+            interval = PAD_INTERVAL.get(day_view.flow, 4.0)
+            state.pads = max(0, state.pads - int(round(PAD_WAKING_HOURS / interval)))
+        cursor += timedelta(days=1)
+    state.last_pad_day = (today - timedelta(days=1)).isoformat()
 
 
 def _add_event(
@@ -766,7 +877,7 @@ def _advance_cycle_events(
     view: CycleView | None,
 ) -> None:
     """Record period and phase transitions without duplicating them."""
-    if view is None or view.phase in ("premenarche", "menopause"):
+    if view is None or view.phase in ("premenarche", "menopause", "pregnant"):
         state.cycle_phase = ""
         state.cycle_start = ""
         return
@@ -1098,20 +1209,24 @@ def advance(
         else:
             state.desire = 0.0
 
-        if in_period:
-            state.pad_hours += step_hours * awake_fraction
-            while state.pad_hours >= PAD_HOURS:
-                state.pad_hours -= PAD_HOURS
-                if state.pads > 0:
-                    state.pads -= 1
-        else:
-            state.pad_hours = 0.0
-
         cursor = chunk_end
         remaining -= step_seconds
 
     _recompute_primary(state, now, profile, settings, in_period)
+    if state.pregnant and state.conceived_at > 0:
+        if (now_ts - state.conceived_at) >= PREGNANCY_DAYS * 86400:
+            state.pregnant = False
+            state.conceived_at = 0.0
+            state.cycle_anchor = now.date().isoformat()
+            _add_event(
+                state,
+                now,
+                "birth",
+                "孩子出生了",
+                key=f"birth:{now.date().isoformat()}",
+            )
     _advance_cycle_events(state, now, profile, view)
+    _account_supplies(state, now, profile, settings)
     if in_period and state.pads <= 0:
         _add_event(
             state,
@@ -1215,6 +1330,31 @@ def apply_action(
         state.pads += PAD_RESTOCK
         state.last_supply_at = now_ts
     elif action == "intimacy":
+        fertile = cycle_view(state, now, profile, settings)
+        can_conceive = (
+            settings.enable_pregnancy
+            and profile.gender == "female"
+            and not state.pregnant
+            and not _is_pubertal(profile.physio_age)
+            and (profile.physio_age is None or profile.physio_age >= PUBERTY_END)
+            and (profile.age is None or profile.age >= PUBERTY_END)
+            and fertile is not None
+            and fertile.fertile
+        )
+        if can_conceive:
+            factor = CONTRACEPTION_FACTOR.get(settings.contraception, 1.0)
+            if _roll(profile.persona_id, str(int(now_ts)), "conception") < (
+                CONCEPTION_BASE * factor
+            ):
+                state.pregnant = True
+                state.conceived_at = now_ts
+                _add_event(
+                    state,
+                    now,
+                    "conception",
+                    "怀孕了",
+                    key=f"conceived:{int(now_ts)}",
+                )
         state.desire = 0.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.4, 0.0, 24.0)
         state.skin = _clamp(state.skin + 4.0)

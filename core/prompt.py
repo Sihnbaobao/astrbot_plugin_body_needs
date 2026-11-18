@@ -49,6 +49,7 @@ PHASE_LABELS = {
     "luteal": "黄体期",
     "premenarche": "未初潮",
     "menopause": "已绝经",
+    "pregnant": "怀孕中",
 }
 FLOW_LABELS = {1: "量少", 2: "量中等", 3: "量多"}
 DISCHARGE_LABELS = {0: "干爽", 1: "少量", 2: "偏多", 3: "蛋清样拉丝"}
@@ -316,6 +317,13 @@ def _cycle_text(view: CycleView) -> str:
         return f"青春期：{view.note}"
     if view.phase == "menopause":
         return f"妇科：{view.note}"
+    if view.phase == "pregnant":
+        text = f"身体：{view.note}"
+        if 6 <= view.weeks <= 12:
+            text += "，最近容易恶心、犯困"
+        elif view.weeks >= 28:
+            text += "，行动开始不太方便"
+        return text
     if view.phase == "menstrual":
         flow = FLOW_LABELS.get(view.flow, "")
         detail = "，".join(part for part in (flow, view.note) if part)
@@ -456,6 +464,8 @@ def build_prompt_block(
         lines.append(_internal_line(state, now))
     if view is not None and (show_private or full_group):
         lines.append(_cycle_text(view))
+        if show_private and view.fertile:
+            lines.append("身体：这几天更容易受孕。")
         supply = _supply_text(state, view) if show_private else ""
         if supply:
             lines.append(supply)
@@ -662,6 +672,8 @@ def build_web_state(
             "mood": view.mood,
             "appetite": view.appetite,
             "anovulatory": view.anovulatory,
+            "fertile": view.fertile,
+            "weeks": view.weeks,
             "breast": view.breast,
             "headache": view.headache,
             "backache": view.backache,

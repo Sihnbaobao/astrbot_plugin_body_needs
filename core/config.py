@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+CONTRACEPTIONS = ("none", "condom", "pill")
 GENDERS = ("auto", "female", "male", "none")
 GROUP_DETAILS = ("basic", "full")
 INTENSITIES = ("subtle", "natural", "strong")
@@ -77,6 +78,8 @@ class Settings:
         enable_cycle: Track the menstrual cycle.
         enable_intimate: Track intimate physiology; needs a resolvable gender
             and a private chat, and never depends on age.
+        enable_pregnancy: Let a fertile encounter possibly start a pregnancy.
+        contraception: none, condom or pill; scales the conception chance.
         enable_hygiene: Track showering and tooth brushing.
         enable_sleep: Let the sleep window change metabolism and recovery.
         enable_tools: Offer the body tools to the chat model.
@@ -100,6 +103,8 @@ class Settings:
     intensity: str = "natural"
     enable_cycle: bool = True
     enable_intimate: bool = True
+    enable_pregnancy: bool = True
+    contraception: str = "none"
     enable_hygiene: bool = True
     enable_sleep: bool = True
     enable_tools: bool = True
@@ -157,6 +162,8 @@ class Settings:
             intensity=_choice(get("INTENSITY", "natural"), INTENSITIES, "natural"),
             enable_cycle=_as_bool(get("ENABLE_CYCLE", True), True),
             enable_intimate=_as_bool(get("ENABLE_INTIMATE", True), True),
+            enable_pregnancy=_as_bool(get("ENABLE_PREGNANCY", True), True),
+            contraception=_choice(get("CONTRACEPTION", "none"), CONTRACEPTIONS, "none"),
             enable_hygiene=_as_bool(get("ENABLE_HYGIENE", True), True),
             enable_sleep=_as_bool(get("ENABLE_SLEEP", True), True),
             enable_tools=_as_bool(get("ENABLE_TOOLS", True), True),

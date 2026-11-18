@@ -296,13 +296,37 @@ def test_anovulatory_cycle_never_reports_ovulation() -> None:
 
 
 def test_supplies_are_used_during_a_period() -> None:
-    now = datetime(2026, 11, 2, 12, 0, tzinfo=TZ)
+    now = datetime(2026, 11, 3, 12, 0, tzinfo=TZ)
     profile = make_profile(age=25)
     state = make_state(now - timedelta(hours=12))
     state.cycle_anchor = "2026-11-01"
-    state.pads = 5
+    state.pads = 20
+    state.last_pad_day = "2026-10-31"
     advance(state, now, profile, Settings())
-    assert state.pads < 5
+    # Two heavy days at a two hour interval cost eight pads each.
+    assert state.pads == 4
+
+
+def test_light_period_days_cost_fewer_pads() -> None:
+    profile = make_profile(age=25)
+    heavy_moment = datetime(2026, 11, 3, 12, 0, tzinfo=TZ)
+    heavy = BodyState(
+        persona_id="test", updated_at=(heavy_moment - timedelta(hours=12)).timestamp()
+    )
+    heavy.cycle_anchor = "2026-11-01"
+    heavy.pads = 40
+    heavy.last_pad_day = "2026-10-31"
+    advance(heavy, heavy_moment, profile, Settings())
+
+    light_moment = datetime(2026, 11, 8, 12, 0, tzinfo=TZ)
+    light = BodyState(
+        persona_id="test", updated_at=(light_moment - timedelta(hours=12)).timestamp()
+    )
+    light.cycle_anchor = "2026-11-05"
+    light.pads = 40
+    light.last_pad_day = "2026-11-06"
+    advance(light, light_moment, profile, Settings())
+    assert light.pads > heavy.pads
 
 
 def test_supplies_action_restocks() -> None:
@@ -321,13 +345,93 @@ def test_morning_odds_fall_with_age() -> None:
     assert factors[0] > factors[-1] * 3
 
 
-def test_puberty_makes_cycle_lengths_vary() -> None:
-    adult = {_cycle_length_for(28, index, "p", False) for index in range(24)}
-    assert adult == {28}
+def test_cycle_jitter_only_when_asked() -> None:
+    fixed = {_cycle_length_for(28, index, "p", 0.0) for index in range(24)}
+    assert fixed == {28}
 
-    teen = {_cycle_length_for(28, index, "p", True) for index in range(24)}
+    teen = {_cycle_length_for(28, index, "p", 5.0) for index in range(24)}
     assert len(teen) > 1
-    assert all(18 <= length <= 45 for length in teen)
+    assert all(18 <= length <= 70 for length in teen)
+
+    pcos = {_cycle_length_for(28, index, "p", 12.0) for index in range(24)}
+    assert max(pcos) - min(pcos) > max(teen) - min(teen)
+
+
+def test_pcos_makes_cycles_rarely_ovulatory() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    skipped = 0
+    for index in range(12):
+        pid = f"pcos{index}"
+        profile = Profile(pid, "t", "female", 30, True, 28, 5, pcos=True)
+        state = make_state(start)
+        state.cycle_anchor = "2026-11-01"
+        view = cycle_view(state, start, profile, settings)
+        if view.anovulatory:
+            skipped += 1
+            assert view.fertile is False
+    assert skipped >= 8
+
+
+def test_pregnancy_stops_the_cycle_and_advances() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    profile = make_profile(age=28)
+    state = make_state(start)
+    state.cycle_anchor = "2026-11-01"
+    state.pregnant = True
+    state.conceived_at = start.timestamp()
+    view = cycle_view(state, start + timedelta(days=70), profile, settings)
+    assert view is not None
+    assert view.phase == "pregnant"
+    assert view.weeks == 10
+    assert view.flow == 0
+
+    later = start + timedelta(days=290)
+    state.updated_at = (start + timedelta(days=70)).timestamp()
+    advance(state, later, profile, settings)
+    assert state.pregnant is False
+
+
+def test_contraception_scales_conception_chance() -> None:
+    from core.model import CONCEPTION_BASE, CONTRACEPTION_FACTOR
+
+    assert CONTRACEPTION_FACTOR["none"] == 1.0
+    assert CONCEPTION_BASE * CONTRACEPTION_FACTOR["condom"] < 0.01
+    assert CONCEPTION_BASE * CONTRACEPTION_FACTOR["pill"] < 0.01
+
+
+def test_conception_only_inside_the_fertile_window() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    conceived = 0
+    for index in range(60):
+        pid = f"con{index}"
+        profile = Profile(pid, "t", "female", 28, True, 28, 5)
+        state = make_state(start)
+        state.cycle_anchor = "2026-11-01"
+        # Day 3 is inside the period, far outside any fertile window.
+        apply_action(state, "intimacy", start + timedelta(days=2), profile, settings)
+        if state.pregnant:
+            conceived += 1
+    assert conceived == 0
+
+
+def test_fertile_window_marks_ovulation() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    found = False
+    for index in range(40):
+        pid = f"fert{index}"
+        profile = Profile(pid, "t", "female", 30, True, 28, 5)
+        state = make_state(start)
+        state.cycle_anchor = "2026-11-01"
+        view = cycle_view(state, start + timedelta(days=13), profile, settings)
+        if view.phase == "ovulation":
+            found = True
+            assert view.fertile is True
+            assert view.anovulatory is False
+    assert found
 
 
 def test_premenarche_has_no_period() -> None:

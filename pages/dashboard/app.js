@@ -44,6 +44,8 @@ const CONFIG_FIELDS = [
     group: "成人模块",
     fields: [
       { key: "ENABLE_INTIMATE", label: "启用成人私密生理", type: "bool", adult: true, hint: "男/女人格的欲望与亲密记录；需要能识别出性别，只在私聊启用。" },
+      { key: "ENABLE_PREGNANCY", label: "启用怀孕", type: "bool", adult: true, hint: "易孕期亲密有概率受孕；受孕后停经并按孕周推进。未成年人格不会受孕。" },
+      { key: "CONTRACEPTION", label: "避孕方式", type: "select", options: ["none", "condom", "pill"], optionLabels: { none: "不避孕", condom: "安全套", pill: "避孕药" }, adult: true, hint: "把受孕概率从约 18% 降到 1-2%。" },
     ],
   },
   {
@@ -243,7 +245,7 @@ function renderCycle(persona) {
   const host = el("cycleBody");
   host.replaceChildren();
 
-  if (cycle.phase === "premenarche" || cycle.phase === "menopause") {
+  if (cycle.phase === "premenarche" || cycle.phase === "menopause" || cycle.phase === "pregnant") {
     el("cyclePhase").textContent = cycle.phase_label || "周期";
     host.appendChild(make("p", "cycle-note", cycle.note || ""));
     const raceRow = cycle.race

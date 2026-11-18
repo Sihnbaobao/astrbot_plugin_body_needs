@@ -99,6 +99,19 @@
     "default": true,
     "hint": "男性人格的梦遗、晨勃，以及欲望值和亲密记录；需要能识别出性别且只在私聊生效，年龄不参与判断。插件页设置里也可以开关。"
   },
+  "ENABLE_PREGNANCY": {
+    "description": "启用怀孕",
+    "type": "bool",
+    "default": true,
+    "hint": "女性人格在易孕期内亲密时，有一定概率受孕；受孕后会停经并按孕周推进，280 天后写一条出生事件。未成年人格不会受孕。关掉后亲密没有任何后果。"
+  },
+  "CONTRACEPTION": {
+    "description": "避孕方式",
+    "type": "string",
+    "default": "none",
+    "options": ["none", "condom", "pill"],
+    "hint": "none = 不避孕（受孕概率约 18%）；condom / pill 会把概率降到 1-2%。只影响受孕判定。"
+  },
   "ENABLE_HYGIENE": {
     "description": "启用清洁与口腔",
     "type": "bool",

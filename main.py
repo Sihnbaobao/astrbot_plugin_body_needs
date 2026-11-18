@@ -81,6 +81,8 @@ CONFIG_SPEC: dict[str, tuple[str, type]] = {
     "INTENSITY": ("intensity", str),
     "ENABLE_CYCLE": ("enable_cycle", bool),
     "ENABLE_INTIMATE": ("enable_intimate", bool),
+    "ENABLE_PREGNANCY": ("enable_pregnancy", bool),
+    "CONTRACEPTION": ("contraception", str),
     "ENABLE_HYGIENE": ("enable_hygiene", bool),
     "ENABLE_SLEEP": ("enable_sleep", bool),
     "ENABLE_TOOLS": ("enable_tools", bool),
@@ -93,6 +95,7 @@ CONFIG_OPTIONS: dict[str, tuple[str, ...]] = {
     "GENDER": ("auto", "female", "male", "none"),
     "GROUP_DETAIL": ("basic", "full"),
     "INTENSITY": ("subtle", "natural", "strong"),
+    "CONTRACEPTION": ("none", "condom", "pill"),
 }
 CONFIG_RANGES: dict[str, tuple[int, int]] = {
     "AGE": (0, 100000),

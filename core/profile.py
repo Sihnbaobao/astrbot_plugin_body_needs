@@ -84,6 +84,8 @@ class Profile:
         race: Detected species label, for display only.
         lifespan: Species lifespan in years; the physiology curves are driven
             by the human-equivalent age, not the raw one.
+        pcos: Whether the persona is written with polycystic ovary syndrome,
+            which makes ovulation rare and cycles long.
     """
 
     persona_id: str
@@ -95,6 +97,7 @@ class Profile:
     period_length: int
     race: str = "人类"
     lifespan: int = HUMAN_LIFESPAN
+    pcos: bool = False
 
     @property
     def physio_age(self) -> float | None:
@@ -133,6 +136,15 @@ def detect_age(text: str) -> int | None:
             if 1 <= value <= 100000:
                 return value
     return None
+
+
+_PCOS_WORDS = ("多囊", "pcos", "多囊卵巢")
+
+
+def detect_pcos(text: str) -> bool:
+    """Return whether the persona states a polycystic ovary condition."""
+    lowered = (text or "").lower()
+    return any(word in lowered for word in _PCOS_WORDS)
 
 
 def detect_race(text: str) -> tuple[str, int]:
@@ -210,6 +222,7 @@ def detect_profile(
     race, lifespan = detect_race(prompt)
     if settings.lifespan > 0:
         race, lifespan = "自定义", settings.lifespan
+    pcos = detect_pcos(prompt)
 
     # Age no longer participates in this decision: any persona whose gender can
     # be resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
@@ -226,4 +239,5 @@ def detect_profile(
         period_length=settings.period_length,
         race=race,
         lifespan=lifespan,
+        pcos=pcos,
     )
