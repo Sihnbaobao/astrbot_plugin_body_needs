@@ -48,6 +48,8 @@ MENARCHE_MIN = 10.0
 MENARCHE_SPAN = 5.0
 MENOPAUSE_AGE = 50
 LUTEAL_DAYS = 14
+OVULATION_ESTROGEN = 85.0
+FOLLICULAR_FLOOR = 6.0
 CONCEPTION_BASE = 0.18
 PREGNANCY_DAYS = 280
 CONTRACEPTION_FACTOR = {"none": 1.0, "condom": 0.02, "pill": 0.01}
@@ -175,6 +177,12 @@ class BodyState:
     period_length: int = 5
     cycle_phase: str = ""
     cycle_start: str = ""
+    cycle_day: int = 0
+    estrogen: float = 0.0
+    progesterone: float = 0.0
+    lh: float = 0.0
+    ovulation_day: int = 0
+    anovulatory: bool = False
     pregnant: bool = False
     conceived_at: float = 0.0
     pads: int = 12
@@ -219,6 +227,12 @@ class BodyState:
             "period_length": self.period_length,
             "cycle_phase": self.cycle_phase,
             "cycle_start": self.cycle_start,
+            "cycle_day": self.cycle_day,
+            "estrogen": self.estrogen,
+            "progesterone": self.progesterone,
+            "lh": self.lh,
+            "ovulation_day": self.ovulation_day,
+            "anovulatory": self.anovulatory,
             "pregnant": self.pregnant,
             "conceived_at": self.conceived_at,
             "pads": self.pads,
@@ -320,6 +334,12 @@ class BodyState:
         state.period_length = int(_number(data.get("period_length"), 5))
         state.cycle_phase = str(data.get("cycle_phase") or "")
         state.cycle_start = str(data.get("cycle_start") or "")
+        state.cycle_day = max(0, int(_number(data.get("cycle_day"), 0)))
+        state.estrogen = _clamp(_number(data.get("estrogen"), 0.0))
+        state.progesterone = _clamp(_number(data.get("progesterone"), 0.0))
+        state.lh = _clamp(_number(data.get("lh"), 0.0))
+        state.ovulation_day = max(0, int(_number(data.get("ovulation_day"), 0)))
+        state.anovulatory = bool(data.get("anovulatory"))
         state.pregnant = bool(data.get("pregnant"))
         state.conceived_at = _number(data.get("conceived_at"), 0.0)
         state.pads = max(0, int(_number(data.get("pads"), 12)))
@@ -621,6 +641,157 @@ def _hormones(
     return _clamp(estrogen), _clamp(progesterone), _clamp(lh)
 
 
+def _cycle_span(profile: Profile, pubertal: bool) -> float:
+    """Return the per-cycle drift half-width for this persona."""
+    span = 5.0 if pubertal else 0.0
+    if profile.pcos:
+        span = max(span, 12.0)
+    return span
+
+
+def _cycle_stress(state: BodyState) -> float:
+    """Return the follicular stretch factor; sleep debt delays ovulation."""
+    return 1.0 + min(0.35, max(0.0, state.sleep_debt - 6.0) / 24.0 * 0.6)
+
+
+def _period_days(profile: Profile) -> int:
+    """Return the bleeding length in days, clamped below the cycle."""
+    length = max(1, int(profile.cycle_length))
+    return max(1, min(profile.period_length, length - 1))
+
+
+def _restart_cycle(state: BodyState, now: datetime, profile: Profile) -> None:
+    """Begin a new cycle today and roll whether it will ovulate."""
+    state.cycle_start = now.date().isoformat()
+    state.cycle_day = 1
+    state.ovulation_day = 0
+    state.estrogen = 15.0
+    state.progesterone = 5.0
+    state.lh = 10.0
+    state.anovulatory = _roll(
+        profile.persona_id, now.date().isoformat(), "ovulation"
+    ) < _anovulatory_chance(profile.physio_age, profile.pcos)
+
+
+def _seed_cycle(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> None:
+    """Fill the hormone state from the calendar model on first use.
+
+    Later calls keep the integrated values, so a persona's cycle stops
+    following the calendar once the simulation has stepped past the seed.
+    """
+    if state.cycle_start and state.estrogen > 0.0:
+        return
+    age = profile.physio_age
+    pubertal = _is_pubertal(age)
+    span = _cycle_span(profile, pubertal)
+    stress = _cycle_stress(state)
+    anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
+    day, start, length = cycle_position(
+        anchor,
+        now.date(),
+        profile.cycle_length,
+        persona_id=profile.persona_id,
+        jitter=span,
+        period=profile.period_length,
+        stress=stress,
+    )
+    length = max(1, length)
+    period = max(1, min(profile.period_length, length - 1))
+    state.cycle_start = start.isoformat()
+    state.cycle_day = day
+    state.anovulatory = _roll(
+        profile.persona_id, start.isoformat(), "ovulation"
+    ) < _anovulatory_chance(age, profile.pcos)
+    expected = max(period + 1, length - LUTEAL_DAYS)
+    state.ovulation_day = 0
+    if not state.anovulatory and day >= expected:
+        state.ovulation_day = expected
+    estrogen, progesterone, lh = _hormones(day, length, period, state.anovulatory)
+    state.estrogen = estrogen
+    state.progesterone = progesterone
+    state.lh = lh
+
+
+def _step_cycle(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+    hours: float,
+) -> None:
+    """Advance the integrated hormone state by one chunk of time.
+
+    Estrogen builds through the follicular phase until it crosses the
+    ovulation threshold; progesterone then runs the luteal phase down and the
+    next period starts when it expires.
+    """
+    if profile.gender != "female" or not settings.enable_cycle or state.pregnant:
+        return
+    if not state.cycle_start:
+        return
+    age = profile.physio_age
+    if age is not None:
+        if age < _menarche_age(profile.persona_id) or age >= MENOPAUSE_AGE:
+            return
+    try:
+        cycle_start = date.fromisoformat(state.cycle_start)
+    except ValueError:
+        return
+    day = max(1, (now.date() - cycle_start).days + 1)
+    period = _period_days(profile)
+    pubertal = _is_pubertal(age)
+    stress = _cycle_stress(state)
+    target = _cycle_length_for(
+        profile.cycle_length,
+        0,
+        profile.persona_id,
+        _cycle_span(profile, pubertal),
+        period,
+        stress,
+    )
+    state.cycle_day = day
+
+    if day <= period:
+        state.estrogen = max(12.0, state.estrogen - 6.0 * hours)
+        state.progesterone = max(5.0, state.progesterone - 8.0 * hours)
+        state.lh = max(10.0, state.lh - 20.0 * hours)
+        state.ovulation_day = 0
+        return
+
+    if state.ovulation_day == 0:
+        if state.anovulatory:
+            state.estrogen = min(65.0, state.estrogen + 1.4 * hours)
+            state.progesterone = 5.0
+            state.lh = 12.0
+            if day > target:
+                _restart_cycle(state, now, profile)
+            return
+        window = max(FOLLICULAR_FLOOR, float(target - period - LUTEAL_DAYS))
+        rate = (OVULATION_ESTROGEN - 15.0) / (window * 24.0) / max(1.0, stress)
+        state.estrogen = min(100.0, state.estrogen + rate * hours)
+        state.lh = min(70.0, state.lh + 0.5 * hours)
+        state.progesterone = 5.0
+        if state.estrogen >= OVULATION_ESTROGEN:
+            state.ovulation_day = day
+            state.estrogen = 90.0
+            state.lh = 100.0
+            state.progesterone = 20.0
+        return
+
+    luteal_day = day - state.ovulation_day
+    state.lh = max(20.0, state.lh - 30.0 * hours)
+    progress = min(1.0, luteal_day / float(LUTEAL_DAYS))
+    state.progesterone = 20.0 + 55.0 * math.sin(math.pi * progress)
+    state.estrogen = max(30.0, 90.0 - luteal_day * 4.0)
+    if luteal_day >= LUTEAL_DAYS:
+        _restart_cycle(state, now, profile)
+
+
 def cycle_view(
     state: BodyState,
     now: datetime,
@@ -691,45 +862,45 @@ def cycle_view(
             discharge=0,
         )
 
-    span = 0.0
-    if pubertal:
-        span = 5.0
-    if profile.pcos:
-        span = max(span, 12.0)
-
-    # Sleep debt is the stress proxy: a stretched follicular phase delays
-    # ovulation and therefore pushes the next period back.
-    stress = 1.0 + min(0.35, max(0.0, state.sleep_debt - 6.0) / 24.0 * 0.6)
-    anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
-    day, start, length = cycle_position(
-        anchor,
-        now.date(),
+    _seed_cycle(state, now, profile, settings)
+    try:
+        start = date.fromisoformat(state.cycle_start)
+    except ValueError:
+        start = now.date()
+    day = max(1, (now.date() - start).days + 1)
+    period = _period_days(profile)
+    stress = _cycle_stress(state)
+    target = _cycle_length_for(
         profile.cycle_length,
-        persona_id=profile.persona_id,
-        jitter=span,
-        period=profile.period_length,
-        stress=stress,
+        0,
+        profile.persona_id,
+        _cycle_span(profile, pubertal),
+        period,
+        stress,
     )
-    length = max(1, length)
-    period = max(1, min(profile.period_length, length - 1))
-    # The luteal phase is a fixed 14 days, so ovulation sits 14 days before the
-    # next period instead of at the arithmetic midpoint.
-    ovulation_day = max(period + 1, length - LUTEAL_DAYS)
-    anovulatory = _roll(
-        profile.persona_id, start.isoformat(), "ovulation"
-    ) < _anovulatory_chance(age, profile.pcos)
+    # Before ovulation the next period is only a projection; afterwards it is
+    # pinned to a fixed luteal tail.
+    expected = state.ovulation_day or max(period + 1, target - LUTEAL_DAYS)
+    if state.ovulation_day:
+        length = max(day + 1, state.ovulation_day + LUTEAL_DAYS)
+    else:
+        length = max(day + 1, target)
+    anovulatory = state.anovulatory
+    ovulation_day = expected
     if day <= period:
         phase = "menstrual"
-    elif anovulatory:
-        phase = "luteal" if day > ovulation_day + 1 else "follicular"
-    elif abs(day - ovulation_day) <= 1:
+    elif state.ovulation_day and abs(day - state.ovulation_day) <= 1:
         phase = "ovulation"
-    elif day > ovulation_day + 1:
+    elif state.ovulation_day and day > state.ovulation_day + 1:
+        phase = "luteal"
+    elif anovulatory and day > expected + 1:
         phase = "luteal"
     else:
         phase = "follicular"
 
-    estrogen, progesterone, lh = _hormones(day, length, period, anovulatory)
+    estrogen = state.estrogen
+    progesterone = state.progesterone
+    lh = state.lh
     if profile.pcos:
         # Chronically elevated LH is the usual endocrine signature.
         lh = min(100.0, lh * 1.8)
@@ -815,44 +986,6 @@ def cycle_view(
         backache=backache,
         discharge=discharge,
     )
-
-
-def _account_supplies(
-    state: BodyState,
-    now: datetime,
-    profile: Profile,
-    settings: Settings,
-) -> None:
-    """Spend sanitary supplies once per completed period day.
-
-    Heavier days are changed more often, so a five day period no longer costs
-    the same as a two day one.
-
-    Args:
-        state: State to update.
-        now: Current instant; only days before it are settled.
-        profile: Resolved profile.
-        settings: Plugin settings.
-    """
-    if profile.gender != "female" or not settings.enable_cycle:
-        return
-    today = now.date()
-    cursor = today
-    if state.last_pad_day:
-        try:
-            cursor = date.fromisoformat(state.last_pad_day) + timedelta(days=1)
-        except ValueError:
-            cursor = today
-    budget = 0
-    while cursor < today and budget < 400:
-        budget += 1
-        moment = datetime.combine(cursor, time(12, 0), tzinfo=now.tzinfo)
-        day_view = cycle_view(state, moment, profile, settings)
-        if day_view is not None and day_view.phase == "menstrual":
-            interval = PAD_INTERVAL.get(day_view.flow, 4.0)
-            state.pads = max(0, state.pads - int(round(PAD_WAKING_HOURS / interval)))
-        cursor += timedelta(days=1)
-    state.last_pad_day = (today - timedelta(days=1)).isoformat()
 
 
 def _add_event(
@@ -1123,6 +1256,7 @@ def advance(
     )
     view = cycle_view(state, now, profile, settings)
     in_period = bool(view and view.phase == "menstrual")
+    pubertal = _is_pubertal(profile.physio_age)
 
     cursor = start
     remaining = float(elapsed)
@@ -1148,6 +1282,13 @@ def advance(
         awake_fraction = 1.0 - sleep_fraction
         midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
         alert = circadian_alertness(midpoint)
+        _step_cycle(state, chunk_end, profile, settings, step_hours)
+        cycle_day = state.cycle_day
+        in_period_now = (
+            profile.gender == "female"
+            and settings.enable_cycle
+            and 0 < cycle_day <= _period_days(profile)
+        )
 
         decay = (
             STOMACH_DECAY_AWAKE * awake_fraction + STOMACH_DECAY_SLEEP * sleep_fraction
@@ -1175,8 +1316,8 @@ def advance(
         state.urine = _clamp(state.urine + urine_rate * step_hours)
 
         sweat = max(0.0, alert - 70.0) / 100.0 * 0.4
-        period_extra = SKIN_PERIOD_EXTRA if in_period else 0.0
-        puberty_extra = SKIN_PUBERTY_EXTRA if view is not None and view.puberty else 0.0
+        period_extra = SKIN_PERIOD_EXTRA if in_period_now else 0.0
+        puberty_extra = SKIN_PUBERTY_EXTRA if pubertal else 0.0
         skin_rate = (
             SKIN_AWAKE * awake_fraction
             + SKIN_SLEEP * sleep_fraction
@@ -1209,9 +1350,22 @@ def advance(
         else:
             state.desire = 0.0
 
+        if in_period_now:
+            flow_now = 3 if cycle_day <= 2 else (2 if cycle_day <= 4 else 1)
+            state.pad_hours += step_hours * awake_fraction
+            interval = PAD_INTERVAL.get(flow_now, 4.0)
+            while state.pad_hours >= interval:
+                state.pad_hours -= interval
+                if state.pads > 0:
+                    state.pads -= 1
+        else:
+            state.pad_hours = 0.0
+
         cursor = chunk_end
         remaining -= step_seconds
 
+    view = cycle_view(state, now, profile, settings)
+    in_period = bool(view and view.phase == "menstrual")
     _recompute_primary(state, now, profile, settings, in_period)
     if state.pregnant and state.conceived_at > 0:
         if (now_ts - state.conceived_at) >= PREGNANCY_DAYS * 86400:
@@ -1226,7 +1380,6 @@ def advance(
                 key=f"birth:{now.date().isoformat()}",
             )
     _advance_cycle_events(state, now, profile, view)
-    _account_supplies(state, now, profile, settings)
     if in_period and state.pads <= 0:
         _add_event(
             state,

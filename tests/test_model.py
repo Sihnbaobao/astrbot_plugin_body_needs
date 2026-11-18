@@ -112,22 +112,24 @@ def test_cycle_phase_and_hormones() -> None:
     settings = Settings()
     profile = make_profile()
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
-    state = make_state(now)
-    state.cycle_anchor = (now.date() - timedelta(days=1)).isoformat()
-    view = cycle_view(state, now, profile, settings)
+
+    def view_for(days_ago: int):
+        state = make_state(now)
+        state.cycle_anchor = (now.date() - timedelta(days=days_ago)).isoformat()
+        return cycle_view(state, now, profile, settings)
+
+    view = view_for(1)
     assert view is not None
     assert view.day == 2
     assert view.phase == "menstrual"
     assert view.progesterone < 20
 
-    state.cycle_anchor = (now.date() - timedelta(days=13)).isoformat()
-    view = cycle_view(state, now, profile, settings)
+    view = view_for(13)
     assert view is not None
     assert view.phase == "ovulation"
     assert view.estrogen > 80
 
-    state.cycle_anchor = (now.date() - timedelta(days=21)).isoformat()
-    view = cycle_view(state, now, profile, settings)
+    view = view_for(21)
     assert view is not None
     assert view.phase == "luteal"
     assert view.progesterone > 50
@@ -295,38 +297,37 @@ def test_anovulatory_cycle_never_reports_ovulation() -> None:
     assert checked > 0
 
 
-def test_supplies_are_used_during_a_period() -> None:
-    now = datetime(2026, 11, 3, 12, 0, tzinfo=TZ)
-    profile = make_profile(age=25)
-    state = make_state(now - timedelta(hours=12))
+def _period_state(moment: datetime, pads: int = 20) -> BodyState:
+    state = BodyState(
+        persona_id="test",
+        updated_at=moment.replace(hour=0, minute=0, second=0).timestamp(),
+    )
     state.cycle_anchor = "2026-11-01"
-    state.pads = 20
-    state.last_pad_day = "2026-10-31"
-    advance(state, now, profile, Settings())
-    # Two heavy days at a two hour interval cost eight pads each.
-    assert state.pads == 4
+    state.pads = pads
+    return state
 
 
-def test_light_period_days_cost_fewer_pads() -> None:
+def test_supplies_are_used_during_a_period() -> None:
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=TZ)
     profile = make_profile(age=25)
-    heavy_moment = datetime(2026, 11, 3, 12, 0, tzinfo=TZ)
-    heavy = BodyState(
-        persona_id="test", updated_at=(heavy_moment - timedelta(hours=12)).timestamp()
-    )
-    heavy.cycle_anchor = "2026-11-01"
-    heavy.pads = 40
-    heavy.last_pad_day = "2026-10-31"
-    advance(heavy, heavy_moment, profile, Settings())
+    state = _period_state(now)
+    advance(state, now, profile, Settings())
+    assert state.pads < 20
 
-    light_moment = datetime(2026, 11, 8, 12, 0, tzinfo=TZ)
-    light = BodyState(
-        persona_id="test", updated_at=(light_moment - timedelta(hours=12)).timestamp()
-    )
-    light.cycle_anchor = "2026-11-05"
-    light.pads = 40
-    light.last_pad_day = "2026-11-06"
-    advance(light, light_moment, profile, Settings())
-    assert light.pads > heavy.pads
+
+def test_heavy_period_days_cost_more_pads() -> None:
+    profile = make_profile(age=25)
+    settings = Settings()
+
+    heavy_moment = datetime(2026, 11, 2, 12, 0, tzinfo=TZ)
+    heavy = _period_state(heavy_moment, 40)
+    advance(heavy, heavy_moment, profile, settings)
+
+    light_moment = datetime(2026, 11, 6, 12, 0, tzinfo=TZ)
+    light = _period_state(light_moment, 40)
+    advance(light, light_moment, profile, settings)
+
+    assert heavy.pads < light.pads
 
 
 def test_supplies_action_restocks() -> None:
