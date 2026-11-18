@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+- 新增 `core/affect.py`：把身体状态压缩成 valence/arousal/distress/tension/pain/energy/dirt/desire 和一行身体描述，写入 `vitals.json`。
+- 每次推进后自动发布，供 persona_presence 的情绪资料片读取，让饥饿、睡眠、疼痛、清洁真正影响情绪底色。
+- 单向依赖：身体插件不读情绪，关掉或删掉任一方都不影响另一方。
+
 ## 0.7.1
 
 - 移除 `/身体 喂/喝水/洗澡/刷牙/上厕所/小睡` 等控制指令：这些是她自己的生理现象，不该由用户远程改数值。

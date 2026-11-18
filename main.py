@@ -29,11 +29,13 @@ from astrbot.core.agent.tool import FunctionTool, ToolSet
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.config import Settings
+from .core.affect import publish as publish_affect
 from .core.model import (
     ACTION_LABELS,
     BodyState,
     advance,
     apply_action,
+    cycle_view,
     parse_sleep_window,
 )
 from .core.profile import Profile, detect_profile
@@ -412,6 +414,12 @@ class BodyNeedsPlugin(Star):
             if active:
                 state.last_active_at = now.timestamp()
             self.store.save(state)
+            publish_affect(
+                self.data_dir,
+                state,
+                cycle_view(state, now, profile, self.settings),
+                now,
+            )
         return state
 
     async def _mutate(
@@ -428,6 +436,12 @@ class BodyNeedsPlugin(Star):
             result = apply_action(state, action, now, profile, self.settings)
             state.last_active_at = now.timestamp()
             self.store.save(state)
+            publish_affect(
+                self.data_dir,
+                state,
+                cycle_view(state, now, profile, self.settings),
+                now,
+            )
         return state, result
 
     async def _cycle_change(

@@ -164,6 +164,21 @@
 
 释放（自慰）不分性别：`desire >= 55`、距上次 ≥0.3 天、8-23 点，每天判定一次。概率 = `min(0.85, (间隔天数 - 0.3) * 0.5 * self_rate * (desire / 60))`。命中后 desire -55，男性进入 1-3 小时恢复期，写 `self_release` 事件；事件在群聊提示词里被过滤掉。
 
+## 5.2 对外发布的情绪底色
+
+每次 `advance` 之后会写 `<数据目录>/vitals.json`，按 persona 存一份：
+
+    valence   -1..1   舒适/不适的整体方向
+    arousal    0..1    激活程度（紧张、困、欲望都会推高）
+    distress   0..1    身体负担（饿、渴、累、疼、憋、脏）
+    tension    0..1    耐心被磨掉的程度
+    pain       0..1    经期痛、头痛、腰酸
+    energy     0..1    1 - 疲劳
+    dirt/desire        清洁和欲望
+    labels / line      给提示词用的短标签和一句话
+
+persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低落、distress→压低开心、dirt→嫌 的映射读取它，在情绪块前加 `[身体]`。身体插件不读情绪，保持单向依赖。
+
 ## 6. 女性周期
 
 阶段判定（下文的 day 是本次周期的第几天）：
