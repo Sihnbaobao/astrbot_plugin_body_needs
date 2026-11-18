@@ -94,7 +94,7 @@ def test_advance_sleep_recovers_sleep_debt() -> None:
     advance(state, now, make_profile(), settings)
     assert state.sleep_debt < 20
     assert state.fatigue < 70
-    assert state.hunger > 30
+    assert state.hunger > 20
 
 
 def test_recent_activity_keeps_sleep_window_awake() -> None:
@@ -554,7 +554,7 @@ def test_idle_persona_looks_after_herself() -> None:
     assert any(event["kind"] == "self_care" for event in state.events)
 
 
-def test_active_chat_keeps_her_needs_visible() -> None:
+def test_autonomy_runs_even_during_a_chat() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=10))
     state.last_active_at = now.timestamp() - 60
@@ -562,8 +562,8 @@ def test_active_chat_keeps_her_needs_visible() -> None:
     state.stomach = 8.0
     state.glucose = 22.0
     advance(state, now, make_profile(), Settings())
-    assert state.hunger > 80.0
-    assert not any(event["kind"] == "self_care" for event in state.events)
+    assert state.hunger < 88.0
+    assert any(event["kind"] == "self_care" for event in state.events)
 
 
 def test_self_release_lowers_desire() -> None:

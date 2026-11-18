@@ -61,16 +61,6 @@ const CONFIG_FIELDS = [
   },
 ];
 
-const CARE = [
-  { action: "eat", label: "吃饭", hint: "一顿正餐" },
-  { action: "drink", label: "喝水", hint: "解渴，也会想上厕所" },
-  { action: "shower", label: "洗澡", hint: "清洁归零", hygiene: true },
-  { action: "brush", label: "刷牙", hint: "口腔清爽", hygiene: true },
-  { action: "toilet", label: "上厕所", hint: "膀胱清空" },
-  { action: "nap", label: "小睡", hint: "精神一点" },
-  { action: "snack", label: "零食", hint: "垫一垫" },
-];
-
 function el(id) {
   return document.getElementById(id);
 }
@@ -349,23 +339,6 @@ function renderMale(persona) {
   }
 }
 
-function renderCare(persona) {
-  const host = el("careGrid");
-  const settings = (state.data && state.data.settings) || {};
-  const items = CARE.filter(function (item) {
-    return !item.hygiene || settings.enable_hygiene !== false;
-  });
-  host.replaceChildren();
-  items.forEach(function (item) {
-    const button = make("button", "btn", item.label);
-    button.type = "button";
-    button.dataset.action = item.action;
-    button.appendChild(make("small", "", item.hint));
-    button.disabled = !persona;
-    host.appendChild(button);
-  });
-}
-
 function renderLast(last) {
   const host = el("lastRow");
   if (!last) {
@@ -419,7 +392,6 @@ function render(data) {
     el("lastRow").textContent = "";
     el("events").replaceChildren(make("li", "empty", "还没有值得记下的事。"));
     el("eventCount").textContent = "";
-    renderCare(null);
     el("cycleCard").hidden = true;
     el("maleCard").hidden = true;
     updateSettingsHint();
@@ -431,7 +403,6 @@ function render(data) {
   renderLast(persona.last);
   renderCycle(persona);
   renderMale(persona);
-  renderCare(persona);
   renderEvents(persona.events);
   updateSettingsHint();
 }
@@ -442,30 +413,6 @@ async function refresh() {
     render(data);
   } catch (error) {
     showNotice(error && error.message ? error.message : "读取状态失败", "error");
-  }
-}
-
-async function act(action, button) {
-  const persona = selectedPersona();
-  if (!persona) return;
-  if (button) button.disabled = true;
-  try {
-    const result = await bridge.apiPost("page/action", {
-      persona_id: persona.id,
-      action: action,
-    });
-    if (result && result.state) {
-      const index = state.data.personas.findIndex(function (item) {
-        return item.id === persona.id;
-      });
-      if (index >= 0) state.data.personas[index] = result.state;
-      render(state.data);
-    }
-    showNotice(result && result.label ? result.label + "，状态已更新" : "状态已更新", "ok");
-  } catch (error) {
-    showNotice(error && error.message ? error.message : "动作失败", "error");
-  } finally {
-    if (button) button.disabled = false;
   }
 }
 
@@ -659,11 +606,6 @@ function bind() {
     if (!el("panel-settings").hidden) {
       renderSettings(state.config.values);
     }
-  });
-  el("careGrid").addEventListener("click", function (event) {
-    const button = event.target.closest("[data-action]");
-    if (!button || button.disabled) return;
-    act(button.dataset.action, button);
   });
   el("cycleActions").addEventListener("click", function (event) {
     const button = event.target.closest("[data-cycle]");

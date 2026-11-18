@@ -29,7 +29,13 @@ from astrbot.core.agent.tool import FunctionTool, ToolSet
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.config import Settings
-from .core.model import BodyState, advance, apply_action, parse_sleep_window
+from .core.model import (
+    ACTION_LABELS,
+    BodyState,
+    advance,
+    apply_action,
+    parse_sleep_window,
+)
 from .core.profile import Profile, detect_profile
 from .core.prompt import build_prompt_block, build_status_text, build_web_state
 from .core.store import Store
@@ -669,49 +675,37 @@ class BodyNeedsPlugin(Star):
             yield event.plain_result("身体状态已经重置，重新从一种普通的日常开始。")
             return
 
-        action = ACTION_ALIASES.get(sub)
-        if action is None:
-            # Allow the English action names too.
-            if sub.lower() in (
-                "eat",
-                "snack",
-                "drink",
-                "shower",
-                "brush",
-                "toilet",
-                "nap",
-                "release",
-                "prenatal",
-                "express",
-            ):
-                action = sub.lower()
-            else:
-                yield event.plain_result(self._help_text())
+        if sub in ("调试", "debug"):
+            if not event.is_admin():
+                yield event.plain_result("只有管理员能用调试接口。")
                 return
-
-        if not event.is_admin():
-            yield event.plain_result("只有管理员能改身体状态。")
-            return
-        if action in ("intimacy", "release"):
-            if not event.is_private_chat():
+            name = argument.split()[0] if argument else ""
+            action = ACTION_ALIASES.get(name)
+            if action is None and name.lower() in ACTION_LABELS:
+                action = name.lower()
+            if action is None:
+                yield event.plain_result(
+                    "用法：/身体 调试 <喂|零食|喝水|洗澡|刷牙|上厕所|小睡|亲密|自己解决|产检|哺乳|补货>\n"
+                    "这是维护用的调试口，不是她的日常；正常聊天里她做了什么由 body_action 记录。"
+                )
+                return
+            if action in ("intimacy", "release") and not event.is_private_chat():
                 yield event.plain_result("这个动作只能在私聊里记录。")
                 return
+            try:
+                persona_id, profile, now = await self._identity(event)
+                state, result = await self._mutate(persona_id, profile, now, action)
+            except ValueError as exc:
+                yield event.plain_result(f"这个动作现在不能记录：{exc}")
+                return
+            except Exception as exc:
+                logger.warning("[body] 调试动作失败：%s", exc, exc_info=True)
+                yield event.plain_result(f"记录失败：{exc}")
+                return
+            yield event.plain_result(f"[调试] {result.label}。{result.detail}。")
+            return
 
-        try:
-            persona_id, profile, now = await self._identity(event)
-            state, result = await self._mutate(persona_id, profile, now, action)
-        except ValueError as exc:
-            yield event.plain_result(f"这个动作现在不能记录：{exc}")
-            return
-        except Exception as exc:
-            logger.warning("[body] 指令动作失败：%s", exc, exc_info=True)
-            yield event.plain_result(f"记录失败：{exc}")
-            return
-        yield event.plain_result(
-            f"{result.label}。{result.detail}。\n"
-            f"胃 {round(state.hunger)}/100 · 渴 {round(state.thirst)}/100 · "
-            f"精力 {round(state.fatigue)}/100"
-        )
+        yield event.plain_result(self._help_text())
 
     async def _cycle_command(self, event: AstrMessageEvent, argument: str):
         """Handle the /身体 经期 subcommands.
@@ -777,12 +771,10 @@ class BodyNeedsPlugin(Star):
         return (
             "身体指令：\n"
             "/身体 状态\n"
-            "/身体 喂 | 零食 | 喝水 | 洗澡 | 刷牙 | 上厕所 | 小睡 | 补货\n"
-            "/身体 产检 | 哺乳（怀孕/哺乳期可用）\n"
-            "私聊还可记录：亲密 | 自己解决\n"
             "/身体 经期 [状态|开始|延后 N|提前 N|设置 YYYY-MM-DD]\n"
             "/身体 重置\n"
-            "改身体状态需要管理员权限；群聊里只看得到基础状态。"
+            "她的身体由她自己维持：吃饭、喝水、洗澡、上厕所、睡觉都会按自己的状态和作息发生，\n"
+            "不用在聊天里打卡。改生理期和重置需要管理员权限；群聊里只看得到基础状态。"
         )
 
     # ── 插件页接口 ──
@@ -791,7 +783,6 @@ class BodyNeedsPlugin(Star):
         """Register the plugin page routes."""
         routes = [
             ("page/status", self._api_status, ["GET"], "身体：状态总览"),
-            ("page/action", self._api_action, ["POST"], "身体：记录一次照顾"),
             ("page/cycle", self._api_cycle, ["POST"], "身体：调整生理期"),
             ("page/reset", self._api_reset, ["POST"], "身体：重置状态"),
             ("page/config", self._api_config, ["GET"], "身体：读取可编辑配置"),
@@ -922,42 +913,6 @@ class BodyNeedsPlugin(Star):
                     "enable_cycle": self.settings.enable_cycle,
                     "enable_intimate": self.settings.enable_intimate,
                 },
-            }
-        )
-
-    async def _api_action(self):
-        """Apply one care action from the plugin page."""
-        from astrbot.api.web import error_response, json_response, request
-
-        self._refresh()
-
-        try:
-            payload = await request.json(default={})
-        except Exception:
-            payload = {}
-        payload = payload if isinstance(payload, dict) else {}
-        persona_id = str(payload.get("persona_id") or "").strip()
-        action = str(payload.get("action") or "").strip()
-        if not action:
-            return error_response("缺少动作")
-        persona_id, profile = self._profile_by_id(persona_id)
-        if action == "intimacy" and not profile.adult:
-            return error_response(
-                "当前人格未启用成人模块：需要能识别出性别，且 ENABLE_INTIMATE 开启"
-            )
-        try:
-            now = self._now()
-            state, result = await self._mutate(persona_id, profile, now, action)
-        except ValueError as exc:
-            return error_response(str(exc))
-        except Exception as exc:
-            logger.warning("[body] 页面动作失败：%s", exc, exc_info=True)
-            return error_response("记录失败，详情见日志")
-        return json_response(
-            {
-                "label": result.label,
-                "detail": result.detail,
-                "state": build_web_state(state, now, profile, self.settings),
             }
         )
 

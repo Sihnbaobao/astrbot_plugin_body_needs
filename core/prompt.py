@@ -601,7 +601,7 @@ def build_status_text(
     if recent:
         lines.append("最近：" + "；".join(recent))
     if private and show_help:
-        lines.append("照顾：/身体 喂 · 喝水 · 洗澡 · 刷牙 · 上厕所 · 小睡")
+        lines.append("她的饮食起居由她自己维持；想知道周期可以用 /身体 经期。")
     return "\n".join(lines)
 
 

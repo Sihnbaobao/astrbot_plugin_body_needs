@@ -1235,20 +1235,29 @@ def _morning_age_factor(age: float) -> float:
     return 0.35
 
 
-def _routine(state: BodyState, moment: datetime, const: Constitution) -> None:
-    """Let a persona look after herself while nobody is interacting.
+def _routine(
+    state: BodyState,
+    moment: datetime,
+    profile: Profile,
+    settings: Settings,
+    const: Constitution,
+) -> None:
+    """Let a persona run her own body on an ordinary daily rhythm.
 
-    Meals, drinks and a full gut are handled at ordinary hours instead of
-    piling up forever. This only runs after a long idle gap, so an active
-    conversation still sees real hunger, thirst and pressure.
+    Meals, drinks, hygiene, the toilet and supplies are hers to handle, so they
+    are driven by her own state and the clock, never by a chat command. The
+    model only ever learns that they happened.
 
     Args:
         state: Body state being advanced.
         moment: Current simulation instant.
+        profile: Persona profile; supplies only matter for a cycling body.
+        settings: Plugin settings; hygiene can be switched off.
         const: Per-persona baseline, used for the meal size.
     """
     hour = moment.hour
-    if hour in (8, 13, 19) and state.stomach <= 55.0:
+    since_meal = moment.timestamp() - state.last_eat_at
+    if hour in (8, 13, 19) and state.stomach <= 55.0 and since_meal > 2 * 3600:
         state.stomach = _clamp(state.stomach + 42.0 / const.stomach_capacity)
         state.glucose = _clamp(state.glucose + 18.0)
         state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
@@ -1264,6 +1273,35 @@ def _routine(state: BodyState, moment: datetime, const: Constitution) -> None:
     if hour in (10, 16, 21) and state.hydration <= 55.0:
         state.hydration = _clamp(state.hydration + 22.0)
         state.last_drink_at = moment.timestamp()
+    if settings.enable_hygiene:
+        if hour in (7, 21) and state.skin >= 60.0:
+            state.skin = 2.0
+            state.last_shower_at = moment.timestamp()
+            _add_event(
+                state,
+                moment,
+                "self_care",
+                "洗了个澡",
+                key=f"self-shower:{moment.date().isoformat()}",
+            )
+        if hour in (8, 22) and state.oral >= 55.0:
+            state.oral = 2.0
+            state.last_brush_at = moment.timestamp()
+    if (
+        profile.gender == "female"
+        and settings.enable_cycle
+        and state.pads <= 2
+        and not state.pregnant
+    ):
+        state.pads += PAD_RESTOCK
+        state.last_supply_at = moment.timestamp()
+        _add_event(
+            state,
+            moment,
+            "self_care",
+            "买了卫生用品",
+            key=f"self-supplies:{moment.date().isoformat()}",
+        )
     if state.lactating and state.milk >= 85.0:
         state.milk = 25.0
         state.last_express_at = moment.timestamp()
@@ -1639,8 +1677,8 @@ def advance(
         midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
         alert = circadian_alertness(midpoint)
         _step_cycle(state, chunk_end, profile, settings, step_hours)
-        if idle and chunk_end.hour != cursor.hour:
-            _routine(state, chunk_end, const)
+        if chunk_end.hour != cursor.hour:
+            _routine(state, chunk_end, profile, settings, const)
         cycle_day = state.cycle_day
         in_period_now = (
             profile.gender == "female"

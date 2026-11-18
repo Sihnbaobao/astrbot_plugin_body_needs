@@ -131,16 +131,31 @@ async def test_inject_body_and_tools(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_command_feeds_persona(monkeypatch, tmp_path) -> None:
+async def test_command_no_longer_feeds_her(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
+    before = plugin.store.load("test", plugin._now()).hunger
     event = FakeEvent(text="/身体 喂")
     results = []
     async for result in plugin.body_command(event):
         results.append(result.get_plain_text())
-    assert "吃了一顿饭" in results[0]
+    assert "身体指令" in results[0]
+    assert "喂" not in results[0].split("她的身体由她自己维持")[0]
     state = plugin.store.load("test", plugin._now())
-    assert state.hunger < 20
+    assert state.hunger == before
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
+async def test_debug_command_remains_for_maintenance(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
+    await plugin.initialize()
+    event = FakeEvent(text="/身体 调试 喂")
+    results = []
+    async for result in plugin.body_command(event):
+        results.append(result.get_plain_text())
+    assert "[调试]" in results[0]
+    assert "吃了一顿饭" in results[0]
     await plugin.terminate()
 
 
