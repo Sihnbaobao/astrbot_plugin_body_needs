@@ -47,6 +47,7 @@ PHASE_LABELS = {
     "follicular": "经期后",
     "ovulation": "排卵期",
     "luteal": "黄体期",
+    "premenarche": "未初潮",
 }
 FLOW_LABELS = {1: "量少", 2: "量中等", 3: "量多"}
 
@@ -291,15 +292,21 @@ def _internal_line(state: BodyState, now: datetime) -> str:
 
 def _cycle_text(view: CycleView) -> str:
     """Build the one-line cycle description used in prompts and cards."""
+    if view.phase == "premenarche":
+        return f"青春期：{view.note}"
     if view.phase == "menstrual":
         flow = FLOW_LABELS.get(view.flow, "")
         detail = "，".join(part for part in (flow, view.note) if part)
-        return f"经期：第 {view.day} 天，{detail}；距下次约 {view.days_to_next} 天"
-    if view.phase == "luteal":
-        return f"周期：黄体期，{view.note}；距下次约 {view.days_to_next} 天"
-    if view.phase == "ovulation":
-        return f"周期：排卵期，{view.note}；距下次约 {view.days_to_next} 天"
-    return f"周期：第 {view.day} 天（经期后），距下次约 {view.days_to_next} 天"
+        text = f"经期：第 {view.day} 天，{detail}；距下次约 {view.days_to_next} 天"
+    elif view.phase == "luteal":
+        text = f"周期：黄体期，{view.note}；距下次约 {view.days_to_next} 天"
+    elif view.phase == "ovulation":
+        text = f"周期：排卵期，{view.note}；距下次约 {view.days_to_next} 天"
+    else:
+        text = f"周期：第 {view.day} 天（经期后），距下次约 {view.days_to_next} 天"
+    if view.puberty:
+        text += "（青春期，周期还不太规律）"
+    return text
 
 
 def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
@@ -602,8 +609,9 @@ def build_web_state(
             "phase": view.phase,
             "phase_label": PHASE_LABELS.get(view.phase, view.phase),
             "day": view.day,
-            "cycle_length": profile.cycle_length,
+            "cycle_length": view.cycle_length,
             "period_length": profile.period_length,
+            "puberty": view.puberty,
             "days_to_next": view.days_to_next,
             "flow": view.flow,
             "flow_label": FLOW_LABELS.get(view.flow, ""),
@@ -612,7 +620,7 @@ def build_web_state(
             "appetite": view.appetite,
             "note": view.note,
             "start": view.cycle_start.isoformat(),
-            "progress": round(view.day / max(1, profile.cycle_length), 3),
+            "progress": round(view.day / max(1, view.cycle_length), 3),
             "estrogen": round(view.estrogen, 1),
             "progesterone": round(view.progesterone, 1),
             "lh": round(view.lh, 1),

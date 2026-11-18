@@ -42,6 +42,9 @@ URINE_BASE_SLEEP = 1.0
 SKIN_AWAKE = 1.1
 SKIN_SLEEP = 0.55
 SKIN_PERIOD_EXTRA = 0.8
+SKIN_PUBERTY_EXTRA = 0.15
+PUBERTY_END = 18
+MENARCHE_AGE = 13
 ORAL_AWAKE = 2.8
 ORAL_SLEEP = 1.3
 SLEEP_DEBT_AWAKE = 0.55
@@ -328,6 +331,8 @@ class CycleView:
     estrogen: float
     progesterone: float
     lh: float
+    puberty: bool = False
+    cycle_length: int = 28
 
 
 @dataclass(frozen=True)
@@ -402,15 +407,73 @@ def sleep_seconds_between(
     return min(total, (end - start).total_seconds())
 
 
-def cycle_position(anchor: date, today: date, cycle_length: int) -> tuple[int, date]:
-    """Return the 1-based cycle day and the current cycle's start date."""
+def _is_pubertal(age: int | None) -> bool:
+    """Return whether an age still sits inside the puberty band."""
+    return age is not None and age < PUBERTY_END
+
+
+def _cycle_length_for(
+    base: int,
+    index: int,
+    persona_id: str,
+    pubertal: bool,
+) -> int:
+    """Return the length of one cycle, jittered while the body is still growing.
+
+    Adult cycles are treated as steady. During puberty the gap between periods
+    is visibly irregular, so each cycle drifts around the configured length.
+
+    Args:
+        base: Configured cycle length in days.
+        index: Zero-based cycle number counted from the anchor.
+        persona_id: Seed, so one persona keeps a stable sequence.
+        pubertal: Whether to apply the puberty drift.
+
+    Returns:
+        A cycle length in days.
+    """
+    length = max(1, int(base))
+    if not pubertal:
+        return length
+    drift = (_roll(persona_id, "cycle-length", str(index)) * 2.0 - 1.0) * 5.0
+    return max(18, min(45, int(round(length + drift))))
+
+
+def cycle_position(
+    anchor: date,
+    today: date,
+    cycle_length: int,
+    *,
+    persona_id: str = "",
+    pubertal: bool = False,
+) -> tuple[int, date, int]:
+    """Return the cycle day, the current cycle's start and its length.
+
+    Args:
+        anchor: Day one of a known cycle.
+        today: The date to place.
+        cycle_length: Configured length in days.
+        persona_id: Seed used when lengths are jittered.
+        pubertal: Whether the current cycle lengths are irregular.
+
+    Returns:
+        A (day, start, length) tuple, with a 1-based day.
+    """
     length = max(1, int(cycle_length))
-    offset = (today - anchor).days
-    if offset < 0:
-        offset = 0
-    index = offset // length
-    start = anchor + timedelta(days=index * length)
-    return (today - start).days + 1, start
+    if not pubertal or today <= anchor:
+        offset = max(0, (today - anchor).days)
+        index = offset // length
+        start = anchor + timedelta(days=index * length)
+        return (today - start).days + 1, start, length
+
+    cursor = anchor
+    for index in range(600):
+        span = _cycle_length_for(length, index, persona_id, True)
+        following = cursor + timedelta(days=span)
+        if today < following:
+            return (today - cursor).days + 1, cursor, span
+        cursor = following
+    return 1, cursor, length
 
 
 def _ensure_anchor(
@@ -479,15 +542,43 @@ def cycle_view(
     """Compute the current menstrual phase, hormones and symptoms."""
     if not settings.enable_cycle or profile.gender != "female":
         return None
+
+    age = profile.age
+    pubertal = _is_pubertal(age)
+    if age is not None and age < MENARCHE_AGE:
+        return CycleView(
+            cycle_start=now.date(),
+            day=0,
+            phase="premenarche",
+            flow=0,
+            cramps=0,
+            mood=0,
+            appetite=0,
+            days_to_next=0,
+            note="还没来初潮，身体还在长",
+            estrogen=8.0,
+            progesterone=3.0,
+            lh=6.0,
+            puberty=True,
+            cycle_length=max(21, profile.cycle_length),
+        )
+
     anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
-    day, start = cycle_position(anchor, now.date(), profile.cycle_length)
-    length = max(1, profile.cycle_length)
+    day, start, length = cycle_position(
+        anchor,
+        now.date(),
+        profile.cycle_length,
+        persona_id=profile.persona_id,
+        pubertal=pubertal,
+    )
+    length = max(1, length)
     period = max(1, min(profile.period_length, length - 1))
+    ovulation_day = length // 2 + 1
     if day <= period:
         phase = "menstrual"
-    elif abs(day - (length // 2 + 1)) <= 1:
+    elif abs(day - ovulation_day) <= 1:
         phase = "ovulation"
-    elif day > length // 2 + 2:
+    elif day > ovulation_day + 1:
         phase = "luteal"
     else:
         phase = "follicular"
@@ -502,6 +593,8 @@ def cycle_view(
     if phase == "menstrual":
         flow = 3 if day <= 2 else (2 if day <= 4 else 1)
         cramps = min(3, 1 + (1 if day <= 2 else 0) + rng.randint(0, 1))
+        if pubertal and rng.random() < 0.35:
+            cramps = min(3, cramps + 1)
         mood = -1 if day <= 2 else 0
         appetite = rng.choice([-1, 0, 0, 1])
         note = "小腹坠胀，腰有点酸" if cramps >= 2 else "小腹有点坠"
@@ -509,8 +602,12 @@ def cycle_view(
         days_left = max(1, length - day + 1)
         cramps = rng.choice([0, 0, 1]) if days_left <= 4 else 0
         mood = -1 - (1 if progesterone > 45 else 0)
+        if pubertal:
+            mood = max(-3, mood - 1)
         appetite = 1
-        if days_left <= 6:
+        if days_left <= 6 and pubertal:
+            note = "经期快到了，情绪起伏比平时大，胃口也大一点"
+        elif days_left <= 6:
             note = "经期快到了，容易烦躁，胃口也大一点"
         else:
             note = "排卵后，身体开始为经期做准备"
@@ -533,6 +630,8 @@ def cycle_view(
         estrogen=estrogen,
         progesterone=progesterone,
         lh=lh,
+        puberty=pubertal,
+        cycle_length=length,
     )
 
 
@@ -558,7 +657,7 @@ def _advance_cycle_events(
     view: CycleView | None,
 ) -> None:
     """Record period and phase transitions without duplicating them."""
-    if view is None:
+    if view is None or view.phase == "premenarche":
         state.cycle_phase = ""
         state.cycle_start = ""
         return
@@ -635,6 +734,31 @@ def _emission_age_factor(age: int) -> float:
     return 0.1
 
 
+def _morning_age_factor(age: int) -> float:
+    """Return the age multiplier for morning-erection odds.
+
+    Morning erections are most frequent in the late teens and twenties and
+    fade steadily afterwards.
+
+    Args:
+        age: The persona's age in years.
+
+    Returns:
+        A multiplier on the base per-morning chance.
+    """
+    if age < 20:
+        return 1.25
+    if age < 30:
+        return 1.15
+    if age < 40:
+        return 1.0
+    if age < 50:
+        return 0.85
+    if age < 60:
+        return 0.6
+    return 0.35
+
+
 def _advance_male_events(
     state: BodyState,
     start_ts: float,
@@ -686,7 +810,8 @@ def _advance_male_events(
         morning = datetime.combine(current, time(7, 30), tzinfo=now.tzinfo)
         if start_ts < morning.timestamp() <= now.timestamp():
             key = f"morning:{current.isoformat()}"
-            chance = 0.22 + max(0.0, 1.0 - state.sleep_debt / 12.0) * 0.14
+            base = 0.22 + max(0.0, 1.0 - state.sleep_debt / 12.0) * 0.14
+            chance = min(0.5, base * _morning_age_factor(profile.age or 30))
             if (
                 not state.flags.get(key)
                 and _roll(profile.persona_id, current.isoformat(), "morning") < chance
@@ -829,11 +954,13 @@ def advance(
 
         sweat = max(0.0, alert - 70.0) / 100.0 * 0.4
         period_extra = SKIN_PERIOD_EXTRA if in_period else 0.0
+        puberty_extra = SKIN_PUBERTY_EXTRA if view is not None and view.puberty else 0.0
         skin_rate = (
             SKIN_AWAKE * awake_fraction
             + SKIN_SLEEP * sleep_fraction
             + sweat
             + period_extra
+            + puberty_extra
         )
         state.skin = _clamp(state.skin + skin_rate * step_hours)
 

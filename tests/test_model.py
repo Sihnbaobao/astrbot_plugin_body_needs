@@ -10,8 +10,10 @@ import pytest
 from core.config import Settings
 from core.model import (
     BodyState,
+    _cycle_length_for,
     _desire_rate,
     _emission_age_factor,
+    _morning_age_factor,
     advance,
     apply_action,
     cycle_view,
@@ -219,6 +221,43 @@ def test_male_desire_rate_falls_with_age() -> None:
     ]
     assert rates == [2.0, 1.8, 1.4, 1.0]
     assert rates == sorted(rates, reverse=True)
+
+
+def test_morning_odds_fall_with_age() -> None:
+    factors = [_morning_age_factor(age) for age in (17, 25, 35, 45, 55, 65)]
+    assert factors == sorted(factors, reverse=True)
+    assert factors[0] > factors[-1] * 3
+
+
+def test_puberty_makes_cycle_lengths_vary() -> None:
+    adult = {_cycle_length_for(28, index, "p", False) for index in range(24)}
+    assert adult == {28}
+
+    teen = {_cycle_length_for(28, index, "p", True) for index in range(24)}
+    assert len(teen) > 1
+    assert all(18 <= length <= 45 for length in teen)
+
+
+def test_premenarche_has_no_period() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now)
+    settings = Settings()
+    view = cycle_view(state, now, make_profile(age=12), settings)
+    assert view is not None
+    assert view.phase == "premenarche"
+    assert view.flow == 0
+    assert view.puberty is True
+
+
+def test_puberty_flags_teen_cycle() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now)
+    settings = Settings()
+    teen = cycle_view(state, now, make_profile(age=16), settings)
+    adult = cycle_view(state, now, make_profile(age=28), settings)
+    assert teen is not None and adult is not None
+    assert teen.puberty is True
+    assert adult.puberty is False
 
 
 def test_emission_odds_fall_with_age() -> None:

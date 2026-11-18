@@ -239,11 +239,17 @@ function renderCycle(persona) {
     return;
   }
   card.hidden = false;
-  el("cyclePhase").textContent =
-    (cycle.phase_label || "周期") + " · 第 " + cycle.day + " 天";
-
   const host = el("cycleBody");
   host.replaceChildren();
+
+  if (cycle.phase === "premenarche") {
+    el("cyclePhase").textContent = cycle.phase_label || "未初潮";
+    host.appendChild(make("p", "cycle-note", cycle.note || "还没来初潮"));
+    return;
+  }
+
+  el("cyclePhase").textContent =
+    (cycle.phase_label || "周期") + " · 第 " + cycle.day + " 天";
 
   const hero = make("div", "cycle-hero");
   hero.appendChild(make("b", "", "第 " + cycle.day + " 天"));
