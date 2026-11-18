@@ -15,6 +15,7 @@ from core.model import (
     _desire_rate,
     _emission_age_factor,
     _menarche_age,
+    _menopause_age,
     _morning_age_factor,
     advance,
     apply_action,
@@ -230,7 +231,13 @@ def test_male_desire_rate_falls_with_age() -> None:
 def test_menarche_varies_between_personas() -> None:
     ages = {_menarche_age(pid) for pid in ("a", "b", "c", "d", "e", "f")}
     assert len(ages) > 1
-    assert all(10.0 <= value <= 15.0 for value in ages)
+    assert all(9.0 <= value <= 16.0 for value in ages)
+
+
+def test_menopause_age_varies_between_personas() -> None:
+    ages = {_menopause_age(pid) for pid in ("a", "b", "c", "d", "e", "f")}
+    assert len(ages) > 1
+    assert all(40.0 <= value <= 61.0 for value in ages)
 
 
 def test_menarche_is_not_a_fixed_cutoff() -> None:
@@ -249,7 +256,7 @@ def test_menarche_is_not_a_fixed_cutoff() -> None:
 def test_menopause_stops_the_cycle() -> None:
     now = datetime(2026, 11, 19, 9, 0, tzinfo=TZ)
     state = make_state(now)
-    view = cycle_view(state, now, make_profile(age=55), Settings())
+    view = cycle_view(state, now, make_profile(age=62), Settings())
     assert view is not None
     assert view.phase == "menopause"
     assert view.flow == 0
@@ -467,7 +474,7 @@ def test_premenarche_has_no_period() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)
     settings = Settings()
-    view = cycle_view(state, now, make_profile(age=12), settings)
+    view = cycle_view(state, now, make_profile(age=8), settings)
     assert view is not None
     assert view.phase == "premenarche"
     assert view.flow == 0

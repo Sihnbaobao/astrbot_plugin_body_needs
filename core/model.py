@@ -44,9 +44,19 @@ SKIN_SLEEP = 0.55
 SKIN_PERIOD_EXTRA = 0.8
 SKIN_PUBERTY_EXTRA = 0.15
 PUBERTY_END = 18
-MENARCHE_MIN = 10.0
-MENARCHE_SPAN = 5.0
-MENOPAUSE_AGE = 50
+# Menarche is roughly normal around 12.5 years; the clamp keeps the tails at
+# the real extremes rather than letting the distribution run wild.
+MENARCHE_MEAN = 12.5
+MENARCHE_SD = 1.1
+MENARCHE_MIN = 9.0
+MENARCHE_MAX = 16.0
+# Natural menopause is roughly normal around 51, and the years before it are
+# a transition rather than a switch.
+MENOPAUSE_MEAN = 51.0
+MENOPAUSE_SD = 4.0
+MENOPAUSE_MIN = 40.0
+MENOPAUSE_MAX = 61.0
+PERIMENOPAUSE_YEARS = 4.0
 LUTEAL_DAYS = 14
 OVULATION_ESTROGEN = 85.0
 FOLLICULAR_FLOOR = 6.0
@@ -467,16 +477,46 @@ def _is_pubertal(age: float | None) -> bool:
     return age is not None and age < PUBERTY_END
 
 
+def _normal_draw(*parts: str) -> float:
+    """Return a stable standard-normal deviate for the given parts."""
+    u1 = max(1e-9, _roll(*parts, "u1"))
+    u2 = _roll(*parts, "u2")
+    return math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+
+
 def _menarche_age(persona_id: str) -> float:
     """Return the age of first menstruation for one persona.
 
-    Real menarche spreads over roughly ten to fifteen years of age, so each
-    persona gets a stable point in that range instead of a hard cut-off.
+    Drawn from a normal distribution around 12.5 with a standard deviation of
+    about one year, so most personas start between 11 and 14 while a few start
+    at ten or even earlier, which is a normal spread rather than an exception.
     """
-    return MENARCHE_MIN + _roll(persona_id, "menarche") * MENARCHE_SPAN
+    value = MENARCHE_MEAN + _normal_draw(persona_id, "menarche") * MENARCHE_SD
+    return min(MENARCHE_MAX, max(MENARCHE_MIN, value))
 
 
-def _anovulatory_chance(age: float | None, pcos: bool = False) -> float:
+def _menopause_age(persona_id: str) -> float:
+    """Return the age at which one persona reaches menopause.
+
+    Normal around 51 with a standard deviation of four years, so a persona can
+    stop anywhere between the early forties and the late fifties.
+    """
+    value = MENOPAUSE_MEAN + _normal_draw(persona_id, "menopause") * MENOPAUSE_SD
+    return min(MENOPAUSE_MAX, max(MENOPAUSE_MIN, value))
+
+
+def _is_perimenopausal(age: float | None, menopause_at: float) -> bool:
+    """Return whether an age sits in the transition before menopause."""
+    if age is None:
+        return False
+    return menopause_at - PERIMENOPAUSE_YEARS <= age < menopause_at
+
+
+def _anovulatory_chance(
+    age: float | None,
+    pcos: bool = False,
+    perimenopausal: bool = False,
+) -> float:
     """Return how often a cycle skips ovulation."""
     if pcos:
         return 0.85
@@ -486,6 +526,8 @@ def _anovulatory_chance(age: float | None, pcos: bool = False) -> float:
         return 0.55
     if age < 20:
         return 0.25
+    if perimenopausal:
+        return 0.35
     if age < 45:
         return 0.08
     return 0.35
@@ -641,9 +683,15 @@ def _hormones(
     return _clamp(estrogen), _clamp(progesterone), _clamp(lh)
 
 
-def _cycle_span(profile: Profile, pubertal: bool) -> float:
+def _cycle_span(
+    profile: Profile,
+    pubertal: bool,
+    perimenopausal: bool = False,
+) -> float:
     """Return the per-cycle drift half-width for this persona."""
     span = 5.0 if pubertal else 0.0
+    if perimenopausal:
+        span = max(span, 9.0)
     if profile.pcos:
         span = max(span, 12.0)
     return span
@@ -668,9 +716,12 @@ def _restart_cycle(state: BodyState, now: datetime, profile: Profile) -> None:
     state.estrogen = 15.0
     state.progesterone = 5.0
     state.lh = 10.0
+    age = profile.physio_age
     state.anovulatory = _roll(
         profile.persona_id, now.date().isoformat(), "ovulation"
-    ) < _anovulatory_chance(profile.physio_age, profile.pcos)
+    ) < _anovulatory_chance(
+        age, profile.pcos, _is_perimenopausal(age, _menopause_age(profile.persona_id))
+    )
 
 
 def _seed_cycle(
@@ -688,7 +739,9 @@ def _seed_cycle(
         return
     age = profile.physio_age
     pubertal = _is_pubertal(age)
-    span = _cycle_span(profile, pubertal)
+    span = _cycle_span(
+        profile, pubertal, _is_perimenopausal(age, _menopause_age(profile.persona_id))
+    )
     stress = _cycle_stress(state)
     anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
     day, start, length = cycle_position(
@@ -706,7 +759,9 @@ def _seed_cycle(
     state.cycle_day = day
     state.anovulatory = _roll(
         profile.persona_id, start.isoformat(), "ovulation"
-    ) < _anovulatory_chance(age, profile.pcos)
+    ) < _anovulatory_chance(
+        age, profile.pcos, _is_perimenopausal(age, _menopause_age(profile.persona_id))
+    )
     expected = max(period + 1, length - LUTEAL_DAYS)
     state.ovulation_day = 0
     if not state.anovulatory and day >= expected:
@@ -736,7 +791,9 @@ def _step_cycle(
         return
     age = profile.physio_age
     if age is not None:
-        if age < _menarche_age(profile.persona_id) or age >= MENOPAUSE_AGE:
+        if age < _menarche_age(profile.persona_id):
+            return
+        if age >= _menopause_age(profile.persona_id):
             return
     try:
         cycle_start = date.fromisoformat(state.cycle_start)
@@ -750,7 +807,11 @@ def _step_cycle(
         profile.cycle_length,
         0,
         profile.persona_id,
-        _cycle_span(profile, pubertal),
+        _cycle_span(
+            profile,
+            pubertal,
+            _is_perimenopausal(age, _menopause_age(profile.persona_id)),
+        ),
         period,
         stress,
     )
@@ -844,7 +905,7 @@ def cycle_view(
             cycle_length=max(21, profile.cycle_length),
             discharge=1,
         )
-    elif age >= MENOPAUSE_AGE:
+    elif age >= _menopause_age(profile.persona_id):
         return CycleView(
             cycle_start=now.date(),
             day=0,
@@ -862,6 +923,7 @@ def cycle_view(
             discharge=0,
         )
 
+    perimenopausal = _is_perimenopausal(age, _menopause_age(profile.persona_id))
     _seed_cycle(state, now, profile, settings)
     try:
         start = date.fromisoformat(state.cycle_start)
@@ -874,7 +936,7 @@ def cycle_view(
         profile.cycle_length,
         0,
         profile.persona_id,
-        _cycle_span(profile, pubertal),
+        _cycle_span(profile, pubertal, perimenopausal),
         period,
         stress,
     )
@@ -937,6 +999,8 @@ def cycle_view(
             note = "经期快到了，情绪起伏比平时大，胃口也大一点"
         elif days_left <= 6:
             note = "经期快到了，容易烦躁，胃口也大一点"
+        elif perimenopausal:
+            note = "围绝经期，周期开始不太规律，偶尔潮热"
         elif anovulatory:
             note = "这个周期没有排卵，身体还是在照常准备"
         else:
