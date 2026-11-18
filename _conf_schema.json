@@ -1,0 +1,138 @@
+{
+  "ENABLED": {
+    "description": "启用身体系统",
+    "type": "bool",
+    "default": true,
+    "hint": "总开关。关掉后不注入提示词、不挂工具，已有状态文件保留。"
+  },
+  "GENDER": {
+    "description": "生理性别",
+    "type": "string",
+    "default": "auto",
+    "options": [
+      "auto",
+      "female",
+      "male",
+      "none"
+    ],
+    "hint": "auto 会从人格正文里的称谓和性别词判断；判断不准时直接指定 female / male。none 只有饥渴清洁，没有生理期和成人模块。"
+  },
+  "AGE": {
+    "description": "年龄（0 = 从人格读取）",
+    "type": "int",
+    "default": 0,
+    "hint": "人格正文里写明的年龄优先。低于 18 岁会自动关闭成人模块，这个设置不能覆盖人格里写明的未成年年龄。"
+  },
+  "PERSONA_ID": {
+    "description": "【人格】固定使用哪个人格的身体",
+    "type": "string",
+    "default": "",
+    "_special": "select_persona",
+    "hint": "留空 = 跟随当前会话的人格；插件页默认显示 AstrBot 的默认人格。选一个 = 固定这个人的身体，其他会话切人格也不会换身体。"
+  },
+  "TIMEZONE": {
+    "description": "时区",
+    "type": "string",
+    "default": "",
+    "hint": "IANA 时区，如 Asia/Shanghai。留空使用 AstrBot 全局时区。"
+  },
+  "SLEEP_WINDOW": {
+    "description": "睡眠时段",
+    "type": "string",
+    "default": "00:00-08:00",
+    "hint": "这个时段里消化变慢、睡眠债恢复，也可能发生成年男性的夜间生理事件。格式 HH:MM-HH:MM。"
+  },
+  "CYCLE_LENGTH": {
+    "description": "生理期周期（天）",
+    "type": "int",
+    "default": 28,
+    "hint": "两次经期开始之间的天数，18-45。只对女性人格生效。"
+  },
+  "PERIOD_LENGTH": {
+    "description": "经期持续（天）",
+    "type": "int",
+    "default": 5,
+    "hint": "每次经期持续几天，2-10。只对女性人格生效。"
+  },
+  "CYCLE_START": {
+    "description": "经期起点（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "格式 YYYY-MM-DD，填了就把这天当作第 1 天。留空会自动错开，不会一装好就正好来经期。"
+  },
+  "GROUP_DETAIL": {
+    "description": "群聊里显示多少",
+    "type": "string",
+    "default": "basic",
+    "options": [
+      "basic",
+      "full"
+    ],
+    "hint": "basic 只给饥饿、口渴、精力；full 额外给非性相关的经期信息。成人细节永远不进群聊。"
+  },
+  "INTENSITY": {
+    "description": "身体存在感",
+    "type": "string",
+    "default": "natural",
+    "options": [
+      "subtle",
+      "natural",
+      "strong"
+    ],
+    "hint": "subtle 只在明显不舒服时提醒；natural 每次给完整状态；strong 会强调身体对情绪和注意力的影响。"
+  },
+  "ENABLE_CYCLE": {
+    "description": "启用女性生理期",
+    "type": "bool",
+    "default": true,
+    "hint": "经期、排卵期、黄体期和相应的小腹坠胀、情绪、胃口变化。只对女性人格生效。"
+  },
+  "ENABLE_INTIMATE": {
+    "description": "启用成人私密生理",
+    "type": "bool",
+    "default": true,
+    "hint": "成年男性人格的梦遗、晨勃，以及成年人格的欲望值；只对成年人格和私聊生效。插件页设置里也可以开关。"
+  },
+  "ENABLE_HYGIENE": {
+    "description": "启用清洁与口腔",
+    "type": "bool",
+    "default": true,
+    "hint": "洗澡和刷牙会随时间变脏；关掉后不再显示这两项。"
+  },
+  "ENABLE_SLEEP": {
+    "description": "启用睡眠时段",
+    "type": "bool",
+    "default": true,
+    "hint": "睡觉时消化变慢、睡眠债恢复；关掉后所有时间都按清醒速度计算。"
+  },
+  "ENABLE_TOOLS": {
+    "description": "给她身体工具",
+    "type": "bool",
+    "default": true,
+    "hint": "模型可以调用 body_status 看状态、body_action 记录真的吃了/喝了/洗了。关掉后只用 /身体 指令。"
+  },
+  "PROMPT_EXTRA": {
+    "description": "附加提示（可选）",
+    "type": "text",
+    "default": "",
+    "hint": "追加在身体提示块末尾，比如「她习惯忍着不说」。最多 500 字。"
+  },
+  "EVENT_KEEP_DAYS": {
+    "description": "身体事件保留（天）",
+    "type": "int",
+    "default": 7,
+    "hint": "经期开始、梦遗这类事件在提示词里保留多久，1-30。"
+  },
+  "MAX_EVENTS": {
+    "description": "最多保留事件数",
+    "type": "int",
+    "default": 30,
+    "hint": "状态文件里最多存多少条身体事件，5-100。"
+  },
+  "DEBUG": {
+    "description": "调试日志",
+    "type": "bool",
+    "default": false,
+    "hint": "输出更多解析和注入日志；平时不用开。"
+  }
+}

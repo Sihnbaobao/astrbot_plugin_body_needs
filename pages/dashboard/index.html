@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>身体 · 生理需求</title>
+    <link rel="stylesheet" href="./style.css?v=6" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">身</div>
+        <div class="brand-text">
+          <strong>身体</strong>
+          <span id="subtitle">正在读取…</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <label class="persona-picker" id="personaWrap" hidden>
+          <span>人格</span>
+          <select id="personaSelect"></select>
+        </label>
+        <button class="btn ghost" id="refreshBtn" type="button">刷新</button>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="页面">
+      <button class="tab active" type="button" data-tab="live">现在</button>
+      <button class="tab" type="button" data-tab="settings">设置</button>
+    </nav>
+
+    <div class="notice" id="notice" hidden></div>
+
+    <main>
+      <section class="panel active" id="panel-live">
+      <section class="card hero">
+        <div class="hero-main">
+          <span class="eyebrow">此刻的身体</span>
+          <h1 id="summary">—</h1>
+          <p id="profileLine">—</p>
+        </div>
+        <div class="hero-clock">
+          <span id="clock">—</span>
+          <small>状态随真实时间流逝</small>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="card meters-card">
+          <div class="card-head">
+            <h2>身体指标</h2>
+            <span class="hint">0 轻松 · 100 难受</span>
+          </div>
+          <div id="meters" class="meters">
+            <p class="empty">正在读取…</p>
+          </div>
+          <div class="inner-stats" id="innerStats"></div>
+          <div class="last-row" id="lastRow"></div>
+        </section>
+
+        <section class="card cycle-card" id="cycleCard" hidden>
+          <div class="card-head">
+            <h2>生理期</h2>
+            <span class="hint" id="cyclePhase"></span>
+          </div>
+          <div id="cycleBody"></div>
+          <div class="card-actions" id="cycleActions" hidden>
+            <button class="btn ghost" data-cycle="start" type="button">今天开始</button>
+            <button class="btn ghost" data-cycle="delay" type="button">延后一天</button>
+          </div>
+        </section>
+
+        <section class="card cycle-card" id="maleCard" hidden>
+          <div class="card-head">
+            <h2>成年男性</h2>
+            <span class="hint">私密</span>
+          </div>
+          <div id="maleBody"></div>
+        </section>
+
+        <section class="card care-card">
+          <div class="card-head">
+            <h2>照顾</h2>
+            <span class="hint">会真的改变状态</span>
+          </div>
+          <div class="care-grid" id="careGrid"></div>
+          <p class="hint">和聊天里的 /身体 指令共用同一份状态。</p>
+        </section>
+
+        <section class="card events-card">
+          <div class="card-head">
+            <h2>最近</h2>
+            <span class="hint" id="eventCount"></span>
+          </div>
+          <ul class="events" id="events">
+            <li class="empty">还没有值得记下的事。</li>
+          </ul>
+        </section>
+      </div>
+
+      <section class="card notes">
+        <div class="card-head">
+          <h2>它是怎么运转的</h2>
+        </div>
+        <div class="notes-grid">
+          <div>
+            <h3>时间是真的</h3>
+            <p>
+              状态按真实时间推进，不靠定时任务。TA 隔了多久没吃东西、睡了几个小时、
+              上次洗澡是什么时候，都会在下次开口前结算。
+            </p>
+          </div>
+          <div>
+            <h3>不是命令</h3>
+            <p>
+              身体状态只会作为背景写进对话，不会强迫 TA 说什么。TA 可以饿着不说，
+              也可以拒绝你递过来的东西。
+            </p>
+          </div>
+          <div>
+            <h3>私密分层</h3>
+            <p>
+              群聊默认只看到饥饿、口渴和精力；更细的身体细节只在私聊里出现。
+            </p>
+          </div>
+          <div>
+            <h3>数据在哪里</h3>
+            <p>
+              每个人格一份 JSON，保存在插件的 <code>data/plugin_data</code> 下。
+              重置只会重新生成这一份，不影响别人。
+            </p>
+          </div>
+        </div>
+      </section>
+      </section>
+
+      <section class="panel" id="panel-settings" hidden>
+        <section class="card settings-card">
+          <div class="card-head">
+            <h2>插件设置</h2>
+            <span class="hint" id="settingsHint">保存后立即生效</span>
+          </div>
+          <p class="settings-note">
+            这些设置会立即写入插件配置；带开关的项保存后马上生效。
+          </p>
+          <div class="settings-form" id="settingsForm"></div>
+          <div class="settings-actions">
+            <button class="btn" id="saveSettingsBtn" type="button">保存设置</button>
+            <span class="hint" id="settingsStatus"></span>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      身体状态由 astrbot_plugin_body_needs 维护 · TA 不会因为数值而被迫说话
+    </footer>
+
+    <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
+    <script type="module" src="./app.js?v=6"></script>
+  </body>
+</html>

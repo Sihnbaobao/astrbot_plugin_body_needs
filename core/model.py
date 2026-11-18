@@ -1,0 +1,975 @@
+"""Physiology v2: digestion, hydration, sleep debt, cycle hormones.
+
+The model is still intentionally simpler than a medical simulation, but the
+primary meters are now derived from slower internal state instead of being
+constant linear ramps:
+
+- stomach fullness and glucose drive hunger
+- hydration drives thirst and urine production
+- urine volume drives bladder pressure
+- sleep debt and circadian alertness drive fatigue
+- skin and oral dirtiness drive cleanliness
+- a simplified estrogen/progesterone curve drives cycle symptoms and desire
+
+All time integration is piecewise: 15-minute steps for the first day, hourly
+steps afterwards. That keeps a 60-day absence cheap while letting digestion and
+circadian changes happen at a human-ish resolution.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import math
+import random
+import re
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
+from typing import Any
+
+from .config import Settings
+from .profile import Profile
+
+# Digestion / metabolism
+STOMACH_DECAY_AWAKE = 0.32
+STOMACH_DECAY_SLEEP = 0.18
+GLUCOSE_USE_AWAKE = 1.0
+GLUCOSE_USE_SLEEP = 0.55
+GLUCOSE_RELEASE = 0.35
+HYDRATION_USE_AWAKE = 1.1
+HYDRATION_USE_SLEEP = 0.55
+URINE_BASE_AWAKE = 2.0
+URINE_BASE_SLEEP = 1.0
+SKIN_AWAKE = 1.1
+SKIN_SLEEP = 0.55
+SKIN_PERIOD_EXTRA = 0.8
+ORAL_AWAKE = 2.8
+ORAL_SLEEP = 1.3
+SLEEP_DEBT_AWAKE = 0.55
+SLEEP_DEBT_SLEEP = 1.2
+
+# Circadian anchor points. Hour is local wall clock; value is 0-100 alertness.
+_ALERT_POINTS = (
+    (0.0, 40.0),
+    (3.0, 28.0),
+    (6.0, 45.0),
+    (9.0, 85.0),
+    (11.0, 95.0),
+    (14.0, 62.0),
+    (16.0, 88.0),
+    (19.0, 76.0),
+    (22.0, 50.0),
+    (24.0, 40.0),
+)
+# Appetite bias around meal times. 1.0 is neutral.
+_APPETITE_POINTS = (
+    (0.0, 0.80),
+    (6.0, 0.90),
+    (8.0, 1.16),
+    (12.0, 1.20),
+    (14.0, 1.00),
+    (18.0, 1.16),
+    (21.0, 1.00),
+    (24.0, 0.80),
+)
+
+_WINDOW_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$")
+
+
+def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    """Clamp a value into its allowed range."""
+    return max(low, min(high, float(value)))
+
+
+def _number(value: Any, default: float = 0.0) -> float:
+    """Coerce a stored JSON value to float without raising."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _roll(*parts: str) -> float:
+    """Return a stable pseudo-random float in [0, 1) for the given parts."""
+    digest = hashlib.sha1("|".join(parts).encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") / 2**32
+
+
+def _parse_ts(value: Any) -> float:
+    """Parse an ISO timestamp from stored events, returning 0 on failure."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return datetime.fromisoformat(str(value)).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _interp(points: tuple[tuple[float, float], ...], hour: float) -> float:
+    """Interpolate a daily curve at a fractional local hour."""
+    hour = hour % 24.0
+    for (left_hour, left_value), (right_hour, right_value) in zip(points, points[1:]):
+        if left_hour <= hour <= right_hour:
+            span = right_hour - left_hour
+            if span <= 0:
+                return right_value
+            ratio = (hour - left_hour) / span
+            return left_value + (right_value - left_value) * ratio
+    return points[-1][1]
+
+
+def circadian_alertness(moment: datetime) -> float:
+    """Return circadian alertness (0-100) for a local datetime."""
+    return _clamp(_interp(_ALERT_POINTS, moment.hour + moment.minute / 60.0))
+
+
+def appetite_level(moment: datetime) -> float:
+    """Return the time-of-day appetite bias (about 0.8-1.2)."""
+    return _interp(_APPETITE_POINTS, moment.hour + moment.minute / 60.0)
+
+
+@dataclass
+class BodyState:
+    """Everything persisted for one persona's body.
+
+    Primary meters are 0-100 and are what the prompt and page show. Internal
+    values are slower signals that drive them:
+
+    - hunger is derived from stomach fullness and glucose
+    - thirst is derived from hydration
+    - bladder is urine volume
+    - cleanliness is skin dirtiness
+    - fatigue is derived from sleep debt and circadian alertness
+    - desire is an adult-only tension meter
+    """
+
+    persona_id: str
+    updated_at: float = 0.0
+    last_active_at: float = 0.0
+    hunger: float = 20.0
+    thirst: float = 20.0
+    bladder: float = 18.0
+    cleanliness: float = 18.0
+    oral: float = 20.0
+    fatigue: float = 22.0
+    desire: float = 10.0
+    stomach: float = 72.0
+    glucose: float = 78.0
+    hydration: float = 80.0
+    urine: float = 18.0
+    skin: float = 18.0
+    sleep_debt: float = 2.0
+    cycle_anchor: str = ""
+    cycle_length: int = 28
+    period_length: int = 5
+    cycle_phase: str = ""
+    cycle_start: str = ""
+    last_eat_at: float = 0.0
+    last_drink_at: float = 0.0
+    last_shower_at: float = 0.0
+    last_brush_at: float = 0.0
+    last_toilet_at: float = 0.0
+    last_nap_at: float = 0.0
+    last_release_at: float = 0.0
+    refractory_until: float = 0.0
+    last_meal_kind: str = ""
+    last_meal_size: float = 0.0
+    last_drink_ml: float = 0.0
+    events: list[dict[str, Any]] = field(default_factory=list)
+    flags: dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to plain JSON-compatible data."""
+        return {
+            "persona_id": self.persona_id,
+            "updated_at": self.updated_at,
+            "last_active_at": self.last_active_at,
+            "hunger": self.hunger,
+            "thirst": self.thirst,
+            "bladder": self.bladder,
+            "cleanliness": self.cleanliness,
+            "oral": self.oral,
+            "fatigue": self.fatigue,
+            "desire": self.desire,
+            "stomach": self.stomach,
+            "glucose": self.glucose,
+            "hydration": self.hydration,
+            "urine": self.urine,
+            "skin": self.skin,
+            "sleep_debt": self.sleep_debt,
+            "cycle_anchor": self.cycle_anchor,
+            "cycle_length": self.cycle_length,
+            "period_length": self.period_length,
+            "cycle_phase": self.cycle_phase,
+            "cycle_start": self.cycle_start,
+            "last_eat_at": self.last_eat_at,
+            "last_drink_at": self.last_drink_at,
+            "last_shower_at": self.last_shower_at,
+            "last_brush_at": self.last_brush_at,
+            "last_toilet_at": self.last_toilet_at,
+            "last_nap_at": self.last_nap_at,
+            "last_release_at": self.last_release_at,
+            "refractory_until": self.refractory_until,
+            "last_meal_kind": self.last_meal_kind,
+            "last_meal_size": self.last_meal_size,
+            "last_drink_ml": self.last_drink_ml,
+            "events": list(self.events),
+            "flags": dict(self.flags),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> BodyState:
+        """Rebuild a state from JSON, migrating old single-meter files."""
+        state = cls(persona_id=str(data.get("persona_id") or ""))
+        state.updated_at = _number(data.get("updated_at"))
+        state.last_active_at = _number(data.get("last_active_at"))
+        has_internal = "stomach" in data
+        for key in (
+            "hunger",
+            "thirst",
+            "bladder",
+            "cleanliness",
+            "oral",
+            "fatigue",
+            "desire",
+            "stomach",
+            "glucose",
+            "hydration",
+            "urine",
+            "skin",
+            "sleep_debt",
+            "last_eat_at",
+            "last_drink_at",
+            "last_shower_at",
+            "last_brush_at",
+            "last_toilet_at",
+            "last_nap_at",
+            "last_release_at",
+            "refractory_until",
+            "last_meal_size",
+            "last_drink_ml",
+        ):
+            if key in data:
+                setattr(state, key, _number(data.get(key), getattr(state, key)))
+
+        for key in (
+            "hunger",
+            "thirst",
+            "bladder",
+            "cleanliness",
+            "oral",
+            "fatigue",
+            "desire",
+            "stomach",
+            "glucose",
+            "hydration",
+            "urine",
+            "skin",
+        ):
+            setattr(state, key, _clamp(getattr(state, key)))
+        state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
+
+        if not has_internal:
+            # Old files only had the seven displayed meters. Reconstruct a
+            # plausible digestive/hydration/sleep baseline from them and from
+            # the last meal/drink timestamps when those exist.
+            reference = state.updated_at or 0.0
+            if state.last_eat_at and reference:
+                meal_hours = max(0.0, (reference - state.last_eat_at) / 3600.0)
+                state.stomach = _clamp(20.0 + 55.0 * math.exp(-0.32 * meal_hours))
+                state.glucose = _clamp(50.0 + 35.0 * math.exp(-0.18 * meal_hours))
+            else:
+                state.stomach = _clamp(100.0 - state.hunger)
+                state.glucose = _clamp(100.0 - state.hunger * 0.7)
+            if state.last_drink_at and reference:
+                drink_hours = max(0.0, (reference - state.last_drink_at) / 3600.0)
+                state.hydration = _clamp(40.0 + 60.0 * math.exp(-0.12 * drink_hours))
+            else:
+                state.hydration = _clamp(100.0 - state.thirst)
+            state.urine = _clamp(state.bladder)
+            state.skin = _clamp(state.cleanliness)
+            state.sleep_debt = _clamp(state.fatigue / 4.0, 0.0, 24.0)
+            state.last_meal_kind = "meal"
+            state.last_meal_size = 45.0
+
+        state.cycle_anchor = str(data.get("cycle_anchor") or "")
+        state.cycle_length = int(_number(data.get("cycle_length"), 28))
+        state.period_length = int(_number(data.get("period_length"), 5))
+        state.cycle_phase = str(data.get("cycle_phase") or "")
+        state.cycle_start = str(data.get("cycle_start") or "")
+        state.last_meal_kind = str(data.get("last_meal_kind") or "")
+        events = data.get("events")
+        if isinstance(events, list):
+            state.events = [
+                item for item in events if isinstance(item, dict) and item.get("text")
+            ][:100]
+        flags = data.get("flags")
+        if isinstance(flags, dict):
+            state.flags = {
+                str(key): _number(value)
+                for key, value in flags.items()
+                if isinstance(key, str)
+            }
+        return state
+
+
+@dataclass(frozen=True)
+class CycleView:
+    """Derived view of one persona's current menstrual position."""
+
+    cycle_start: date
+    day: int
+    phase: str
+    flow: int
+    cramps: int
+    mood: int
+    appetite: int
+    days_to_next: int
+    note: str
+    estrogen: float
+    progesterone: float
+    lh: float
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """Outcome of a deliberate body action."""
+
+    action: str
+    label: str
+    detail: str
+    before: dict[str, float]
+    after: dict[str, float]
+
+
+ACTION_LABELS = {
+    "eat": "吃了一顿饭",
+    "snack": "吃了点零食",
+    "drink": "喝了水",
+    "shower": "洗了澡",
+    "brush": "刷了牙",
+    "toilet": "去了厕所",
+    "nap": "小睡了一会儿",
+    "intimacy": "亲密过后",
+}
+METER_TEXT = {
+    "hunger": "饥饿",
+    "thirst": "口渴",
+    "bladder": "膀胱",
+    "cleanliness": "清洁",
+    "oral": "口腔",
+    "fatigue": "精力",
+    "desire": "欲望",
+}
+
+
+def parse_sleep_window(text: str) -> tuple[time, time] | None:
+    """Parse a sleep window such as 00:00-08:00."""
+    match = _WINDOW_RE.fullmatch((text or "").strip())
+    if not match:
+        return None
+    start_hour, start_minute, end_hour, end_minute = map(int, match.groups())
+    if start_hour > 24 or end_hour > 24:
+        return None
+    if start_minute > 59 or end_minute > 59:
+        return None
+    return time(start_hour % 24, start_minute), time(end_hour % 24, end_minute)
+
+
+def sleep_seconds_between(
+    start: datetime,
+    end: datetime,
+    window: tuple[time, time],
+) -> float:
+    """Count seconds inside the daily sleep window between two instants."""
+    if end <= start:
+        return 0.0
+    if (end - start).days > 60:
+        start = end - timedelta(days=60)
+    start_time, end_time = window
+    total = 0.0
+    current = start.date() - timedelta(days=1)
+    last = end.date()
+    while current <= last:
+        begin = datetime.combine(current, start_time, tzinfo=start.tzinfo)
+        finish = datetime.combine(current, end_time, tzinfo=start.tzinfo)
+        if end_time <= start_time:
+            finish += timedelta(days=1)
+        overlap_start = max(start, begin)
+        overlap_end = min(end, finish)
+        if overlap_end > overlap_start:
+            total += (overlap_end - overlap_start).total_seconds()
+        current += timedelta(days=1)
+    return min(total, (end - start).total_seconds())
+
+
+def cycle_position(anchor: date, today: date, cycle_length: int) -> tuple[int, date]:
+    """Return the 1-based cycle day and the current cycle's start date."""
+    length = max(1, int(cycle_length))
+    offset = (today - anchor).days
+    if offset < 0:
+        offset = 0
+    index = offset // length
+    start = anchor + timedelta(days=index * length)
+    return (today - start).days + 1, start
+
+
+def _ensure_anchor(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    configured_start: str = "",
+) -> date:
+    """Return the cycle anchor, seeding a sensible one on first use."""
+    anchor: date | None = None
+    if state.cycle_anchor:
+        try:
+            anchor = date.fromisoformat(state.cycle_anchor)
+        except ValueError:
+            anchor = None
+    if anchor is None and configured_start:
+        try:
+            anchor = date.fromisoformat(configured_start)
+        except ValueError:
+            anchor = None
+        if anchor is not None:
+            state.cycle_anchor = anchor.isoformat()
+    if anchor is None:
+        length = max(1, profile.cycle_length)
+        period = max(1, min(profile.period_length, length - 1))
+        span = max(1, length - period)
+        offset = period + int(_roll(profile.persona_id, "cycle-anchor") * span)
+        anchor = now.date() - timedelta(days=min(offset, length + 30))
+        state.cycle_anchor = anchor.isoformat()
+    if anchor > now.date():
+        anchor = now.date() - timedelta(days=max(1, profile.period_length))
+        state.cycle_anchor = anchor.isoformat()
+    return anchor
+
+
+def _hormones(day: int, length: int, period: int) -> tuple[float, float, float]:
+    """Return simplified estrogen, progesterone and LH for one cycle day."""
+    ovulation = length // 2 + 1
+    if day <= period:
+        estrogen = 15.0 + 8.0 * math.sin(math.pi * day / max(1, period))
+        progesterone = 5.0
+        lh = 10.0
+    elif day < ovulation - 1:
+        progress = (day - period) / max(1, ovulation - 1 - period)
+        estrogen = 23.0 + 67.0 * progress
+        progesterone = 5.0 + 10.0 * progress
+        lh = 10.0 + 45.0 * progress**2
+    elif abs(day - ovulation) <= 1:
+        estrogen = 90.0
+        progesterone = 20.0
+        lh = 100.0
+    else:
+        progress = (day - (ovulation + 1)) / max(1, length - (ovulation + 1))
+        progesterone = 20.0 + 55.0 * math.sin(math.pi * progress)
+        estrogen = 70.0 - 40.0 * progress
+        lh = 20.0
+    return _clamp(estrogen), _clamp(progesterone), _clamp(lh)
+
+
+def cycle_view(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> CycleView | None:
+    """Compute the current menstrual phase, hormones and symptoms."""
+    if not settings.enable_cycle or profile.gender != "female":
+        return None
+    anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
+    day, start = cycle_position(anchor, now.date(), profile.cycle_length)
+    length = max(1, profile.cycle_length)
+    period = max(1, min(profile.period_length, length - 1))
+    if day <= period:
+        phase = "menstrual"
+    elif abs(day - (length // 2 + 1)) <= 1:
+        phase = "ovulation"
+    elif day > length // 2 + 2:
+        phase = "luteal"
+    else:
+        phase = "follicular"
+
+    estrogen, progesterone, lh = _hormones(day, length, period)
+    rng = random.Random(int(_roll(profile.persona_id, start.isoformat()) * 1_000_000))
+    flow = 0
+    cramps = 0
+    mood = 0
+    appetite = 0
+    note = ""
+    if phase == "menstrual":
+        flow = 3 if day <= 2 else (2 if day <= 4 else 1)
+        cramps = min(3, 1 + (1 if day <= 2 else 0) + rng.randint(0, 1))
+        mood = -1 if day <= 2 else 0
+        appetite = rng.choice([-1, 0, 0, 1])
+        note = "小腹坠胀，腰有点酸" if cramps >= 2 else "小腹有点坠"
+    elif phase == "luteal":
+        days_left = max(1, length - day + 1)
+        cramps = rng.choice([0, 0, 1]) if days_left <= 4 else 0
+        mood = -1 - (1 if progesterone > 45 else 0)
+        appetite = 1
+        if days_left <= 6:
+            note = "经期快到了，容易烦躁，胃口也大一点"
+        else:
+            note = "排卵后，身体开始为经期做准备"
+    elif phase == "ovulation":
+        mood = 1
+        note = "排卵期，精力比前几天好"
+    else:
+        note = "经期后，身体轻快"
+
+    return CycleView(
+        cycle_start=start,
+        day=day,
+        phase=phase,
+        flow=flow,
+        cramps=cramps,
+        mood=mood,
+        appetite=appetite,
+        days_to_next=max(1, length - day + 1),
+        note=note,
+        estrogen=estrogen,
+        progesterone=progesterone,
+        lh=lh,
+    )
+
+
+def _add_event(
+    state: BodyState,
+    at: datetime,
+    kind: str,
+    text: str,
+    key: str = "",
+) -> None:
+    """Append a notable event once per key and remember the key."""
+    if key and state.flags.get(key):
+        return
+    state.events.append({"at": at.isoformat(), "kind": kind, "text": text})
+    if key:
+        state.flags[key] = at.timestamp()
+
+
+def _advance_cycle_events(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    view: CycleView | None,
+) -> None:
+    """Record period and phase transitions without duplicating them."""
+    if view is None:
+        state.cycle_phase = ""
+        state.cycle_start = ""
+        return
+    phase_key = f"period:{view.cycle_start.isoformat()}"
+    if view.phase == "menstrual" and not state.flags.get(phase_key):
+        text = "经期开始了，第 1 天" if view.day == 1 else f"经期第 {view.day} 天"
+        _add_event(state, now, "period", text, key=phase_key)
+    if state.cycle_phase == "menstrual" and view.phase != "menstrual":
+        previous = state.cycle_start or view.cycle_start.isoformat()
+        _add_event(
+            state,
+            now,
+            "period_end",
+            "经期结束了",
+            key=f"period_end:{previous}",
+        )
+    if state.cycle_phase and state.cycle_phase != view.phase:
+        key = f"phase:{view.cycle_start.isoformat()}:{view.phase}"
+        text = ""
+        if view.phase == "ovulation":
+            text = "进入排卵期"
+        elif view.phase == "luteal":
+            text = "进入黄体期"
+        if text:
+            _add_event(state, now, "phase", text, key=key)
+    state.cycle_phase = view.phase
+    state.cycle_start = view.cycle_start.isoformat()
+
+
+def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> float:
+    """Return the daily desire increase for the current profile."""
+    if profile.gender == "male":
+        age = profile.age or 30
+        if age < 30:
+            return 1.8
+        if age < 45:
+            return 1.4
+        return 1.0
+    rate = 0.9
+    if view is not None:
+        rate += view.estrogen / 100.0 * 0.5
+        if view.phase == "ovulation":
+            rate += 0.6
+        elif view.phase == "luteal":
+            rate += 0.2
+    return rate
+
+
+def _advance_male_events(
+    state: BodyState,
+    start_ts: float,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> None:
+    """Roll nocturnal emissions, morning erections and daytime arousal."""
+    if not (profile.adult and settings.enable_intimate and profile.gender == "male"):
+        return
+    if state.last_release_at <= 0:
+        state.last_release_at = start_ts - 3 * 86400
+    first = datetime.fromtimestamp(start_ts, now.tzinfo).date()
+    last = now.date()
+    if (last - first).days > 30:
+        first = last - timedelta(days=30)
+    current = first
+    while current <= last:
+        night = datetime.combine(current, time(4, 0), tzinfo=now.tzinfo)
+        if start_ts < night.timestamp() <= now.timestamp():
+            key = f"wet:{current.isoformat()}"
+            if not state.flags.get(key):
+                days = (night.timestamp() - state.last_release_at) / 86400
+                age_bonus = 0.03 if (profile.age or 30) < 30 else 0.0
+                sleep_bonus = max(0.0, state.sleep_debt - 6.0) * 0.008
+                chance = min(
+                    0.65, max(0.0, (days - 2) * 0.10 + age_bonus + sleep_bonus)
+                )
+                if (
+                    days >= 2
+                    and _roll(profile.persona_id, current.isoformat(), "wet") < chance
+                ):
+                    at = min(
+                        now,
+                        datetime.combine(current, time(6, 30), tzinfo=now.tzinfo),
+                    )
+                    _add_event(state, at, "wet_dream", "昨晚梦遗了", key=key)
+                    state.last_release_at = at.timestamp()
+                    state.desire = _clamp(state.desire - 50)
+                    state.refractory_until = (
+                        at.timestamp()
+                        + (
+                            2
+                            + _roll(
+                                profile.persona_id, current.isoformat(), "refractory"
+                            )
+                            * 4
+                        )
+                        * 3600
+                    )
+        morning = datetime.combine(current, time(7, 30), tzinfo=now.tzinfo)
+        if start_ts < morning.timestamp() <= now.timestamp():
+            key = f"morning:{current.isoformat()}"
+            chance = 0.22 + max(0.0, 1.0 - state.sleep_debt / 12.0) * 0.14
+            if (
+                not state.flags.get(key)
+                and _roll(profile.persona_id, current.isoformat(), "morning") < chance
+            ):
+                _add_event(
+                    state,
+                    morning,
+                    "morning_erection",
+                    "早晨有晨勃，过一会儿就好了",
+                    key=key,
+                )
+        current += timedelta(days=1)
+
+    if 8 <= now.hour <= 23:
+        key = f"arousal:{now.date().isoformat()}"
+        if (
+            not state.flags.get(key)
+            and state.desire >= 70
+            and _roll(profile.persona_id, now.date().isoformat(), "arousal") < 0.12
+        ):
+            _add_event(
+                state,
+                now,
+                "arousal",
+                "白天身体有点反应，过一会儿自己消了",
+                key=key,
+            )
+            state.desire = _clamp(state.desire - 8)
+
+
+def _recompute_primary(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+    in_period: bool = False,
+) -> None:
+    """Refresh displayed meters from internal state after a time step."""
+    appetite = appetite_level(now)
+    state.hunger = _clamp(
+        0.55 * (100.0 - state.stomach)
+        + 0.45 * (100.0 - state.glucose)
+        + (appetite - 1.0) * 20.0
+    )
+    state.thirst = _clamp(100.0 - state.hydration)
+    state.bladder = _clamp(state.urine)
+    state.cleanliness = _clamp(state.skin)
+    alert = circadian_alertness(now)
+    penalty = max(0.0, state.hunger - 70.0) * 0.20
+    penalty += max(0.0, state.thirst - 70.0) * 0.15
+    if in_period:
+        penalty += 4.0
+    state.fatigue = _clamp(
+        0.55 * (state.sleep_debt / 24.0 * 100.0) + 0.45 * (100.0 - alert) + penalty
+    )
+    if not settings.enable_hygiene:
+        state.skin = 0.0
+        state.cleanliness = 0.0
+        state.oral = 0.0
+    if not (profile.adult and settings.enable_intimate):
+        state.desire = 0.0
+
+
+def advance(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> BodyState:
+    """Let time pass and update internal state, meters and events."""
+    now_ts = now.timestamp()
+    if state.updated_at <= 0:
+        state.updated_at = now_ts
+        return state
+    if now_ts <= state.updated_at:
+        return state
+
+    start = datetime.fromtimestamp(state.updated_at, now.tzinfo)
+    elapsed = now_ts - state.updated_at
+    if elapsed > 60 * 86400:
+        # A year away should not run a year of hourly steps. Cap the simulation
+        # window; all meters clamp anyway.
+        start = now - timedelta(days=60)
+        elapsed = 60 * 86400
+    window = (
+        parse_sleep_window(settings.sleep_window) if settings.enable_sleep else None
+    )
+    view = cycle_view(state, now, profile, settings)
+    in_period = bool(view and view.phase == "menstrual")
+
+    cursor = start
+    remaining = float(elapsed)
+    while remaining > 1e-6:
+        if elapsed <= 86400:
+            step_seconds = min(900.0, remaining)
+        else:
+            step_seconds = min(3600.0, remaining)
+        step_hours = step_seconds / 3600.0
+        chunk_end = cursor + timedelta(seconds=step_seconds)
+        sleep_seconds = 0.0
+        if window is not None:
+            sleep_seconds = sleep_seconds_between(cursor, chunk_end, window)
+            if state.last_active_at and now_ts - state.last_active_at <= 1800:
+                active_from = max(
+                    cursor, datetime.fromtimestamp(state.last_active_at, now.tzinfo)
+                )
+                if chunk_end > active_from:
+                    sleep_seconds -= sleep_seconds_between(
+                        active_from, chunk_end, window
+                    )
+        sleep_fraction = min(1.0, max(0.0, sleep_seconds / step_seconds))
+        awake_fraction = 1.0 - sleep_fraction
+        midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
+        alert = circadian_alertness(midpoint)
+
+        decay = (
+            STOMACH_DECAY_AWAKE * awake_fraction + STOMACH_DECAY_SLEEP * sleep_fraction
+        )
+        state.stomach = _clamp(state.stomach * math.exp(-decay * step_hours))
+
+        glucose_use = (
+            GLUCOSE_USE_AWAKE * awake_fraction + GLUCOSE_USE_SLEEP * sleep_fraction
+        )
+        glucose_release = GLUCOSE_RELEASE if state.stomach > 25.0 else 0.0
+        state.glucose = _clamp(
+            state.glucose + (glucose_release - glucose_use) * step_hours
+        )
+
+        hydration_use = (
+            HYDRATION_USE_AWAKE * awake_fraction + HYDRATION_USE_SLEEP * sleep_fraction
+        )
+        state.hydration = _clamp(state.hydration - hydration_use * step_hours)
+
+        urine_rate = (
+            URINE_BASE_AWAKE * awake_fraction
+            + URINE_BASE_SLEEP * sleep_fraction
+            + max(0.0, state.hydration - 50.0) * 0.04
+        )
+        state.urine = _clamp(state.urine + urine_rate * step_hours)
+
+        sweat = max(0.0, alert - 70.0) / 100.0 * 0.4
+        period_extra = SKIN_PERIOD_EXTRA if in_period else 0.0
+        skin_rate = (
+            SKIN_AWAKE * awake_fraction
+            + SKIN_SLEEP * sleep_fraction
+            + sweat
+            + period_extra
+        )
+        state.skin = _clamp(state.skin + skin_rate * step_hours)
+
+        oral_rate = ORAL_AWAKE * awake_fraction + ORAL_SLEEP * sleep_fraction
+        state.oral = _clamp(state.oral + oral_rate * step_hours)
+
+        state.sleep_debt = _clamp(
+            state.sleep_debt
+            + (SLEEP_DEBT_AWAKE * awake_fraction - SLEEP_DEBT_SLEEP * sleep_fraction)
+            * step_hours,
+            0.0,
+            24.0,
+        )
+
+        if (
+            profile.adult
+            and settings.enable_intimate
+            and profile.gender in ("female", "male")
+        ):
+            rate = _desire_rate(state, view, profile)
+            if profile.gender == "male" and state.refractory_until > cursor.timestamp():
+                rate *= 0.25
+            state.desire = _clamp(state.desire + rate * step_hours / 24.0)
+        else:
+            state.desire = 0.0
+
+        cursor = chunk_end
+        remaining -= step_seconds
+
+    _recompute_primary(state, now, profile, settings, in_period)
+    _advance_cycle_events(state, now, profile, view)
+    _advance_male_events(state, state.updated_at, now, profile, settings)
+    state.updated_at = now_ts
+    state.cycle_length = profile.cycle_length
+    state.period_length = profile.period_length
+    if profile.gender != "female":
+        state.cycle_phase = ""
+        state.cycle_start = ""
+        state.cycle_anchor = ""
+    if not settings.enable_hygiene:
+        state.skin = 0.0
+        state.cleanliness = 0.0
+        state.oral = 0.0
+
+    cutoff = now_ts - settings.event_keep_days * 86400
+    state.events = [
+        event for event in state.events if _parse_ts(event.get("at")) >= cutoff
+    ]
+    state.events.sort(key=lambda event: _parse_ts(event.get("at")))
+    state.events = state.events[-settings.max_events :]
+    flag_cutoff = now_ts - 60 * 86400
+    state.flags = {
+        key: value for key, value in state.flags.items() if value >= flag_cutoff
+    }
+    return state
+
+
+def _meter_snapshot(state: BodyState) -> dict[str, float]:
+    """Return the displayed meters as a plain dict."""
+    return {
+        "hunger": state.hunger,
+        "thirst": state.thirst,
+        "bladder": state.bladder,
+        "cleanliness": state.cleanliness,
+        "oral": state.oral,
+        "fatigue": state.fatigue,
+        "desire": state.desire,
+    }
+
+
+def apply_action(
+    state: BodyState,
+    action: str,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+) -> ActionResult:
+    """Apply one deliberate action and report what changed."""
+    if action not in ACTION_LABELS:
+        raise ValueError(f"unknown action: {action}")
+    if action in ("shower", "brush") and not settings.enable_hygiene:
+        raise ValueError("hygiene module is disabled")
+    if action == "intimacy" and not (profile.adult and settings.enable_intimate):
+        raise ValueError("intimacy is only available for adult personas")
+
+    before = _meter_snapshot(state)
+    now_ts = now.timestamp()
+    if action == "eat":
+        state.stomach = _clamp(state.stomach + 55.0)
+        state.glucose = _clamp(state.glucose + 28.0)
+        state.hydration = _clamp(state.hydration + 2.0)
+        state.oral = _clamp(state.oral + 4.0)
+        state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
+        state.last_eat_at = now_ts
+        state.last_meal_kind = "meal"
+        state.last_meal_size = 55.0
+    elif action == "snack":
+        state.stomach = _clamp(state.stomach + 22.0)
+        state.glucose = _clamp(state.glucose + 12.0)
+        state.hydration = _clamp(state.hydration + 1.0)
+        state.oral = _clamp(state.oral + 3.0)
+        state.last_eat_at = now_ts
+        state.last_meal_kind = "snack"
+        state.last_meal_size = 22.0
+    elif action == "drink":
+        state.hydration = _clamp(state.hydration + 32.0)
+        state.urine = _clamp(state.urine + 12.0)
+        state.last_drink_at = now_ts
+        state.last_drink_ml = 300.0
+    elif action == "shower":
+        state.skin = 2.0
+        state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
+        state.last_shower_at = now_ts
+    elif action == "brush":
+        state.oral = 2.0
+        state.last_brush_at = now_ts
+    elif action == "toilet":
+        state.urine = 2.0
+        state.last_toilet_at = now_ts
+    elif action == "nap":
+        state.sleep_debt = _clamp(state.sleep_debt - 2.5, 0.0, 24.0)
+        state.last_nap_at = now_ts
+    elif action == "intimacy":
+        state.desire = 0.0
+        state.sleep_debt = _clamp(state.sleep_debt - 0.4, 0.0, 24.0)
+        state.skin = _clamp(state.skin + 4.0)
+        state.last_release_at = now_ts
+        if profile.gender == "male":
+            state.refractory_until = (
+                now_ts
+                + (2.0 + _roll(profile.persona_id, str(now_ts), "refractory") * 4.0)
+                * 3600
+            )
+
+    view = cycle_view(state, now, profile, settings)
+    _recompute_primary(
+        state,
+        now,
+        profile,
+        settings,
+        bool(view and view.phase == "menstrual"),
+    )
+    after = _meter_snapshot(state)
+    changes = []
+    for key in (
+        "hunger",
+        "thirst",
+        "bladder",
+        "cleanliness",
+        "oral",
+        "fatigue",
+        "desire",
+    ):
+        if round(before[key]) != round(after[key]):
+            changes.append(
+                f"{METER_TEXT[key]} {round(before[key])}→{round(after[key])}"
+            )
+    detail = "，".join(changes) if changes else "没有明显变化"
+    return ActionResult(
+        action=action,
+        label=ACTION_LABELS[action],
+        detail=detail,
+        before=before,
+        after=after,
+    )
