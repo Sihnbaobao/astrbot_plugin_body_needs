@@ -61,6 +61,16 @@ PERIMENOPAUSE_YEARS = 4.0
 LUTEAL_DAYS = 14
 CONCEPTION_BASE = 0.18
 PREGNANCY_DAYS = 280
+TWIN_CHANCE = 0.012
+TRIPLET_CHANCE = 0.0008
+LACTATION_DAYS = 365
+MILK_RATE = 4.5
+PREGNANCY_CHECKS = (
+    (12, "第一次产检，听到了胎心"),
+    (20, "大排畸，一切正常"),
+    (28, "产检，胎位和发育都正常"),
+    (36, "产检，孩子已经准备入盆"),
+)
 CONTRACEPTION_FACTOR = {"none": 1.0, "condom": 0.02, "pill": 0.01}
 PAD_INTERVAL = {3: 2.0, 2: 4.0, 1: 6.0}
 PAD_WAKING_HOURS = 16.0
@@ -242,6 +252,12 @@ class BodyState:
     anovulatory: bool = False
     pregnant: bool = False
     conceived_at: float = 0.0
+    fetuses: int = 0
+    prenatal_week: int = 0
+    birth_at: float = 0.0
+    lactating: bool = False
+    milk: float = 0.0
+    last_express_at: float = 0.0
     pads: int = 12
     pad_hours: float = 0.0
     last_pad_day: str = ""
@@ -298,6 +314,12 @@ class BodyState:
             "anovulatory": self.anovulatory,
             "pregnant": self.pregnant,
             "conceived_at": self.conceived_at,
+            "fetuses": self.fetuses,
+            "prenatal_week": self.prenatal_week,
+            "birth_at": self.birth_at,
+            "lactating": self.lactating,
+            "milk": self.milk,
+            "last_express_at": self.last_express_at,
             "pads": self.pads,
             "pad_hours": self.pad_hours,
             "last_pad_day": self.last_pad_day,
@@ -415,6 +437,12 @@ class BodyState:
         state.anovulatory = bool(data.get("anovulatory"))
         state.pregnant = bool(data.get("pregnant"))
         state.conceived_at = _number(data.get("conceived_at"), 0.0)
+        state.fetuses = max(0, min(3, int(_number(data.get("fetuses"), 0))))
+        state.prenatal_week = max(0, int(_number(data.get("prenatal_week"), 0)))
+        state.birth_at = _number(data.get("birth_at"), 0.0)
+        state.lactating = bool(data.get("lactating"))
+        state.milk = _clamp(_number(data.get("milk"), 0.0))
+        state.last_express_at = _number(data.get("last_express_at"), 0.0)
         state.pads = max(0, int(_number(data.get("pads"), 12)))
         state.pad_hours = max(0.0, _number(data.get("pad_hours"), 0.0))
         state.last_pad_day = str(data.get("last_pad_day") or "")
@@ -485,6 +513,8 @@ ACTION_LABELS = {
     "supplies": "补了卫生用品",
     "intimacy": "亲密过后",
     "release": "自己解决了一次",
+    "prenatal": "去做了产检",
+    "express": "喂了奶",
 }
 METER_TEXT = {
     "hunger": "饥饿",
@@ -883,6 +913,11 @@ def cycle_view(
 
     if state.pregnant:
         weeks = max(0, int((now.timestamp() - state.conceived_at) // (7 * 86400)))
+        count = ""
+        if weeks >= 12 and state.fetuses == 2:
+            count = "，双胎"
+        elif weeks >= 12 and state.fetuses >= 3:
+            count = "，三胎"
         return CycleView(
             cycle_start=now.date(),
             day=0,
@@ -892,7 +927,7 @@ def cycle_view(
             mood=0,
             appetite=0,
             days_to_next=0,
-            note=f"怀孕第 {weeks} 周",
+            note=f"怀孕第 {weeks} 周{count}",
             estrogen=75.0,
             progesterone=80.0,
             lh=8.0,
@@ -1221,6 +1256,16 @@ def _routine(state: BodyState, moment: datetime, const: Constitution) -> None:
     if hour in (10, 16, 21) and state.hydration <= 55.0:
         state.hydration = _clamp(state.hydration + 22.0)
         state.last_drink_at = moment.timestamp()
+    if state.lactating and state.milk >= 85.0:
+        state.milk = 25.0
+        state.last_express_at = moment.timestamp()
+        _add_event(
+            state,
+            moment,
+            "self_care",
+            "喂了奶，胸口松下来",
+            key=f"self-feed:{moment.date().isoformat()}",
+        )
     if state.bowel >= 75:
         state.gut = max(0.0, state.gut - 85.0)
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
@@ -1286,6 +1331,125 @@ def _maybe_release(
         "self_release",
         "自己解决了一次，身体松下来",
         key=key,
+    )
+
+
+def _miscarriage_chance(week: int) -> float:
+    """Return the weekly miscarriage hazard before twenty weeks.
+
+    Args:
+        week: Completed pregnancy weeks.
+
+    Returns:
+        A per-week probability, zero after the twentieth week.
+    """
+    if week < 6:
+        return 0.025
+    if week < 10:
+        return 0.020
+    if week < 13:
+        return 0.010
+    if week < 20:
+        return 0.004
+    return 0.0
+
+
+def _fetal_count(persona_id: str, key: str) -> int:
+    """Return 1-3 fetuses for one conception, with twins and triplets rare.
+
+    Args:
+        persona_id: Persona seed.
+        key: Conception timestamp used as the event key.
+
+    Returns:
+        The number of fetuses.
+    """
+    roll = _roll(persona_id, key, "fetuses")
+    if roll < TRIPLET_CHANCE:
+        return 3
+    if roll < TWIN_CHANCE:
+        return 2
+    return 1
+
+
+def _roll_pregnancy(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    weeks: int,
+) -> None:
+    """Roll miscarriage per completed week and record prenatal checks.
+
+    Args:
+        state: Body state being advanced.
+        now: Current local instant.
+        profile: Persona profile.
+        weeks: Completed pregnancy weeks.
+    """
+    previous = 0
+    if state.updated_at > 0 and state.conceived_at > 0:
+        previous = max(0, int((state.updated_at - state.conceived_at) // (7 * 86400)))
+    for week in range(previous, min(20, weeks) + 1):
+        key = f"miscarriage:{int(state.conceived_at)}:{week}"
+        if state.flags.get(key):
+            continue
+        state.flags[key] = now.timestamp()
+        chance = _miscarriage_chance(week) * (1.0 + min(0.5, state.sleep_debt / 24.0))
+        if _roll(profile.persona_id, key, "miscarriage") < chance:
+            state.pregnant = False
+            state.conceived_at = 0.0
+            state.fetuses = 0
+            state.cycle_anchor = now.date().isoformat()
+            state.cycle_start = ""
+            state.cycle_phase = ""
+            _add_event(
+                state,
+                now,
+                "miscarriage",
+                "流产了",
+                key=f"miscarried:{now.date().isoformat()}",
+            )
+            return
+
+    for milestone, text in PREGNANCY_CHECKS:
+        if weeks < milestone:
+            continue
+        key = f"prenatal:{int(state.conceived_at)}:{milestone}"
+        if state.flags.get(key):
+            continue
+        if state.fetuses == 2:
+            count = "双胎"
+        elif state.fetuses >= 3:
+            count = "三胎"
+        else:
+            count = "单胎"
+        _add_event(state, now, "prenatal", f"产检：{text}，{count}", key=key)
+
+
+def _give_birth(state: BodyState, now: datetime) -> None:
+    """End the pregnancy, record the birth and start lactation.
+
+    Args:
+        state: Body state being advanced.
+        now: Current local instant.
+    """
+    count = max(1, state.fetuses)
+    state.pregnant = False
+    state.conceived_at = 0.0
+    state.fetuses = 0
+    state.cycle_anchor = now.date().isoformat()
+    state.cycle_start = ""
+    state.cycle_phase = ""
+    state.birth_at = now.timestamp()
+    state.lactating = True
+    state.milk = 55.0
+    label = {2: "，是双胎", 3: "，是三胎"}.get(count, "")
+    _add_event(
+        state,
+        now,
+        "birth",
+        f"孩子出生了{label}",
+        key=f"birth:{now.date().isoformat()}",
     )
 
 
@@ -1506,6 +1670,17 @@ def advance(
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
 
+        if state.lactating:
+            state.milk = _clamp(state.milk + MILK_RATE * step_hours)
+            if state.milk >= 95.0:
+                _add_event(
+                    state,
+                    chunk_end,
+                    "engorged",
+                    "涨奶得厉害",
+                    key=f"engorged:{chunk_end.date().isoformat()}",
+                )
+
         sweat = max(0.0, alert - 70.0) / 100.0 * 0.4
         period_extra = SKIN_PERIOD_EXTRA if in_period_now else 0.0
         puberty_extra = SKIN_PUBERTY_EXTRA if pubertal else 0.0
@@ -1567,17 +1742,16 @@ def advance(
     in_period = bool(view and view.phase == "menstrual")
     _recompute_primary(state, now, profile, settings, in_period)
     if state.pregnant and state.conceived_at > 0:
-        if (now_ts - state.conceived_at) >= PREGNANCY_DAYS * 86400:
-            state.pregnant = False
-            state.conceived_at = 0.0
-            state.cycle_anchor = now.date().isoformat()
-            _add_event(
-                state,
-                now,
-                "birth",
-                "孩子出生了",
-                key=f"birth:{now.date().isoformat()}",
-            )
+        weeks = max(0, int((now_ts - state.conceived_at) // (7 * 86400)))
+        _roll_pregnancy(state, now, profile, weeks)
+        if state.pregnant:
+            duration = PREGNANCY_DAYS - 14 * (max(1, state.fetuses) - 1)
+            if (now_ts - state.conceived_at) >= duration * 86400:
+                _give_birth(state, now)
+    if state.lactating and state.birth_at > 0:
+        if now_ts - state.birth_at > LACTATION_DAYS * 86400:
+            state.lactating = False
+            state.milk = 0.0
     _advance_cycle_events(state, now, profile, view)
     if in_period and state.pads <= 0:
         _add_event(
@@ -1642,6 +1816,10 @@ def apply_action(
         profile.adult and settings.enable_intimate
     ):
         raise ValueError("intimacy is only available for adult personas")
+    if action == "prenatal" and not state.pregnant:
+        raise ValueError("现在没有怀孕")
+    if action == "express" and (not state.lactating or profile.gender != "female"):
+        raise ValueError("现在没有在哺乳")
 
     before = _meter_snapshot(state)
     now_ts = now.timestamp()
@@ -1706,6 +1884,11 @@ def apply_action(
             ):
                 state.pregnant = True
                 state.conceived_at = now_ts
+                state.fetuses = _fetal_count(profile.persona_id, str(int(now_ts)))
+                state.prenatal_week = 0
+                state.birth_at = 0.0
+                state.lactating = False
+                state.milk = 0.0
                 _add_event(
                     state,
                     now,
@@ -1735,6 +1918,19 @@ def apply_action(
                 )
                 * 3600
             )
+    elif action == "prenatal":
+        weeks = max(0, int((now_ts - state.conceived_at) // (7 * 86400)))
+        state.prenatal_week = weeks
+        _add_event(
+            state,
+            now,
+            "prenatal",
+            f"去做了产检，怀孕 {weeks} 周",
+            key=f"visit:{int(now_ts)}",
+        )
+    elif action == "express":
+        state.milk = max(0.0, state.milk - 65.0)
+        state.last_express_at = now_ts
 
     view = cycle_view(state, now, profile, settings)
     _recompute_primary(

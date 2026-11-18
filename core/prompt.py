@@ -397,6 +397,15 @@ def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
     return ""
 
 
+def _lactation_text(state: BodyState) -> str:
+    """Return the private lactation line while it matters."""
+    if state.milk >= 80:
+        return "哺乳：涨得厉害，需要挤一下"
+    if state.milk >= 45:
+        return "哺乳：有点涨"
+    return "哺乳：还好"
+
+
 def build_prompt_block(
     state: BodyState,
     now: datetime,
@@ -480,6 +489,8 @@ def build_prompt_block(
         supply = _supply_text(state, view) if show_private else ""
         if supply:
             lines.append(supply)
+        if show_private and state.lactating:
+            lines.append(_lactation_text(state))
     if show_private and settings.enable_intimate and profile.adult:
         male = _male_text(state, now, profile)
         if male:
@@ -709,6 +720,7 @@ def build_web_state(
             "anovulatory": view.anovulatory,
             "fertile": view.fertile,
             "weeks": view.weeks,
+            "fetuses": state.fetuses,
             "breast": view.breast,
             "headache": view.headache,
             "backache": view.backache,
@@ -726,6 +738,14 @@ def build_web_state(
             "progesterone": round(view.progesterone, 1),
             "lh": round(view.lh, 1),
             "bbt": view.bbt,
+        }
+
+    lactation = None
+    if state.lactating or state.birth_at > 0:
+        lactation = {
+            "active": state.lactating,
+            "milk": round(state.milk, 1),
+            "line": _lactation_text(state) if state.lactating else "",
         }
 
     male = None
@@ -775,6 +795,7 @@ def build_web_state(
         "meters": meters,
         "details": details,
         "cycle": cycle,
+        "lactation": lactation,
         "male": male,
         "events": events,
         "last": last,

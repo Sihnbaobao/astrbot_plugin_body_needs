@@ -63,6 +63,10 @@ ACTION_ALIASES = {
     "自己解决": "release",
     "释放": "release",
     "自慰": "release",
+    "产检": "prenatal",
+    "哺乳": "express",
+    "喂奶": "express",
+    "挤奶": "express",
     "补货": "supplies",
     "卫生巾": "supplies",
     "卫生用品": "supplies",
@@ -525,6 +529,9 @@ class BodyNeedsPlugin(Star):
         if private and profile.adult and self.settings.enable_intimate:
             actions.append("intimacy")
             actions.append("release")
+        if profile.gender == "female" and self.settings.enable_pregnancy:
+            actions.append("prenatal")
+            actions.append("express")
         tools = ToolSet()
         tools.add_tool(
             FunctionTool(
@@ -542,6 +549,11 @@ class BodyNeedsPlugin(Star):
                     + ("洗澡、刷牙、" if self.settings.enable_hygiene else "")
                     + "上厕所、小睡"
                     + ("、补卫生用品" if profile.gender == "female" else "")
+                    + (
+                        "、产检、喂奶"
+                        if profile.gender == "female" and self.settings.enable_pregnancy
+                        else ""
+                    )
                     + (
                         "、亲密、自己解决"
                         if private and profile.adult and self.settings.enable_intimate
@@ -669,6 +681,8 @@ class BodyNeedsPlugin(Star):
                 "toilet",
                 "nap",
                 "release",
+                "prenatal",
+                "express",
             ):
                 action = sub.lower()
             else:
@@ -764,6 +778,7 @@ class BodyNeedsPlugin(Star):
             "身体指令：\n"
             "/身体 状态\n"
             "/身体 喂 | 零食 | 喝水 | 洗澡 | 刷牙 | 上厕所 | 小睡 | 补货\n"
+            "/身体 产检 | 哺乳（怀孕/哺乳期可用）\n"
             "私聊还可记录：亲密 | 自己解决\n"
             "/身体 经期 [状态|开始|延后 N|提前 N|设置 YYYY-MM-DD]\n"
             "/身体 重置\n"

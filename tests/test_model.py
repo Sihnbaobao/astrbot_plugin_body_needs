@@ -12,6 +12,8 @@ from core.model import (
     PAD_RESTOCK,
     BodyState,
     _cycle_length_for,
+    _fetal_count,
+    _miscarriage_chance,
     _desire_rate,
     _emission_age_factor,
     _menarche_age,
@@ -600,6 +602,83 @@ def test_adult_follows_detected_gender() -> None:
     unknown = detect_profile("anon", "anon", "一个普通的助手。", Settings())
     assert unknown.gender == "none"
     assert unknown.adult is False
+
+
+def test_birth_starts_lactation() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=2))
+    state.pregnant = True
+    state.fetuses = 1
+    state.conceived_at = (now - timedelta(days=281)).timestamp()
+    advance(state, now, make_profile(), Settings())
+    assert state.pregnant is False
+    assert state.lactating is True
+    assert state.milk > 0
+    assert state.birth_at > 0
+    assert any(event["kind"] == "birth" for event in state.events)
+
+
+def test_twins_arrive_earlier_than_a_singleton() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    settings = Settings()
+    profile = make_profile()
+
+    singleton = make_state(now - timedelta(hours=2))
+    singleton.pregnant = True
+    singleton.fetuses = 1
+    singleton.conceived_at = (now - timedelta(days=270)).timestamp()
+    advance(singleton, now, profile, settings)
+    assert singleton.pregnant is True
+
+    twins = make_state(now - timedelta(hours=2))
+    twins.pregnant = True
+    twins.fetuses = 2
+    twins.conceived_at = (now - timedelta(days=270)).timestamp()
+    advance(twins, now, profile, settings)
+    assert twins.pregnant is False
+    assert "双胎" in twins.events[-1]["text"]
+
+
+def test_miscarriage_hazard_falls_with_weeks() -> None:
+    chances = [_miscarriage_chance(week) for week in (3, 8, 12, 18, 25)]
+    assert chances[0] > chances[1] > chances[2] > chances[3] > chances[4]
+    assert chances[4] == 0.0
+
+
+def test_prenatal_visit_needs_a_pregnancy() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    with pytest.raises(ValueError):
+        apply_action(state, "prenatal", now, profile, settings)
+
+    state.pregnant = True
+    state.conceived_at = (now - timedelta(days=70)).timestamp()
+    result = apply_action(state, "prenatal", now, profile, settings)
+    assert result.label
+    assert state.prenatal_week == 10
+    assert any(event["kind"] == "prenatal" for event in state.events)
+
+
+def test_express_relieves_milk() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.lactating = True
+    state.milk = 80.0
+    with pytest.raises(ValueError):
+        apply_action(state, "express", now, make_profile(gender="male"), settings)
+    apply_action(state, "express", now, profile, settings)
+    assert state.milk == pytest.approx(15.0)
+    assert state.last_express_at == now.timestamp()
+
+
+def test_fetal_count_is_rare_but_possible() -> None:
+    counts = [_fetal_count("test", f"conception-{index}") for index in range(2000)]
+    assert set(counts) <= {1, 2, 3}
+    assert counts.count(1) > counts.count(2) > 0
 
 
 def test_bbt_rises_after_ovulation() -> None:
