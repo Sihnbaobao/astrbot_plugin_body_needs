@@ -16,6 +16,7 @@ TZ = ZoneInfo("Asia/Shanghai")
 def make_profile(
     *,
     gender: str = "female",
+    age: int | None = 25,
     adult: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
@@ -23,6 +24,7 @@ def make_profile(
         persona_id="test",
         name="test",
         gender=gender,
+        age=age,
         adult=adult,
         cycle_length=28,
         period_length=5,
@@ -65,7 +67,7 @@ def test_private_block_contains_cycle_and_adult_lines() -> None:
     assert "body_action" in block
 
 
-def test_minor_block_has_no_adult_state() -> None:
+def test_profile_without_adult_flag_has_no_adult_state() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
     state.desire = 0

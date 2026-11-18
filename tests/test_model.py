@@ -10,6 +10,8 @@ import pytest
 from core.config import Settings
 from core.model import (
     BodyState,
+    _desire_rate,
+    _emission_age_factor,
     advance,
     apply_action,
     cycle_view,
@@ -24,6 +26,7 @@ TZ = ZoneInfo("Asia/Shanghai")
 def make_profile(
     *,
     gender: str = "female",
+    age: int | None = 25,
     adult: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
@@ -31,6 +34,7 @@ def make_profile(
         persona_id="test",
         name="test",
         gender=gender,
+        age=age,
         adult=adult,
         cycle_length=28,
         period_length=5,
@@ -204,6 +208,23 @@ def test_intimacy_is_adult_only_and_sets_refractory() -> None:
     apply_action(state, "intimacy", now, male, settings)
     assert state.desire == 0
     assert state.refractory_until > now.timestamp()
+
+
+def test_male_desire_rate_falls_with_age() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now)
+    rates = [
+        _desire_rate(state, None, make_profile(gender="male", age=age))
+        for age in (16, 25, 35, 50)
+    ]
+    assert rates == [2.0, 1.8, 1.4, 1.0]
+    assert rates == sorted(rates, reverse=True)
+
+
+def test_emission_odds_fall_with_age() -> None:
+    factors = [_emission_age_factor(age) for age in (15, 20, 30, 40, 50, 60)]
+    assert factors == sorted(factors, reverse=True)
+    assert factors[0] > factors[-1] * 10
 
 
 def test_sleep_window_crosses_midnight() -> None:

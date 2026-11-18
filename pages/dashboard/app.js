@@ -42,7 +42,7 @@ const CONFIG_FIELDS = [
   {
     group: "成人模块",
     fields: [
-      { key: "ENABLE_INTIMATE", label: "启用成人私密生理", type: "bool", adult: true, hint: "成年人的欲望与亲密记录；只在私聊启用。" },
+      { key: "ENABLE_INTIMATE", label: "启用成人私密生理", type: "bool", adult: true, hint: "男/女人格的欲望与亲密记录；需要能识别出性别，只在私聊启用。" },
     ],
   },
   {

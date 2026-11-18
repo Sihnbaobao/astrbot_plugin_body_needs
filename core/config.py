@@ -63,7 +63,8 @@ class Settings:
     Attributes:
         enabled: Master switch; when false the plugin does nothing.
         gender: "auto" reads the persona prompt, otherwise forces a body type.
-        age: Fallback age when the persona does not state one; 0 means unknown.
+        age: Fallback age for the male physiology curves; 0 means read the
+            persona prompt only.
         persona_id: Fixed persona whose body is used; empty follows the chat.
         timezone: IANA time zone; empty means use AstrBot's configured zone.
         sleep_window: Local HH:MM-HH:MM window used for slower metabolism.
@@ -73,7 +74,8 @@ class Settings:
         group_detail: How much body detail a group chat may see.
         intensity: How strongly the prompt block is phrased.
         enable_cycle: Track the menstrual cycle.
-        enable_intimate: Track adult-only physiology; always off for minors.
+        enable_intimate: Track intimate physiology; needs a resolvable gender
+            and a private chat, and never depends on age.
         enable_hygiene: Track showering and tooth brushing.
         enable_sleep: Let the sleep window change metabolism and recovery.
         enable_tools: Offer the body tools to the chat model.

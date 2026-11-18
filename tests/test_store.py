@@ -27,6 +27,7 @@ def test_detect_profile_does_not_gate_on_stated_age() -> None:
         "kid", "kid", "她今年17岁，是一个女孩子。", settings
     )
     assert profile.gender == "female"
+    assert profile.age == 17
     assert profile.adult is True
 
 

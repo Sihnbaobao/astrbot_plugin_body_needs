@@ -1,8 +1,11 @@
 """Infer the active persona's body profile from its prompt.
 
-AstrBot personas are free-form text. Most of them state gender in the first
-sentence, so a small heuristic is enough; the plugin config can always
+AstrBot personas are free-form text. Most of them state gender and age in the
+first sentence, so a small heuristic is enough; the plugin config can always
 override the result.
+
+Age is informational only. It never gates a feature: it feeds the age curves of
+the male physiology (desire rate and nocturnal-emission odds).
 """
 
 from __future__ import annotations
@@ -43,6 +46,10 @@ _GENDER_HINTS = (
     (re.compile(r"(?:性别|gender)\s*[:：=]?\s*(?:女|female)", re.IGNORECASE), "female"),
     (re.compile(r"(?:性别|gender)\s*[:：=]?\s*(?:男|male)", re.IGNORECASE), "male"),
 )
+_AGE_PATTERNS = (
+    re.compile(r"(?<!\d)(\d{1,2})\s*(?:岁|歲)"),
+    re.compile(r"(?:年龄|年齡|age)\s*[:：=]?\s*(\d{1,2})", re.IGNORECASE),
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,8 @@ class Profile:
         persona_id: Stable persona identifier used as the state key.
         name: Display name for commands and the plugin page.
         gender: One of female, male, none.
+        age: Detected or configured age, or None when unknown. Only used by
+            the age curves; it never enables or disables a feature.
         adult: Whether adult-only physiology is allowed.
         cycle_length: Cycle length in days from settings.
         period_length: Menstrual days from settings.
@@ -61,6 +70,7 @@ class Profile:
     persona_id: str
     name: str
     gender: str
+    age: int | None
     adult: bool
     cycle_length: int
     period_length: int
@@ -69,6 +79,25 @@ class Profile:
 def gender_label(gender: str) -> str:
     """Return a short Chinese label for a gender value."""
     return {"female": "女", "male": "男"}.get(gender, "未知")
+
+
+def detect_age(text: str) -> int | None:
+    """Extract the first plausible age from a persona prompt.
+
+    Args:
+        text: The persona system prompt.
+
+    Returns:
+        A year value, or None when the prompt does not state one.
+    """
+    if not text:
+        return None
+    for pattern in _AGE_PATTERNS:
+        for match in pattern.finditer(text):
+            value = int(match.group(1))
+            if 1 <= value <= 120:
+                return value
+    return None
 
 
 def detect_gender(text: str) -> str:
@@ -123,12 +152,20 @@ def detect_profile(
     if gender == "auto":
         gender = detect_gender(prompt)
 
+    age = detect_age(prompt)
+    if age is None and settings.age > 0:
+        age = settings.age
+
+    # Age no longer participates in this decision: any persona whose gender can
+    # be resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
+    # check decide what actually reaches the model.
     adult = gender in ("female", "male")
 
     return Profile(
         persona_id=persona_id,
         name=name or persona_id,
         gender=gender,
+        age=age,
         adult=adult,
         cycle_length=settings.cycle_length,
         period_length=settings.period_length,

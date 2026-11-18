@@ -139,7 +139,7 @@ class BodyState:
     - bladder is urine volume
     - cleanliness is skin dirtiness
     - fatigue is derived from sleep debt and circadian alertness
-    - desire is an adult-only tension meter
+    - desire is a tension meter that only matters while ENABLE_INTIMATE is on
     """
 
     persona_id: str
@@ -591,7 +591,14 @@ def _advance_cycle_events(
 def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> float:
     """Return the daily desire increase for the current profile."""
     if profile.gender == "male":
-        return 1.4
+        age = profile.age or 30
+        if age < 20:
+            return 2.0
+        if age < 30:
+            return 1.8
+        if age < 45:
+            return 1.4
+        return 1.0
     rate = 0.9
     if view is not None:
         rate += view.estrogen / 100.0 * 0.5
@@ -600,6 +607,32 @@ def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> 
         elif view.phase == "luteal":
             rate += 0.2
     return rate
+
+
+def _emission_age_factor(age: int) -> float:
+    """Return the age multiplier applied to nocturnal-emission odds.
+
+    Emissions peak in the late teens and early twenties and become rare from
+    the mid fifties on, so an older persona needs a much longer gap before the
+    night is likely to end in one.
+
+    Args:
+        age: The persona's age in years.
+
+    Returns:
+        A multiplier on the base per-night chance.
+    """
+    if age < 18:
+        return 1.7
+    if age < 25:
+        return 1.5
+    if age < 35:
+        return 1.0
+    if age < 45:
+        return 0.55
+    if age < 55:
+        return 0.25
+    return 0.1
 
 
 def _advance_male_events(
@@ -626,7 +659,8 @@ def _advance_male_events(
             if not state.flags.get(key):
                 days = (night.timestamp() - state.last_release_at) / 86400
                 sleep_bonus = max(0.0, state.sleep_debt - 6.0) * 0.008
-                chance = min(0.65, max(0.0, (days - 2) * 0.10 + sleep_bonus))
+                base = max(0.0, (days - 2) * 0.10 + sleep_bonus)
+                chance = min(0.65, base * _emission_age_factor(profile.age or 30))
                 if (
                     days >= 2
                     and _roll(profile.persona_id, current.isoformat(), "wet") < chance

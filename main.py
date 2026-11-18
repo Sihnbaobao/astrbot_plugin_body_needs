@@ -472,9 +472,10 @@ class BodyNeedsPlugin(Star):
                 req.extra_user_content_parts = parts
             if self.settings.debug:
                 logger.info(
-                    "[body] 注入 %s：gender=%s adult=%s chars=%d",
+                    "[body] 注入 %s：gender=%s age=%s adult=%s chars=%d",
                     persona_id,
                     profile.gender,
+                    profile.age,
                     profile.adult,
                     len(block),
                 )
@@ -903,7 +904,9 @@ class BodyNeedsPlugin(Star):
             return error_response("缺少动作")
         persona_id, profile = self._profile_by_id(persona_id)
         if action == "intimacy" and not profile.adult:
-            return error_response("成人模块只对成年人格开放")
+            return error_response(
+                "当前人格未启用成人模块：需要能识别出性别，且 ENABLE_INTIMATE 开启"
+            )
         try:
             now = self._now()
             state, result = await self._mutate(persona_id, profile, now, action)

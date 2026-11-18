@@ -191,13 +191,11 @@ async def test_page_tracks_one_persona(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_minor_never_gets_intimacy_tool(monkeypatch, tmp_path) -> None:
-    plugin, _ = make_plugin(
-        monkeypatch, tmp_path, "她今年17岁，是一个女孩子。"
-    )
+async def test_genderless_persona_gets_no_intimacy_tool(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "一个普通的助手。")
     await plugin.initialize()
     event = FakeEvent()
-    profile = plugin._profile_for("test", "test", "她今年17岁，是一个女孩子。")
+    profile = plugin._profile_for("test", "test", "一个普通的助手。")
     tools = plugin._body_tools(profile, True)
     body_action = next(tool for tool in tools.tools if tool.name == "body_action")
     assert "intimacy" not in body_action.parameters["properties"]["action"]["enum"]
