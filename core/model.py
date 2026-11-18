@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
+from . import hpo
 from .config import Settings
 from .profile import Profile
 
@@ -58,8 +59,6 @@ MENOPAUSE_MIN = 40.0
 MENOPAUSE_MAX = 61.0
 PERIMENOPAUSE_YEARS = 4.0
 LUTEAL_DAYS = 14
-OVULATION_ESTROGEN = 85.0
-FOLLICULAR_FLOOR = 6.0
 CONCEPTION_BASE = 0.18
 PREGNANCY_DAYS = 280
 CONTRACEPTION_FACTOR = {"none": 1.0, "condom": 0.02, "pill": 0.01}
@@ -237,6 +236,8 @@ class BodyState:
     estrogen: float = 0.0
     progesterone: float = 0.0
     lh: float = 0.0
+    fsh: float = 0.0
+    follicle: float = 0.0
     ovulation_day: int = 0
     anovulatory: bool = False
     pregnant: bool = False
@@ -291,6 +292,8 @@ class BodyState:
             "estrogen": self.estrogen,
             "progesterone": self.progesterone,
             "lh": self.lh,
+            "fsh": self.fsh,
+            "follicle": self.follicle,
             "ovulation_day": self.ovulation_day,
             "anovulatory": self.anovulatory,
             "pregnant": self.pregnant,
@@ -406,6 +409,8 @@ class BodyState:
         state.estrogen = _clamp(_number(data.get("estrogen"), 0.0))
         state.progesterone = _clamp(_number(data.get("progesterone"), 0.0))
         state.lh = _clamp(_number(data.get("lh"), 0.0))
+        state.fsh = _clamp(_number(data.get("fsh"), 0.0))
+        state.follicle = _clamp(_number(data.get("follicle"), 0.0), 0.0, 1.0)
         state.ovulation_day = max(0, int(_number(data.get("ovulation_day"), 0)))
         state.anovulatory = bool(data.get("anovulatory"))
         state.pregnant = bool(data.get("pregnant"))
@@ -455,6 +460,7 @@ class CycleView:
     headache: int = 0
     backache: int = 0
     discharge: int = 0
+    bbt: float = 36.3
 
 
 @dataclass(frozen=True)
@@ -701,47 +707,6 @@ def _ensure_anchor(
     return anchor
 
 
-def _hormones(
-    day: int,
-    length: int,
-    period: int,
-    anovulatory: bool = False,
-) -> tuple[float, float, float]:
-    """Return simplified estrogen, progesterone and LH for one cycle day."""
-    ovulation = length // 2 + 1
-    if anovulatory:
-        # No corpus luteum: estrogen rises and falls again, progesterone and
-        # LH stay flat and the bleeding that follows is a withdrawal bleed.
-        if day <= period:
-            estrogen = 15.0 + 8.0 * math.sin(math.pi * day / max(1, period))
-        elif day < ovulation:
-            progress = (day - period) / max(1, ovulation - period)
-            estrogen = 20.0 + 45.0 * progress
-        else:
-            progress = (day - ovulation) / max(1, length - ovulation)
-            estrogen = 65.0 - 45.0 * progress
-        return _clamp(estrogen), 5.0, 12.0
-    if day <= period:
-        estrogen = 15.0 + 8.0 * math.sin(math.pi * day / max(1, period))
-        progesterone = 5.0
-        lh = 10.0
-    elif day < ovulation - 1:
-        progress = (day - period) / max(1, ovulation - 1 - period)
-        estrogen = 23.0 + 67.0 * progress
-        progesterone = 5.0 + 10.0 * progress
-        lh = 10.0 + 45.0 * progress**2
-    elif abs(day - ovulation) <= 1:
-        estrogen = 90.0
-        progesterone = 20.0
-        lh = 100.0
-    else:
-        progress = (day - (ovulation + 1)) / max(1, length - (ovulation + 1))
-        progesterone = 20.0 + 55.0 * math.sin(math.pi * progress)
-        estrogen = 70.0 - 40.0 * progress
-        lh = 20.0
-    return _clamp(estrogen), _clamp(progesterone), _clamp(lh)
-
-
 def _cycle_span(
     profile: Profile,
     pubertal: bool,
@@ -772,9 +737,11 @@ def _restart_cycle(state: BodyState, now: datetime, profile: Profile) -> None:
     state.cycle_start = now.date().isoformat()
     state.cycle_day = 1
     state.ovulation_day = 0
-    state.estrogen = 15.0
+    state.estrogen = 12.0
     state.progesterone = 5.0
     state.lh = 10.0
+    state.fsh = 34.0
+    state.follicle = 0.0
     age = profile.physio_age
     state.anovulatory = _roll(
         profile.persona_id, now.date().isoformat(), "ovulation"
@@ -821,14 +788,13 @@ def _seed_cycle(
     ) < _anovulatory_chance(
         age, profile.pcos, _is_perimenopausal(age, _menopause_age(profile.persona_id))
     )
-    expected = max(period + 1, length - LUTEAL_DAYS)
-    state.ovulation_day = 0
-    if not state.anovulatory and day >= expected:
-        state.ovulation_day = expected
-    estrogen, progesterone, lh = _hormones(day, length, period, state.anovulatory)
-    state.estrogen = estrogen
-    state.progesterone = progesterone
-    state.lh = lh
+    axis, ovulated_day = hpo.seed(day, length, period, state.anovulatory)
+    state.estrogen = axis.estrogen
+    state.progesterone = axis.progesterone
+    state.lh = axis.lh
+    state.fsh = axis.fsh
+    state.follicle = axis.follicle
+    state.ovulation_day = ovulated_day if not state.anovulatory else 0
 
 
 def _step_cycle(
@@ -838,11 +804,11 @@ def _step_cycle(
     settings: Settings,
     hours: float,
 ) -> None:
-    """Advance the integrated hormone state by one chunk of time.
+    """Advance the HPO axis by one chunk of time.
 
-    Estrogen builds through the follicular phase until it crosses the
-    ovulation threshold; progesterone then runs the luteal phase down and the
-    next period starts when it expires.
+    FSH grows the follicle, estradiol feeds back on FSH and drives the LH
+    surge, and the corpus luteum then runs progesterone down until the next
+    period starts.
     """
     if profile.gender != "female" or not settings.enable_cycle or state.pregnant:
         return
@@ -875,40 +841,33 @@ def _step_cycle(
         stress,
     )
     state.cycle_day = day
-
-    if day <= period:
-        state.estrogen = max(12.0, state.estrogen - 6.0 * hours)
-        state.progesterone = max(5.0, state.progesterone - 8.0 * hours)
-        state.lh = max(10.0, state.lh - 20.0 * hours)
-        state.ovulation_day = 0
-        return
-
-    if state.ovulation_day == 0:
-        if state.anovulatory:
-            state.estrogen = min(65.0, state.estrogen + 1.4 * hours)
-            state.progesterone = 5.0
-            state.lh = 12.0
-            if day > target:
-                _restart_cycle(state, now, profile)
-            return
-        window = max(FOLLICULAR_FLOOR, float(target - period - LUTEAL_DAYS))
-        rate = (OVULATION_ESTROGEN - 15.0) / (window * 24.0) / max(1.0, stress)
-        state.estrogen = min(100.0, state.estrogen + rate * hours)
-        state.lh = min(70.0, state.lh + 0.5 * hours)
-        state.progesterone = 5.0
-        if state.estrogen >= OVULATION_ESTROGEN:
-            state.ovulation_day = day
-            state.estrogen = 90.0
-            state.lh = 100.0
-            state.progesterone = 20.0
-        return
-
-    luteal_day = day - state.ovulation_day
-    state.lh = max(20.0, state.lh - 30.0 * hours)
-    progress = min(1.0, luteal_day / float(LUTEAL_DAYS))
-    state.progesterone = 20.0 + 55.0 * math.sin(math.pi * progress)
-    state.estrogen = max(30.0, 90.0 - luteal_day * 4.0)
-    if luteal_day >= LUTEAL_DAYS:
+    expected = max(period + 1, target - LUTEAL_DAYS)
+    axis = hpo.Axis(
+        estrogen=state.estrogen,
+        progesterone=state.progesterone,
+        lh=state.lh,
+        fsh=state.fsh,
+        follicle=state.follicle,
+    )
+    axis, ovulated = hpo.step(
+        axis,
+        hours,
+        day=day,
+        ovulation_day=state.ovulation_day,
+        length=expected,
+        anovulatory=state.anovulatory,
+        stress=stress,
+    )
+    state.estrogen = _clamp(axis.estrogen)
+    state.progesterone = _clamp(axis.progesterone)
+    state.lh = _clamp(axis.lh)
+    state.fsh = _clamp(axis.fsh)
+    state.follicle = max(0.0, min(1.0, axis.follicle))
+    if ovulated and state.ovulation_day == 0:
+        state.ovulation_day = day
+    if state.ovulation_day and day - state.ovulation_day >= LUTEAL_DAYS:
+        _restart_cycle(state, now, profile)
+    elif state.anovulatory and day > target:
         _restart_cycle(state, now, profile)
 
 
@@ -1077,13 +1036,12 @@ def cycle_view(
     # ovulation, not to the period, so on a short cycle it overlaps the
     # bleeding days and those are fertile too.
     fertile = not anovulatory and (ovulation_day - 5) <= day <= (ovulation_day + 1)
-    if phase in ("menstrual", "ovulation"):
+    axis = hpo.Axis(estrogen=estrogen, progesterone=progesterone, lh=lh)
+    discharge = hpo.mucus_score(axis)
+    if phase == "menstrual":
+        # Blood masks the mucus during the period, so keep the old high value.
         discharge = 3
-    elif phase == "follicular":
-        soon = not anovulatory and (ovulation_day - day) <= 3
-        discharge = 2 if soon else 1
-    else:
-        discharge = 2 if (length - day) > 7 else 1
+    bbt = hpo.basal_temperature(axis)
 
     return CycleView(
         cycle_start=start,
@@ -1106,6 +1064,7 @@ def cycle_view(
         headache=headache,
         backache=backache,
         discharge=discharge,
+        bbt=bbt,
     )
 
 
@@ -1566,7 +1525,7 @@ def advance(
             state.sleep_debt
             + (
                 SLEEP_DEBT_AWAKE * (const.sleep_need / 8.0) * awake_fraction
-                - SLEEP_DEBT_SLEEP * (8.0 / const.sleep_need) * sleep_fraction
+                - SLEEP_DEBT_SLEEP * (const.sleep_need / 8.0) * sleep_fraction
             )
             * step_hours,
             0.0,

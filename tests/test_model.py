@@ -600,3 +600,73 @@ def test_adult_follows_detected_gender() -> None:
     unknown = detect_profile("anon", "anon", "一个普通的助手。", Settings())
     assert unknown.gender == "none"
     assert unknown.adult is False
+
+
+def test_bbt_rises_after_ovulation() -> None:
+    settings = Settings()
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+
+    def view_for(days_ago: int):
+        state = make_state(now)
+        state.cycle_anchor = (now.date() - timedelta(days=days_ago)).isoformat()
+        return cycle_view(state, now, make_profile(), settings)
+
+    follicular = view_for(6)
+    luteal = view_for(21)
+    assert follicular is not None and luteal is not None
+    assert luteal.bbt - follicular.bbt >= 0.15
+    assert 36.0 < follicular.bbt < 37.0
+
+
+def test_mucus_thins_near_ovulation() -> None:
+    settings = Settings()
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+
+    def view_for(days_ago: int):
+        state = make_state(now)
+        state.cycle_anchor = (now.date() - timedelta(days=days_ago)).isoformat()
+        return cycle_view(state, now, make_profile(), settings)
+
+    early = view_for(3)
+    peak = view_for(13)
+    late = view_for(22)
+    assert early is not None and peak is not None and late is not None
+    assert peak.discharge == 3
+    assert late.discharge < peak.discharge
+
+
+def test_hpo_cycle_stays_on_schedule() -> None:
+    profile = make_profile(age=28)
+    settings = Settings(sleep_window="00:00-08:00")
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=TZ)
+    state = BodyState(persona_id="test", updated_at=now.timestamp())
+    state.cycle_anchor = "2026-01-01"
+    starts = []
+    previous = None
+    for offset in range(150):
+        moment = now + timedelta(days=offset)
+        state.last_active_at = moment.timestamp()
+        advance(state, moment, profile, settings)
+        view = cycle_view(state, moment, profile, settings)
+        if previous != "menstrual" and view.phase == "menstrual":
+            starts.append(moment.date())
+        previous = view.phase
+    gaps = [(starts[i + 1] - starts[i]).days for i in range(len(starts) - 1)]
+    assert len(gaps) >= 3
+    assert all(25 <= gap <= 31 for gap in gaps)
+
+
+def test_hpo_values_stay_in_range() -> None:
+    profile = make_profile(age=28)
+    settings = Settings()
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=TZ)
+    state = BodyState(persona_id="test", updated_at=now.timestamp())
+    state.cycle_anchor = "2026-01-01"
+    for offset in range(0, 90, 3):
+        moment = now + timedelta(days=offset)
+        advance(state, moment, profile, settings)
+        assert 0.0 <= state.estrogen <= 100.0
+        assert 0.0 <= state.progesterone <= 100.0
+        assert 0.0 <= state.lh <= 100.0
+        assert 0.0 <= state.fsh <= 100.0
+        assert 0.0 <= state.follicle <= 1.0

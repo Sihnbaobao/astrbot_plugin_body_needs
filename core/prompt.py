@@ -472,6 +472,9 @@ def build_prompt_block(
         lines.append(_internal_line(state, now))
     if view is not None and (show_private or full_group):
         lines.append(_cycle_text(view))
+        if show_private:
+            warm = "，排卵后偏高" if view.progesterone > 25.0 else ""
+            lines.append(f"基础体温：{view.bbt:.2f}℃{warm}")
         if show_private and view.fertile:
             lines.append("身体：这几天更容易受孕。")
         supply = _supply_text(state, view) if show_private else ""
@@ -722,6 +725,7 @@ def build_web_state(
             "estrogen": round(view.estrogen, 1),
             "progesterone": round(view.progesterone, 1),
             "lh": round(view.lh, 1),
+            "bbt": view.bbt,
         }
 
     male = None
