@@ -1481,16 +1481,13 @@ def apply_action(
         state.pads += PAD_RESTOCK
         state.last_supply_at = now_ts
     elif action == "intimacy":
-        fertile = cycle_view(state, now, profile, settings)
+        cycle = cycle_view(state, now, profile, settings)
         can_conceive = (
             settings.enable_pregnancy
             and profile.gender == "female"
             and not state.pregnant
-            and not _is_pubertal(profile.physio_age)
-            and (profile.physio_age is None or profile.physio_age >= PUBERTY_END)
-            and (profile.age is None or profile.age >= PUBERTY_END)
-            and fertile is not None
-            and fertile.fertile
+            and cycle is not None
+            and cycle.fertile
         )
         if can_conceive:
             factor = CONTRACEPTION_FACTOR.get(settings.contraception, 1.0)
