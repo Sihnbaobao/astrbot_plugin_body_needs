@@ -751,9 +751,38 @@ def _cycle_span(
     return span
 
 
-def _cycle_stress(state: BodyState) -> float:
-    """Return the follicular stretch factor; sleep debt delays ovulation."""
-    return 1.0 + min(0.35, max(0.0, state.sleep_debt - 6.0) / 24.0 * 0.6)
+def _mood_effect(mood: dict[str, Any] | None) -> tuple[float, float, float]:
+    """Turn an emotion snapshot into body effects.
+
+    Args:
+        mood: Emotion values from the persona plugin, or None.
+
+    Returns:
+        A (hunger delta, desire factor, follicular stress) tuple.
+    """
+    if not mood:
+        return 0.0, 1.0, 0.0
+
+    def read(key: str) -> float:
+        try:
+            return max(0.0, min(1.0, float(mood.get(key, 0.0))))
+        except (TypeError, ValueError):
+            return 0.0
+
+    sadness = read("sadness")
+    anger = read("anger")
+    fear = read("fear")
+    joy = read("joy")
+    hunger = 10.0 * sadness + 5.0 * anger - 4.0 * joy
+    desire = max(0.3, min(1.2, 1.0 - 0.45 * sadness - 0.2 * anger + 0.1 * joy))
+    stress = min(0.2, 0.12 * fear + 0.04 * anger)
+    return hunger, desire, stress
+
+
+def _cycle_stress(state: BodyState, mood: dict[str, Any] | None = None) -> float:
+    """Return the follicular stretch factor; sleep debt and stress delay it."""
+    stress = 1.0 + min(0.35, max(0.0, state.sleep_debt - 6.0) / 24.0 * 0.6)
+    return stress * (1.0 + _mood_effect(mood)[2])
 
 
 def _period_days(profile: Profile) -> int:
@@ -785,6 +814,7 @@ def _seed_cycle(
     now: datetime,
     profile: Profile,
     settings: Settings,
+    mood: dict[str, Any] | None = None,
 ) -> None:
     """Fill the hormone state from the calendar model on first use.
 
@@ -798,7 +828,7 @@ def _seed_cycle(
     span = _cycle_span(
         profile, pubertal, _is_perimenopausal(age, _menopause_age(profile.persona_id))
     )
-    stress = _cycle_stress(state)
+    stress = _cycle_stress(state, mood)
     anchor = _ensure_anchor(state, now, profile, settings.cycle_start)
     day, start, length = cycle_position(
         anchor,
@@ -833,6 +863,7 @@ def _step_cycle(
     profile: Profile,
     settings: Settings,
     hours: float,
+    mood: dict[str, Any] | None = None,
 ) -> None:
     """Advance the HPO axis by one chunk of time.
 
@@ -857,7 +888,7 @@ def _step_cycle(
     day = max(1, (now.date() - cycle_start).days + 1)
     period = _period_days(profile)
     pubertal = _is_pubertal(age)
-    stress = _cycle_stress(state)
+    stress = _cycle_stress(state, mood)
     target = _cycle_length_for(
         profile.cycle_length,
         0,
@@ -906,6 +937,7 @@ def cycle_view(
     now: datetime,
     profile: Profile,
     settings: Settings,
+    mood: dict[str, Any] | None = None,
 ) -> CycleView | None:
     """Compute the current menstrual phase, hormones and symptoms."""
     if not settings.enable_cycle or profile.gender != "female":
@@ -977,14 +1009,14 @@ def cycle_view(
         )
 
     perimenopausal = _is_perimenopausal(age, _menopause_age(profile.persona_id))
-    _seed_cycle(state, now, profile, settings)
+    _seed_cycle(state, now, profile, settings, mood)
     try:
         start = date.fromisoformat(state.cycle_start)
     except ValueError:
         start = now.date()
     day = max(1, (now.date() - start).days + 1)
     period = _period_days(profile)
-    stress = _cycle_stress(state)
+    stress = _cycle_stress(state, mood)
     target = _cycle_length_for(
         profile.cycle_length,
         0,
@@ -1163,25 +1195,32 @@ def _advance_cycle_events(
     state.cycle_start = view.cycle_start.isoformat()
 
 
-def _desire_rate(state: BodyState, view: CycleView | None, profile: Profile) -> float:
+def _desire_rate(
+    state: BodyState,
+    view: CycleView | None,
+    profile: Profile,
+    mood: dict[str, Any] | None = None,
+) -> float:
     """Return the daily desire increase for the current profile."""
     if profile.gender == "male":
         age = profile.physio_age or 30
         if age < 20:
-            return 2.0
-        if age < 30:
-            return 1.8
-        if age < 45:
-            return 1.4
-        return 1.0
-    rate = 0.9
-    if view is not None:
-        rate += view.estrogen / 100.0 * 0.5
-        if view.phase == "ovulation":
-            rate += 0.6
-        elif view.phase == "luteal":
-            rate += 0.2
-    return rate
+            rate = 2.0
+        elif age < 30:
+            rate = 1.8
+        elif age < 45:
+            rate = 1.4
+        else:
+            rate = 1.0
+    else:
+        rate = 0.9
+        if view is not None:
+            rate += view.estrogen / 100.0 * 0.5
+            if view.phase == "ovulation":
+                rate += 0.6
+            elif view.phase == "luteal":
+                rate += 0.2
+    return rate * _mood_effect(mood)[1]
 
 
 def _emission_age_factor(age: float) -> float:
@@ -1590,6 +1629,7 @@ def _recompute_primary(
     profile: Profile,
     settings: Settings,
     in_period: bool = False,
+    mood: dict[str, Any] | None = None,
 ) -> None:
     """Refresh displayed meters from internal state after a time step."""
     appetite = appetite_level(now)
@@ -1597,6 +1637,7 @@ def _recompute_primary(
         0.55 * (100.0 - state.stomach)
         + 0.45 * (100.0 - state.glucose)
         + (appetite - 1.0) * 20.0
+        + _mood_effect(mood)[0]
     )
     state.thirst = _clamp(100.0 - state.hydration)
     state.bladder = _clamp(state.urine)
@@ -1624,6 +1665,7 @@ def advance(
     now: datetime,
     profile: Profile,
     settings: Settings,
+    mood: dict[str, Any] | None = None,
 ) -> BodyState:
     """Let time pass and update internal state, meters and events."""
     now_ts = now.timestamp()
@@ -1643,7 +1685,7 @@ def advance(
     window = (
         parse_sleep_window(settings.sleep_window) if settings.enable_sleep else None
     )
-    view = cycle_view(state, now, profile, settings)
+    view = cycle_view(state, now, profile, settings, mood)
     in_period = bool(view and view.phase == "menstrual")
     pubertal = _is_pubertal(profile.physio_age)
     const = constitution(profile.persona_id)
@@ -1676,7 +1718,7 @@ def advance(
         awake_fraction = 1.0 - sleep_fraction
         midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
         alert = circadian_alertness(midpoint)
-        _step_cycle(state, chunk_end, profile, settings, step_hours)
+        _step_cycle(state, chunk_end, profile, settings, step_hours, mood)
         if chunk_end.hour != cursor.hour:
             _routine(state, chunk_end, profile, settings, const)
         cycle_day = state.cycle_day
@@ -1758,7 +1800,7 @@ def advance(
             and settings.enable_intimate
             and profile.gender in ("female", "male")
         ):
-            rate = _desire_rate(state, view, profile)
+            rate = _desire_rate(state, view, profile, mood)
             comfort = 1.0
             comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
             comfort -= min(0.3, max(0.0, state.hunger - 70.0) / 30.0 * 0.3)
@@ -1784,9 +1826,9 @@ def advance(
         remaining -= step_seconds
 
     _maybe_release(state, now, profile, settings, const, idle)
-    view = cycle_view(state, now, profile, settings)
+    view = cycle_view(state, now, profile, settings, mood)
     in_period = bool(view and view.phase == "menstrual")
-    _recompute_primary(state, now, profile, settings, in_period)
+    _recompute_primary(state, now, profile, settings, in_period, mood)
     if state.pregnant and state.conceived_at > 0:
         weeks = max(0, int((now_ts - state.conceived_at) // (7 * 86400)))
         _roll_pregnancy(state, now, profile, weeks)

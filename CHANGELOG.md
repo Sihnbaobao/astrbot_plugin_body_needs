@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3
+
+- 反向读取 persona_presence 发布的 `mood.json`：低落/生气压低食欲和欲望，恐惧/生气轻微拉长卵泡期。
+- 按人格 id 或名字子串匹配情绪记录，任一插件缺失时静默跳过。
+
 ## 0.7.2
 
 - 新增 `core/affect.py`：把身体状态压缩成 valence/arousal/distress/tension/pain/energy/dirt/desire 和一行身体描述，写入 `vitals.json`。

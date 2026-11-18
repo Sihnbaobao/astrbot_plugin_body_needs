@@ -681,6 +681,26 @@ def test_fetal_count_is_rare_but_possible() -> None:
     assert counts.count(1) > counts.count(2) > 0
 
 
+def test_sad_mood_suppresses_appetite() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    settings = Settings()
+    profile = make_profile()
+    calm = make_state(now - timedelta(hours=1))
+    sad = make_state(now - timedelta(hours=1))
+    advance(calm, now, profile, settings)
+    advance(sad, now, profile, settings, {"sadness": 1.0})
+    assert sad.hunger > calm.hunger
+
+
+def test_fear_stretches_the_cycle() -> None:
+    from core.model import _cycle_stress
+
+    state = make_state(datetime(2026, 11, 18, 12, 0, tzinfo=TZ))
+    calm = _cycle_stress(state, None)
+    anxious = _cycle_stress(state, {"fear": 1.0})
+    assert anxious > calm
+
+
 def test_bbt_rises_after_ovulation() -> None:
     settings = Settings()
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)

@@ -62,6 +62,19 @@ def test_cycle_pain_lowers_valence() -> None:
     assert -1.0 <= affect["valence"] <= 1.0
 
 
+def test_match_emotion_by_persona_name() -> None:
+    from core.affect import match_emotion
+
+    personas = {
+        "星野璃月": {"name": "星野璃月", "base": {"anger": 0.4}},
+        "另一个": {"name": "另一个", "base": {"joy": 0.2}},
+    }
+    entry = match_emotion(personas, "璃月")
+    assert entry is not None
+    assert entry["base"]["anger"] == 0.4
+    assert match_emotion({}, "璃月") is None
+
+
 def test_publish_merges_personas(tmp_path) -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     first = _state(persona_id="a")

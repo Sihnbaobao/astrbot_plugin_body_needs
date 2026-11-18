@@ -177,7 +177,15 @@
     dirt/desire        清洁和欲望
     labels / line      给提示词用的短标签和一句话
 
-persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低落、distress→压低开心、dirt→嫌 的映射读取它，在情绪块前加 `[身体]`。身体插件不读情绪，保持单向依赖。
+persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低落、distress→压低开心、dirt→嫌 的映射读取它，在情绪块前加 `[身体]`。
+
+反方向：情绪插件把人格级心情写到 `mood.json`，身体推进时读取（`_mood_effect`）：
+
+    hunger += 10*sadness + 5*anger - 4*joy
+    desire *= 1 - 0.45*sadness - 0.2*anger + 0.1*joy
+    follicular stress *= 1 + 0.12*fear + 0.04*anger
+
+两个方向都是文件契约，任一插件缺失时静默跳过。
 
 ## 6. 女性周期
 

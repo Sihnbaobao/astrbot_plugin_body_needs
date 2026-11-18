@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -29,7 +30,7 @@ from astrbot.core.agent.tool import FunctionTool, ToolSet
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .core.config import Settings
-from .core.affect import publish as publish_affect
+from .core.affect import match_emotion, publish as publish_affect
 from .core.model import (
     ACTION_LABELS,
     BodyState,
@@ -396,6 +397,24 @@ class BodyNeedsPlugin(Star):
         persona_id, name, prompt = await self._resolve_persona(event)
         return persona_id, self._profile_for(persona_id, name, prompt), self._now()
 
+    def _emotion_for(self, persona_id: str) -> dict[str, Any] | None:
+        """Read the persona emotion snapshot, when the other plugin exists."""
+        path = (
+            Path(get_astrbot_plugin_data_path())
+            / "astrbot_plugin_persona_presence"
+            / "mood.json"
+        )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        personas = payload.get("personas") if isinstance(payload, dict) else None
+        if not isinstance(personas, dict):
+            return None
+        entry = match_emotion(personas, persona_id)
+        base = entry.get("base") if isinstance(entry, dict) else None
+        return base if isinstance(base, dict) else None
+
     async def _load_advanced(
         self, persona_id: str, profile: Profile, now: datetime, active: bool = True
     ) -> BodyState:
@@ -410,14 +429,15 @@ class BodyNeedsPlugin(Star):
         """
         async with self._lock:
             state = self.store.load(persona_id, now)
-            advance(state, now, profile, self.settings)
+            mood = self._emotion_for(persona_id)
+            advance(state, now, profile, self.settings, mood)
             if active:
                 state.last_active_at = now.timestamp()
             self.store.save(state)
             publish_affect(
                 self.data_dir,
                 state,
-                cycle_view(state, now, profile, self.settings),
+                cycle_view(state, now, profile, self.settings, mood),
                 now,
             )
         return state
@@ -432,14 +452,15 @@ class BodyNeedsPlugin(Star):
         """Load, advance, apply one action, and save the result."""
         async with self._lock:
             state = self.store.load(persona_id, now)
-            advance(state, now, profile, self.settings)
+            mood = self._emotion_for(persona_id)
+            advance(state, now, profile, self.settings, mood)
             result = apply_action(state, action, now, profile, self.settings)
             state.last_active_at = now.timestamp()
             self.store.save(state)
             publish_affect(
                 self.data_dir,
                 state,
-                cycle_view(state, now, profile, self.settings),
+                cycle_view(state, now, profile, self.settings, mood),
                 now,
             )
         return state, result

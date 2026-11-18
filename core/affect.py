@@ -122,6 +122,33 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
     }
 
 
+def match_emotion(personas: dict[str, Any], persona_id: str) -> dict[str, Any] | None:
+    """Find the emotion entry that belongs to one body persona.
+
+    Args:
+        personas: The ``personas`` mapping from the emotion plugin.
+        persona_id: Body persona id.
+
+    Returns:
+        The matching entry, or None when nothing matches.
+    """
+    if not isinstance(personas, dict) or not persona_id:
+        return None
+    if persona_id in personas:
+        entry = personas[persona_id]
+        return entry if isinstance(entry, dict) else None
+    for key, item in personas.items():
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or key)
+        if name and (persona_id in name or name in persona_id):
+            return item
+    if len(personas) == 1:
+        only = next(iter(personas.values()))
+        return only if isinstance(only, dict) else None
+    return None
+
+
 def publish(
     data_dir: str | os.PathLike[str],
     state: BodyState,
