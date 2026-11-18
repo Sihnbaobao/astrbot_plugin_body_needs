@@ -950,12 +950,10 @@ def cycle_view(
 
     mood = max(-3, mood)
     # Sperm survive about five days and the egg one, so the fertile window is
-    # the five days before ovulation plus the day itself.
-    fertile = (
-        not anovulatory
-        and phase != "menstrual"
-        and (ovulation_day - 5) <= day <= (ovulation_day + 1)
-    )
+    # the five days before ovulation plus the day itself. It is anchored to
+    # ovulation, not to the period, so on a short cycle it overlaps the
+    # bleeding days and those are fertile too.
+    fertile = not anovulatory and (ovulation_day - 5) <= day <= (ovulation_day + 1)
     if phase in ("menstrual", "ovulation"):
         discharge = 3
     elif phase == "follicular":

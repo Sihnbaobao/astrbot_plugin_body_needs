@@ -418,6 +418,34 @@ def test_conception_only_inside_the_fertile_window() -> None:
     assert conceived == 0
 
 
+def test_fertile_window_can_overlap_the_period() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    profile = Profile("short", "t", "female", 28, True, 21, 5)
+    state = make_state(start)
+    state.cycle_anchor = "2026-11-01"
+    inside_period = [
+        day
+        for day in range(1, 6)
+        if cycle_view(state, start + timedelta(days=day - 1), profile, settings).fertile
+    ]
+    assert inside_period, "a short cycle should have fertile days inside the period"
+
+
+def test_fertile_window_ends_a_day_after_ovulation() -> None:
+    settings = Settings()
+    start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
+    profile = Profile("long", "t", "female", 28, True, 28, 5)
+    state = make_state(start)
+    state.cycle_anchor = "2026-11-01"
+    days = [
+        day
+        for day in range(1, 29)
+        if cycle_view(state, start + timedelta(days=day - 1), profile, settings).fertile
+    ]
+    assert days == list(range(9, 16))
+
+
 def test_fertile_window_marks_ovulation() -> None:
     settings = Settings()
     start = datetime(2026, 11, 1, 9, 0, tzinfo=TZ)
