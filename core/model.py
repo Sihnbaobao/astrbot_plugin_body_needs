@@ -70,6 +70,16 @@ ORAL_AWAKE = 2.8
 ORAL_SLEEP = 1.3
 SLEEP_DEBT_AWAKE = 0.55
 SLEEP_DEBT_SLEEP = 1.2
+# Bowel load: meals leave residue, the gut passes a little on its own, and
+# pressure builds until it is answered. 0-100 like the other internal meters.
+GUT_RESIDUE_MEAL = 14.0
+GUT_RESIDUE_SNACK = 6.0
+GUT_BASE = 0.30
+GUT_PASSAGE = 0.35
+GUT_URGE_START = 25.0
+GUT_URGE_GAIN = 1.5
+# A persona only looks after herself once nobody has interacted for a while.
+SELF_CARE_IDLE_HOURS = 6.0
 
 # Circadian anchor points. Hour is local wall clock; value is 0-100 alertness.
 _ALERT_POINTS = (
@@ -116,6 +126,40 @@ def _roll(*parts: str) -> float:
     """Return a stable pseudo-random float in [0, 1) for the given parts."""
     digest = hashlib.sha1("|".join(parts).encode("utf-8")).digest()
     return int.from_bytes(digest[:4], "big") / 2**32
+
+
+@dataclass(frozen=True)
+class Constitution:
+    """Per-persona physical baseline, drawn once from the persona id.
+
+    Two personas should not share the same stomach, sleep need or appetite for
+    release any more than two people do. The values are stable for one persona
+    and never depend on age, so they only shape the curves.
+    """
+
+    sleep_need: float
+    metabolism: float
+    stomach_capacity: float
+    gut_transit: float
+    self_rate: float
+
+
+def constitution(persona_id: str) -> Constitution:
+    """Return the stable physical baseline for one persona.
+
+    Args:
+        persona_id: Stable persona identifier used as the seed.
+
+    Returns:
+        A constitution with small, believable individual variation.
+    """
+    return Constitution(
+        sleep_need=7.0 + 2.2 * _roll(persona_id, "body", "sleep"),
+        metabolism=0.9 + 0.2 * _roll(persona_id, "body", "metabolism"),
+        stomach_capacity=0.85 + 0.3 * _roll(persona_id, "body", "stomach"),
+        gut_transit=0.75 + 0.5 * _roll(persona_id, "body", "gut"),
+        self_rate=0.6 + 1.0 * _roll(persona_id, "body", "release"),
+    )
 
 
 def _parse_ts(value: Any) -> float:
@@ -181,6 +225,8 @@ class BodyState:
     hydration: float = 80.0
     urine: float = 18.0
     skin: float = 18.0
+    gut: float = 8.0
+    bowel: float = 0.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -204,8 +250,10 @@ class BodyState:
     last_shower_at: float = 0.0
     last_brush_at: float = 0.0
     last_toilet_at: float = 0.0
+    last_bowel_at: float = 0.0
     last_nap_at: float = 0.0
     last_release_at: float = 0.0
+    last_self_at: float = 0.0
     refractory_until: float = 0.0
     last_meal_kind: str = ""
     last_meal_size: float = 0.0
@@ -231,6 +279,8 @@ class BodyState:
             "hydration": self.hydration,
             "urine": self.urine,
             "skin": self.skin,
+            "gut": self.gut,
+            "bowel": self.bowel,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -254,8 +304,10 @@ class BodyState:
             "last_shower_at": self.last_shower_at,
             "last_brush_at": self.last_brush_at,
             "last_toilet_at": self.last_toilet_at,
+            "last_bowel_at": self.last_bowel_at,
             "last_nap_at": self.last_nap_at,
             "last_release_at": self.last_release_at,
+            "last_self_at": self.last_self_at,
             "refractory_until": self.refractory_until,
             "last_meal_kind": self.last_meal_kind,
             "last_meal_size": self.last_meal_size,
@@ -284,14 +336,18 @@ class BodyState:
             "hydration",
             "urine",
             "skin",
+            "gut",
+            "bowel",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
             "last_shower_at",
             "last_brush_at",
             "last_toilet_at",
+            "last_bowel_at",
             "last_nap_at",
             "last_release_at",
+            "last_self_at",
             "refractory_until",
             "last_meal_size",
             "last_drink_ml",
@@ -312,8 +368,10 @@ class BodyState:
             "hydration",
             "urine",
             "skin",
+            "gut",
         ):
             setattr(state, key, _clamp(getattr(state, key)))
+        state.bowel = _clamp(state.bowel)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -420,6 +478,7 @@ ACTION_LABELS = {
     "nap": "小睡了一会儿",
     "supplies": "补了卫生用品",
     "intimacy": "亲密过后",
+    "release": "自己解决了一次",
 }
 METER_TEXT = {
     "hunger": "饥饿",
@@ -1174,6 +1233,103 @@ def _morning_age_factor(age: float) -> float:
     return 0.35
 
 
+def _routine(state: BodyState, moment: datetime, const: Constitution) -> None:
+    """Let a persona look after herself while nobody is interacting.
+
+    Meals, drinks and a full gut are handled at ordinary hours instead of
+    piling up forever. This only runs after a long idle gap, so an active
+    conversation still sees real hunger, thirst and pressure.
+
+    Args:
+        state: Body state being advanced.
+        moment: Current simulation instant.
+        const: Per-persona baseline, used for the meal size.
+    """
+    hour = moment.hour
+    if hour in (8, 13, 19) and state.stomach <= 55.0:
+        state.stomach = _clamp(state.stomach + 42.0 / const.stomach_capacity)
+        state.glucose = _clamp(state.glucose + 18.0)
+        state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
+        state.last_eat_at = moment.timestamp()
+        state.last_meal_kind = "meal"
+        _add_event(
+            state,
+            moment,
+            "self_care",
+            "自己吃了点东西",
+            key=f"self-meal:{moment.date().isoformat()}",
+        )
+    if hour in (10, 16, 21) and state.hydration <= 55.0:
+        state.hydration = _clamp(state.hydration + 22.0)
+        state.last_drink_at = moment.timestamp()
+    if state.bowel >= 75:
+        state.gut = max(0.0, state.gut - 85.0)
+        state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+        state.last_bowel_at = moment.timestamp()
+        state.last_toilet_at = moment.timestamp()
+        _add_event(
+            state,
+            moment,
+            "self_care",
+            "去了趟厕所",
+            key=f"self-toilet:{moment.date().isoformat()}",
+        )
+
+
+def _maybe_release(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+    const: Constitution,
+    idle: bool,
+) -> None:
+    """Roll at most one self-release per day once desire has built up.
+
+    Release does not depend on gender or age: both bodies have the drive, and
+    each persona keeps a stable habit multiplier. The event only reaches a
+    private chat, where the prompt filter allows it.
+
+    Args:
+        state: Body state being advanced.
+        now: Current local instant.
+        profile: Resolved persona profile.
+        settings: Plugin settings.
+        const: Per-persona baseline, including the habit multiplier.
+        idle: Whether nobody has interacted for a while.
+    """
+    if not (profile.adult and settings.enable_intimate and idle):
+        return
+    if state.desire < 55.0 or not 8 <= now.hour <= 23:
+        return
+    key = f"self-release:{now.date().isoformat()}"
+    if state.flags.get(key):
+        return
+    since = (
+        (now.timestamp() - state.last_self_at) / 86400.0 if state.last_self_at else 30.0
+    )
+    chance = min(
+        0.85,
+        max(0.0, since - 0.3) * 0.5 * const.self_rate * (state.desire / 60.0),
+    )
+    if _roll(profile.persona_id, key, "roll") >= chance:
+        return
+    state.desire = _clamp(state.desire - 55.0)
+    state.last_self_at = now.timestamp()
+    if profile.gender == "male":
+        state.refractory_until = (
+            now.timestamp()
+            + (1.0 + _roll(profile.persona_id, key, "refractory") * 2.0) * 3600
+        )
+    _add_event(
+        state,
+        now,
+        "self_release",
+        "自己解决了一次，身体松下来",
+        key=key,
+    )
+
+
 def _advance_male_events(
     state: BodyState,
     start_ts: float,
@@ -1277,8 +1433,10 @@ def _recompute_primary(
     state.bladder = _clamp(state.urine)
     state.cleanliness = _clamp(state.skin)
     alert = circadian_alertness(now)
-    penalty = max(0.0, state.hunger - 70.0) * 0.20
-    penalty += max(0.0, state.thirst - 70.0) * 0.15
+    state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+    penalty = max(0.0, state.hunger - 60.0) * 0.20
+    penalty += max(0.0, state.thirst - 60.0) * 0.25
+    penalty += max(0.0, state.bowel - 70.0) * 0.10
     if in_period:
         penalty += 4.0
     state.fatigue = _clamp(
@@ -1319,6 +1477,11 @@ def advance(
     view = cycle_view(state, now, profile, settings)
     in_period = bool(view and view.phase == "menstrual")
     pubertal = _is_pubertal(profile.physio_age)
+    const = constitution(profile.persona_id)
+    idle = (
+        state.last_active_at > 0
+        and now_ts - state.last_active_at > SELF_CARE_IDLE_HOURS * 3600
+    )
 
     cursor = start
     remaining = float(elapsed)
@@ -1345,6 +1508,8 @@ def advance(
         midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
         alert = circadian_alertness(midpoint)
         _step_cycle(state, chunk_end, profile, settings, step_hours)
+        if idle and chunk_end.hour != cursor.hour:
+            _routine(state, chunk_end, const)
         cycle_day = state.cycle_day
         in_period_now = (
             profile.gender == "female"
@@ -1354,7 +1519,7 @@ def advance(
 
         decay = (
             STOMACH_DECAY_AWAKE * awake_fraction + STOMACH_DECAY_SLEEP * sleep_fraction
-        )
+        ) * const.metabolism
         state.stomach = _clamp(state.stomach * math.exp(-decay * step_hours))
 
         glucose_use = (
@@ -1377,6 +1542,11 @@ def advance(
         )
         state.urine = _clamp(state.urine + urine_rate * step_hours)
 
+        state.gut = _clamp(
+            state.gut + (GUT_BASE - GUT_PASSAGE * const.gut_transit) * step_hours
+        )
+        state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+
         sweat = max(0.0, alert - 70.0) / 100.0 * 0.4
         period_extra = SKIN_PERIOD_EXTRA if in_period_now else 0.0
         puberty_extra = SKIN_PUBERTY_EXTRA if pubertal else 0.0
@@ -1394,7 +1564,10 @@ def advance(
 
         state.sleep_debt = _clamp(
             state.sleep_debt
-            + (SLEEP_DEBT_AWAKE * awake_fraction - SLEEP_DEBT_SLEEP * sleep_fraction)
+            + (
+                SLEEP_DEBT_AWAKE * (const.sleep_need / 8.0) * awake_fraction
+                - SLEEP_DEBT_SLEEP * (8.0 / const.sleep_need) * sleep_fraction
+            )
             * step_hours,
             0.0,
             24.0,
@@ -1406,6 +1579,10 @@ def advance(
             and profile.gender in ("female", "male")
         ):
             rate = _desire_rate(state, view, profile)
+            comfort = 1.0
+            comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
+            comfort -= min(0.3, max(0.0, state.hunger - 70.0) / 30.0 * 0.3)
+            rate *= max(0.3, comfort)
             if profile.gender == "male" and state.refractory_until > cursor.timestamp():
                 rate *= 0.25
             state.desire = _clamp(state.desire + rate * step_hours / 24.0)
@@ -1426,6 +1603,7 @@ def advance(
         cursor = chunk_end
         remaining -= step_seconds
 
+    _maybe_release(state, now, profile, settings, const, idle)
     view = cycle_view(state, now, profile, settings)
     in_period = bool(view and view.phase == "menstrual")
     _recompute_primary(state, now, profile, settings, in_period)
@@ -1501,13 +1679,17 @@ def apply_action(
         raise ValueError(f"unknown action: {action}")
     if action in ("shower", "brush") and not settings.enable_hygiene:
         raise ValueError("hygiene module is disabled")
-    if action == "intimacy" and not (profile.adult and settings.enable_intimate):
+    if action in ("intimacy", "release") and not (
+        profile.adult and settings.enable_intimate
+    ):
         raise ValueError("intimacy is only available for adult personas")
 
     before = _meter_snapshot(state)
     now_ts = now.timestamp()
+    const = constitution(profile.persona_id)
     if action == "eat":
-        state.stomach = _clamp(state.stomach + 55.0)
+        state.stomach = _clamp(state.stomach + 55.0 / const.stomach_capacity)
+        state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL)
         state.glucose = _clamp(state.glucose + 28.0)
         state.hydration = _clamp(state.hydration + 2.0)
         state.oral = _clamp(state.oral + 4.0)
@@ -1516,7 +1698,8 @@ def apply_action(
         state.last_meal_kind = "meal"
         state.last_meal_size = 55.0
     elif action == "snack":
-        state.stomach = _clamp(state.stomach + 22.0)
+        state.stomach = _clamp(state.stomach + 22.0 / const.stomach_capacity)
+        state.gut = _clamp(state.gut + GUT_RESIDUE_SNACK)
         state.glucose = _clamp(state.glucose + 12.0)
         state.hydration = _clamp(state.hydration + 1.0)
         state.oral = _clamp(state.oral + 3.0)
@@ -1536,6 +1719,10 @@ def apply_action(
         state.oral = 2.0
         state.last_brush_at = now_ts
     elif action == "toilet":
+        if state.bowel >= 20.0:
+            state.gut = max(0.0, state.gut - 85.0)
+            state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+            state.last_bowel_at = now_ts
         state.urine = 2.0
         state.last_toilet_at = now_ts
     elif action == "nap":
@@ -1575,6 +1762,18 @@ def apply_action(
             state.refractory_until = (
                 now_ts
                 + (2.0 + _roll(profile.persona_id, str(now_ts), "refractory") * 4.0)
+                * 3600
+            )
+    elif action == "release":
+        state.desire = 0.0
+        state.last_self_at = now_ts
+        if profile.gender == "male":
+            state.refractory_until = (
+                now_ts
+                + (
+                    1.0
+                    + _roll(profile.persona_id, str(now_ts), "self-refractory") * 2.0
+                )
                 * 3600
             )
 

@@ -111,9 +111,7 @@ def make_plugin(monkeypatch, tmp_path, prompt: str):
 
 @pytest.mark.asyncio
 async def test_inject_body_and_tools(monkeypatch, tmp_path) -> None:
-    plugin, context = make_plugin(
-        monkeypatch, tmp_path, "一个25岁的女性，性格安静。"
-    )
+    plugin, context = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
     event = FakeEvent()
     req = ProviderRequest(prompt="你好")
@@ -134,9 +132,7 @@ async def test_inject_body_and_tools(monkeypatch, tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_command_feeds_persona(monkeypatch, tmp_path) -> None:
-    plugin, _ = make_plugin(
-        monkeypatch, tmp_path, "一个25岁的女性，性格安静。"
-    )
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
     event = FakeEvent(text="/身体 喂")
     results = []
@@ -150,9 +146,7 @@ async def test_command_feeds_persona(monkeypatch, tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_page_config_toggles_adult_and_validates(monkeypatch, tmp_path) -> None:
-    plugin, context = make_plugin(
-        monkeypatch, tmp_path, "一个25岁的女性，性格安静。"
-    )
+    plugin, context = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
     ok, message, values = plugin._apply_config_updates(
         {"ENABLE_INTIMATE": False, "CYCLE_LENGTH": 30}
@@ -177,9 +171,7 @@ async def test_page_config_toggles_adult_and_validates(monkeypatch, tmp_path) ->
 
 @pytest.mark.asyncio
 async def test_page_tracks_one_persona(monkeypatch, tmp_path) -> None:
-    plugin, _ = make_plugin(
-        monkeypatch, tmp_path, "一个25岁的女性，性格安静。"
-    )
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
     assert len(plugin._persona_entries()) == 1
     profile = plugin._profile_for("test", "test", "一个25岁的女性，性格安静。")

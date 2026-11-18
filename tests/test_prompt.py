@@ -56,6 +56,52 @@ def make_state(now: datetime) -> BodyState:
     return state
 
 
+def test_prompt_keeps_numbers_out_of_dialogue() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    block = build_prompt_block(
+        make_state(now), now, make_profile(), Settings(), private=True
+    )
+    assert "/100" not in block
+
+
+def test_bowel_pressure_appears_when_it_matters() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.gut = 70.0
+    state.bowel = 68.0
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "排便：" in block
+
+
+def test_group_chat_hides_self_release() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.events.append(
+        {
+            "at": (now - timedelta(hours=1)).isoformat(),
+            "kind": "self_release",
+            "text": "自己解决了一次，身体松下来",
+        }
+    )
+    group = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="full"), private=False
+    )
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "自己解决" not in group
+    assert "自己解决" in private
+
+
+def test_loaded_body_adds_irritation_hint() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.hunger = 95.0
+    state.thirst = 95.0
+    state.sleep_debt = 18.0
+    state.bowel = 90.0
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "耐心" in block
+
+
 def test_private_block_contains_cycle_and_adult_lines() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     block = build_prompt_block(

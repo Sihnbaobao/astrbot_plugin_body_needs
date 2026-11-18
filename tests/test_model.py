@@ -507,6 +507,92 @@ def test_sleep_window_crosses_midnight() -> None:
     assert seconds == pytest.approx(8 * 3600, abs=1)
 
 
+def test_constitution_varies_between_personas() -> None:
+    from core.model import constitution
+
+    base = constitution("a")
+    other = constitution("b")
+    assert base.sleep_need != other.sleep_need
+    assert 7.0 <= base.sleep_need <= 9.2
+    assert 0.85 <= base.stomach_capacity <= 1.15
+    assert 0.75 <= base.gut_transit <= 1.25
+
+
+def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.gut = 10.0
+    apply_action(state, "eat", now, profile, settings)
+    assert state.gut > 10.0
+
+    state.gut = 80.0
+    state.bowel = 82.0
+    apply_action(state, "toilet", now, profile, settings)
+    assert state.gut == 0.0
+    assert state.bowel == 0.0
+    assert state.urine == 2.0
+
+
+def test_idle_persona_looks_after_herself() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=30))
+    state.last_active_at = now.timestamp() - 30 * 3600
+    state.hunger = 92.0
+    state.stomach = 5.0
+    state.glucose = 20.0
+    state.hydration = 30.0
+    state.gut = 78.0
+    state.bowel = 79.0
+    advance(state, now, make_profile(), Settings())
+    assert state.hunger < 92.0
+    assert state.thirst < 70.0
+    assert state.bowel < 75.0
+    assert any(event["kind"] == "self_care" for event in state.events)
+
+
+def test_active_chat_keeps_her_needs_visible() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=10))
+    state.last_active_at = now.timestamp() - 60
+    state.hunger = 88.0
+    state.stomach = 8.0
+    state.glucose = 22.0
+    advance(state, now, make_profile(), Settings())
+    assert state.hunger > 80.0
+    assert not any(event["kind"] == "self_care" for event in state.events)
+
+
+def test_self_release_lowers_desire() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    settings = Settings()
+    hits = 0
+    for index in range(16):
+        profile = Profile(f"rel{index}", "t", "female", 25, True, 28, 5)
+        state = make_state(now - timedelta(hours=1))
+        state.persona_id = profile.persona_id
+        state.last_active_at = now.timestamp() - 10 * 3600
+        state.desire = 95.0
+        state.last_self_at = now.timestamp() - 6 * 86400
+        advance(state, now, profile, settings)
+        if any(event["kind"] == "self_release" for event in state.events):
+            hits += 1
+            assert state.desire < 95.0
+            assert state.last_self_at == now.timestamp()
+    assert hits > 0
+
+
+def test_self_release_needs_intimate_enabled() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    settings = Settings(enable_intimate=False)
+    state = make_state(now - timedelta(hours=1))
+    state.last_active_at = now.timestamp() - 10 * 3600
+    state.desire = 95.0
+    advance(state, now, make_profile(), settings)
+    assert not any(event["kind"] == "self_release" for event in state.events)
+
+
 def test_adult_follows_detected_gender() -> None:
     male = detect_profile("doc", "doc", "一个冷静的医生。", Settings(gender="male"))
     assert male.adult is True

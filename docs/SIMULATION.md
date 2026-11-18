@@ -37,23 +37,28 @@
 | glucose | 0-100 | 血糖/可用能量代理；越低越饿 |
 | hydration | 0-100 | 水合程度；越低越渴 |
 | urine | 0-100 | 膀胱充盈度 |
+| gut | 0-100 | 肠道内容量；25 以下没有便意 |
 | skin | 0-100 | 皮肤脏度 |
 | oral | 0-100 | 口腔脏度 |
 | sleep_debt | 0-24 小时 | 睡眠债 |
 | desire | 0-100 | 亲密张力；条件不满足时恒为 0 |
 
-显示的七个指标是推导值，不是独立计数器：
+每个角色还有一套由人格 id 抽出的固定体质：`sleep_need` 7.0-9.2 小时、`metabolism` 0.9-1.1、`stomach_capacity` 0.85-1.15、`gut_transit` 0.75-1.25、`self_rate` 0.6-1.6。体质只缩放曲线，不改变功能开关。
+
+显示的指标是推导值，不是独立计数器：
 
     hunger = clamp(0.55 * (100 - stomach) + 0.45 * (100 - glucose) + (appetite - 1) * 20)
     thirst = clamp(100 - hydration)
     bladder = clamp(urine)
     cleanliness = clamp(skin)
     fatigue = clamp(0.55 * (sleep_debt / 24 * 100) + 0.45 * (100 - alertness) + penalties)
+    bowel = clamp(max(0, gut - 25) * 1.5)
 
 其中 penalties：
 
-    max(0, hunger - 70) * 0.20
-    + max(0, thirst - 70) * 0.15
+    max(0, hunger - 60) * 0.20
+    + max(0, thirst - 60) * 0.25
+    + max(0, bowel - 70) * 0.10
     + 经期额外 4
 
 欲望不是推导值，它自己按速率积攒，只在 `adult and enable_intimate and gender in (female, male)` 时推进，否则每段直接归零。
@@ -82,7 +87,7 @@
 
 胃内容按指数排空：
 
-    stomach *= exp(-(0.32 * a + 0.18 * s) * h)
+    stomach *= exp(-(0.32 * a + 0.18 * s) * metabolism * h)
 
 血糖：
 
@@ -98,6 +103,13 @@
 
     urine += (2.0 * a + 1.0 * s + 0.04 * max(0, hydration - 50)) * h
 
+肠道：
+
+    gut += (0.30 - 0.35 * gut_transit) * h
+    bowel = clamp(max(0, gut - 25) * 1.5)
+
+吃饭和零食会给 gut 加残渣（+14 / +6），所以便意是吃出来的，不是定时器。
+
 皮肤：
 
     skin += (1.1 * a + 0.55 * s + sweat + period_extra + puberty_extra) * h
@@ -111,13 +123,14 @@
 
 睡眠债：
 
-    sleep_debt += (0.55 * a - 1.2 * s) * h
+    sleep_debt += (0.55 * (sleep_need / 8) * a - 1.2 * (8 / sleep_need) * s) * h
     clamp 到 0-24
 
 欲望：
 
     desire += rate * h / 24
     rate 见第 7 节；男性恢复期内再乘 0.25
+    睡不好、饿、渴会再乘一个 0.3-1.0 的舒适系数
 
 睡眠时段里，如果最近 30 分钟内有活动（说话、被喂、被页面操作），这段时间按清醒算，不会一边聊天一边回精力。
 
@@ -137,6 +150,18 @@
 | 亲密 | 欲望 = 0，皮肤 +4，睡眠债 -0.4h；男性进入 2-6 小时恢复期 | 欲望清零，男性暂时不会继续积攒 |
 
 吃饭后不会立刻“饿”，因为胃内容要先排空；但血糖会先升，所以饱腹感会随着消化逐渐下降。
+
+## 5.1 自主照料与释放
+
+连续 6 小时没有互动（`last_active_at` 超过 6 小时）时，时间积分里会插入日常行为：
+
+- 8/13/19 点：`stomach <= 55` 时吃一顿（胃 +42、血糖 +18、gut +11.2）；
+- 10/16/21 点：`hydration <= 55` 时喝水（+22）；
+- `bowel >= 75` 时去厕所（gut -85）。
+
+这些行为写 `self_care` 事件，按天去重。有人正在互动时 `idle` 为假，不会触发，所以对话里能看到真实的饿、渴、憋。
+
+释放（自慰）不分性别：`desire >= 55`、距上次 ≥0.3 天、8-23 点，每天判定一次。概率 = `min(0.85, (间隔天数 - 0.3) * 0.5 * self_rate * (desire / 60))`。命中后 desire -55，男性进入 1-3 小时恢复期，写 `self_release` 事件；事件在群聊提示词里被过滤掉。
 
 ## 6. 女性周期
 

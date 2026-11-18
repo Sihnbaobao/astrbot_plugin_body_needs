@@ -98,6 +98,19 @@ def bladder_label(value: float) -> str:
     return "很急"
 
 
+def bowel_label(value: float) -> str:
+    """Return a natural bowel-pressure description."""
+    if value < 20:
+        return "没感觉"
+    if value < 40:
+        return "有一点"
+    if value < 60:
+        return "想排便"
+    if value < 80:
+        return "有点憋"
+    return "很急"
+
+
 def clean_label(value: float) -> str:
     """Return a natural cleanliness description."""
     if value < 12:
@@ -223,7 +236,12 @@ def _recent_events(
     rows: list[tuple[float, str]] = []
     for event in state.events:
         kind = str(event.get("kind") or "")
-        if not private and kind in ("wet_dream", "morning_erection", "arousal"):
+        if not private and kind in (
+            "wet_dream",
+            "morning_erection",
+            "arousal",
+            "self_release",
+        ):
             continue
         if (
             not private
@@ -426,37 +444,27 @@ def build_prompt_block(
             lines.append("身体暂时没什么特别的感觉。")
         else:
             for key in important:
-                lines.append(
-                    f"{METER_NAMES[key]}：{meter_label(key, values[key])}"
-                    f"（{round(values[key])}/100）"
-                )
+                lines.append(f"{METER_NAMES[key]}：{meter_label(key, values[key])}")
     elif show_all:
         lines.append(
-            f"胃：{hunger_label(state.hunger)}"
-            f"（{round(state.hunger)}/100；{_ago(state.last_eat_at, now)}吃过东西）"
+            f"胃：{hunger_label(state.hunger)}（{_ago(state.last_eat_at, now)}吃过东西）"
         )
         lines.append(
-            f"渴：{thirst_label(state.thirst)}"
-            f"（{round(state.thirst)}/100；{_ago(state.last_drink_at, now)}喝过水）"
+            f"渴：{thirst_label(state.thirst)}（{_ago(state.last_drink_at, now)}喝过水）"
         )
-        lines.append(
-            f"膀胱：{bladder_label(state.bladder)}（{round(state.bladder)}/100）"
-        )
+        lines.append(f"膀胱：{bladder_label(state.bladder)}")
+        if state.bowel >= 35:
+            lines.append(f"排便：{bowel_label(state.bowel)}")
         if settings.enable_hygiene:
             lines.append(
-                f"清洁：{clean_label(state.cleanliness)}"
-                f"（{round(state.cleanliness)}/100）；"
-                f"口腔：{oral_label(state.oral)}（{round(state.oral)}/100）"
+                f"清洁：{clean_label(state.cleanliness)}；"
+                f"口腔：{oral_label(state.oral)}"
             )
-        lines.append(
-            f"精力：{fatigue_label(state.fatigue)}（{round(state.fatigue)}/100）"
-        )
+        lines.append(f"精力：{fatigue_label(state.fatigue)}")
     else:
-        lines.append(f"胃：{hunger_label(state.hunger)}（{round(state.hunger)}/100）")
-        lines.append(f"渴：{thirst_label(state.thirst)}（{round(state.thirst)}/100）")
-        lines.append(
-            f"精力：{fatigue_label(state.fatigue)}（{round(state.fatigue)}/100）"
-        )
+        lines.append(f"胃：{hunger_label(state.hunger)}")
+        lines.append(f"渴：{thirst_label(state.thirst)}")
+        lines.append(f"精力：{fatigue_label(state.fatigue)}")
         if view is not None and view.phase == "menstrual" and view.cramps >= 2:
             lines.append("身体：肚子有点不舒服，不太想动。")
 
@@ -477,6 +485,16 @@ def build_prompt_block(
             lines.append(
                 f"欲望：{desire_label(state.desire)}（私密，只在合适的时候自然流露）"
             )
+
+    if show_private:
+        load = (
+            max(0.0, state.hunger - 65.0)
+            + max(0.0, state.thirst - 65.0)
+            + max(0.0, state.sleep_debt - 8.0) * 4.0
+            + max(0.0, state.bowel - 60.0)
+        )
+        if load >= 45.0:
+            lines.append("情绪：身体有点不舒服，耐心比平时差一点。")
 
     recent = _recent_events(state, now, show_private, full_group)
     if recent:
@@ -656,6 +674,20 @@ def build_web_state(
         },
     ]
 
+    if state.bowel >= 25.0:
+        details.append(
+            {
+                "key": "bowel",
+                "label": "排便",
+                "value": round(state.bowel, 1),
+                "unit": "%",
+                "level": bowel_label(state.bowel),
+                "tone": "hot"
+                if state.bowel >= 70
+                else ("warn" if state.bowel >= 45 else "ok"),
+            }
+        )
+
     cycle = None
     if view is not None and settings.enable_cycle:
         cycle = {
@@ -719,6 +751,7 @@ def build_web_state(
         "brush": _ago(state.last_brush_at, now),
         "toilet": _ago(state.last_toilet_at, now),
         "nap": _ago(state.last_nap_at, now),
+        "release": _ago(state.last_self_at, now),
     }
 
     summary = (
