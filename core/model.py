@@ -1034,7 +1034,6 @@ def cycle_view(
         if pubertal and rng.random() < 0.35:
             cramps = min(3, cramps + 1)
         backache = rng.choice([0, 1, 2]) if cramps >= 2 else rng.randint(0, 1)
-        mood = -1 if day <= 2 else 0
         appetite = rng.choice([-1, 0, 0, 1])
         note = "小腹坠胀，腰有点酸" if cramps >= 2 else "小腹有点坠"
     elif phase == "luteal":
@@ -1044,9 +1043,8 @@ def cycle_view(
         breast = rng.choice([0, 1, 1, 2]) if premenstrual else 0
         headache = rng.choice([0, 0, 1, 2]) if days_left <= 5 else 0
         backache = rng.choice([0, 1, 2]) if days_left <= 4 else 0
-        mood = -1 - (1 if progesterone > 45 else 0) - (1 if breast >= 2 else 0)
         if pubertal:
-            mood = max(-3, mood - 1)
+            mood = -1
         appetite = 1
         if days_left <= 6 and pubertal:
             note = "经期快到了，情绪起伏比平时大，胃口也大一点"
@@ -1059,13 +1057,23 @@ def cycle_view(
         else:
             note = "排卵后，身体开始为经期做准备"
     elif phase == "ovulation":
-        mood = 1
         breast = 1
         note = "精力比前几天好"
     else:
         note = "经期后，身体轻快"
 
-    mood = max(-3, mood)
+    # Mood is a continuous function of the hormones rather than a per-phase
+    # label: estradiol lifts it, a high luteal progesterone drags it down, and
+    # the first bleeding days add their own dip.
+    mood = int(
+        round(
+            1.2 * (estrogen - 55.0) / 45.0
+            - 1.7 * max(0.0, (progesterone - 45.0) / 30.0)
+            + (-0.6 if phase == "menstrual" else 0.0)
+            + (-0.5 if pubertal and phase == "luteal" else 0.0)
+        )
+    )
+    mood = max(-3, min(3, mood))
     # Sperm survive about five days and the egg one, so the fertile window is
     # the five days before ovulation plus the day itself. It is anchored to
     # ovulation, not to the period, so on a short cycle it overlaps the

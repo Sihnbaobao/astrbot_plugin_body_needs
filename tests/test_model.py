@@ -714,6 +714,23 @@ def test_mucus_thins_near_ovulation() -> None:
     assert late.discharge < peak.discharge
 
 
+def test_mood_follows_hormones_not_the_calendar() -> None:
+    settings = Settings()
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+
+    def view_for(days_ago: int):
+        state = make_state(now)
+        state.cycle_anchor = (now.date() - timedelta(days=days_ago)).isoformat()
+        return cycle_view(state, now, make_profile(), settings)
+
+    follicular = view_for(6)
+    luteal = view_for(21)
+    menstrual = view_for(1)
+    assert follicular is not None and luteal is not None and menstrual is not None
+    assert luteal.mood < follicular.mood
+    assert menstrual.mood < follicular.mood
+
+
 def test_hpo_cycle_stays_on_schedule() -> None:
     profile = make_profile(age=28)
     settings = Settings(sleep_window="00:00-08:00")
