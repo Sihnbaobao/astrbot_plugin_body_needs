@@ -77,15 +77,6 @@
           <div id="maleBody"></div>
         </section>
 
-        <section class="card selfcare-card">
-          <div class="card-head">
-            <h2>日常</h2>
-            <span class="hint">最近 24 小时</span>
-          </div>
-          <div id="selfCare" class="selfcare-body"></div>
-          <div class="last-row" id="lastRow"></div>
-        </section>
-
         <section class="card care-timeline-card">
           <div class="card-head">
             <h2>作息</h2>
@@ -101,9 +92,18 @@
           <div class="care-tip" id="careTip" hidden></div>
         </section>
 
+        <section class="card selfcare-card">
+          <div class="card-head">
+            <h2>日常</h2>
+            <span class="hint">最近 24 小时</span>
+          </div>
+          <div id="selfCare" class="selfcare-body"></div>
+          <div class="last-row" id="lastRow"></div>
+        </section>
+
         <section class="card events-card">
           <div class="card-head">
-            <h2>最近</h2>
+            <h2>身体事件</h2>
             <span class="hint" id="eventCount"></span>
           </div>
           <ul class="events" id="events">
@@ -178,6 +178,6 @@
     </footer>
 
     <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
-    <script type="module" src="./app.js?v=13"></script>
+    <script type="module" src="./app.js?v=14"></script>
   </body>
 </html>

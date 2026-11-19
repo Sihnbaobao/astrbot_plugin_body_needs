@@ -213,25 +213,12 @@ function renderCare(care) {
   const nowHour = Number.isFinite(nowMinutes) ? Math.floor(nowMinutes / 60) : -1;
   const summary = el("careSummary");
   if (summary) {
-    const counts = { meal: 0, drink: 0, toilet: 0, shower: 0, brush: 0 };
-    items.forEach(function (item) {
-      if (counts[item.kind] !== undefined) counts[item.kind] += 1;
-    });
     const nowLabel = Number.isFinite(nowMinutes)
       ? String(Math.floor(nowMinutes / 60)).padStart(2, "0") +
         ":" +
         String(nowMinutes % 60).padStart(2, "0")
       : "";
-    summary.textContent =
-      "吃饭 " +
-      counts.meal +
-      " · 喝水 " +
-      counts.drink +
-      " · 厕所 " +
-      counts.toilet +
-      " · 澡/刷 " +
-      (counts.shower + counts.brush) +
-      (nowLabel ? "　现在 " + nowLabel : "");
+    summary.textContent = nowLabel ? "现在 " + nowLabel : "";
   }
   CARE_ROWS.forEach(function (rowDef) {
     const row = make("div", "care-row");
@@ -540,18 +527,21 @@ function renderLast(last) {
 function renderEvents(events) {
   const host = el("events");
   host.replaceChildren();
-  if (!events || !events.length) {
-    host.appendChild(make("li", "empty", "还没有值得记下的事。"));
+  const notable = (events || []).filter(function (event) {
+    return event.kind !== "self_care";
+  });
+  if (!notable.length) {
+    host.appendChild(make("li", "empty", "还没有值得记下的身体变化。"));
     el("eventCount").textContent = "";
     return;
   }
-  events.forEach(function (event) {
+  notable.forEach(function (event) {
     const item = document.createElement("li");
     item.appendChild(make("time", "", event.time || ""));
     item.appendChild(make("span", "", event.text || ""));
     host.appendChild(item);
   });
-  el("eventCount").textContent = events.length + " 条";
+  el("eventCount").textContent = notable.length + " 条";
 }
 
 function render(data) {
