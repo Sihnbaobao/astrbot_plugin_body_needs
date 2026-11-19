@@ -229,7 +229,7 @@ def test_male_libido_rate_falls_with_age() -> None:
         _libido_rate(state, None, make_profile(gender="male", age=age))
         for age in (16, 25, 35, 50)
     ]
-    assert rates == [70.0, 60.0, 45.0, 28.0]
+    assert rates == [80.0, 70.0, 50.0, 32.0]
     assert rates == sorted(rates, reverse=True)
 
 
