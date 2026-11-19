@@ -75,8 +75,8 @@ CONTRACEPTION_FACTOR = {"none": 1.0, "condom": 0.02, "pill": 0.01}
 PAD_INTERVAL = {3: 2.0, 2: 4.0, 1: 6.0}
 PAD_WAKING_HOURS = 16.0
 PAD_RESTOCK = 20
-ORAL_AWAKE = 2.8
-ORAL_SLEEP = 1.3
+ORAL_AWAKE = 1.6
+ORAL_SLEEP = 0.8
 SLEEP_DEBT_AWAKE = 0.55
 SLEEP_DEBT_SLEEP = 1.2
 # Bowel load: meals leave residue, the gut passes a little on its own, and
@@ -1393,6 +1393,7 @@ def _routine(
         state.glucose = _clamp(state.glucose + 16.0)
         state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
         state.hydration = _clamp(state.hydration + 2.0)
+        state.oral = _clamp(state.oral + 1.5)
         state.last_eat_at = moment.timestamp()
         state.last_meal_kind = "meal"
         _add_care(state, moment, "meal")
@@ -1412,6 +1413,7 @@ def _routine(
         and moment.timestamp() - state.last_drink_at > 3600
     ):
         state.hydration = _clamp(state.hydration + 10.0)
+        state.oral = _clamp(state.oral - 1.5)
         state.last_drink_at = moment.timestamp()
         _add_care(state, moment, "drink")
 
@@ -2123,6 +2125,7 @@ def apply_action(
     elif action == "drink":
         state.hydration = _clamp(state.hydration + 32.0)
         state.urine = _clamp(state.urine + 12.0)
+        state.oral = _clamp(state.oral - 1.5)
         state.last_drink_at = now_ts
         state.last_drink_ml = 300.0
         _add_care(state, now, "drink")

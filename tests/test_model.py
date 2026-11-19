@@ -153,6 +153,14 @@ def test_period_event_is_recorded_once() -> None:
     assert len(state.events) == count
 
 
+def test_drinking_rinses_the_mouth() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.oral = 30.0
+    apply_action(state, "drink", now, make_profile(), Settings())
+    assert state.oral < 30.0
+
+
 def test_actions_change_internal_state() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)

@@ -149,6 +149,16 @@ def test_group_full_shows_cycle_but_not_adult() -> None:
     )
     assert "经期：第 2 天" in block
     assert "性欲" not in block
+    assert "可以提非性相关" in block
+    assert "不必提经期" not in block
+
+
+def test_group_basic_wording_stays_restricted() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    block = build_prompt_block(
+        make_state(now), now, make_profile(), Settings(), private=False
+    )
+    assert "不必提经期" in block
 
 
 def test_status_card_and_web_payload() -> None:
@@ -176,6 +186,7 @@ def test_status_card_and_web_payload() -> None:
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
     assert meters["libido"]["value"] == pytest.approx(state.libido, abs=0.1)
     assert "饱食度" in text
+    assert "不想吃" not in text
 
 
 def test_status_card_hides_male_events_when_intimate_off() -> None:
@@ -214,6 +225,9 @@ def test_meter_labels_follow_reserve_direction() -> None:
     assert clean_label(92) == "刚洗过"
     assert clean_label(8) == "浑身难受"
     assert oral_label(92) == "刚刷过"
+    assert oral_label(72) == "清爽"
+    assert oral_label(45) == "还行"
+    assert oral_label(20) == "有点口气"
     assert oral_label(8) == "嘴里发黏"
     assert energy_label(92) == "很有精神"
     assert energy_label(8) == "快撑不住了"

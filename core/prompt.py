@@ -110,15 +110,15 @@ def clean_label(value: float) -> str:
 
 def oral_label(value: float) -> str:
     """Return a natural oral-hygiene description for a 100 = clean meter."""
-    if value >= 88:
+    if value >= 90:
         return "刚刷过"
-    if value >= 70:
+    if value >= 65:
         return "清爽"
-    if value >= 50:
+    if value >= 40:
         return "还行"
-    if value >= 30:
+    if value >= 18:
         return "有点口气"
-    if value >= 15:
+    if value >= 10:
         return "该刷牙了"
     return "嘴里发黏"
 
@@ -572,9 +572,11 @@ def build_prompt_block(
             actions.extend(["洗了澡", "刷了牙"])
         actions.append("去了厕所")
         rules += f"真的{'、'.join(actions)}时，可以用 body_action 记录。"
-    rules += "不想吃、不想说，也可以拒绝。"
     if not private:
-        rules += "群聊里不必提经期或身体私密细节。"
+        if full_group:
+            rules += "群聊里可以提非性相关的身体状态，但不要提亲密细节。"
+        else:
+            rules += "群聊里不必提经期或身体私密细节。"
     lines.append(rules)
     if settings.prompt_extra:
         lines.append(settings.prompt_extra)
