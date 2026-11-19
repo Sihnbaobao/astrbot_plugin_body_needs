@@ -37,9 +37,9 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
     Returns:
         A JSON-serialisable snapshot with valence, tension, pain and a line.
     """
-    hunger = _clamp(state.hunger / 100.0)
-    thirst = _clamp(state.thirst / 100.0)
-    fatigue = _clamp(state.fatigue / 100.0)
+    hunger = _clamp((100.0 - state.satiety) / 100.0)
+    thirst = _clamp((100.0 - state.hydration) / 100.0)
+    fatigue = _clamp((100.0 - state.energy) / 100.0)
     sleep = _clamp(state.sleep_debt / 24.0)
     bowel = _clamp(state.bowel / 100.0)
     dirt = _clamp(max(state.skin, state.oral) / 100.0)

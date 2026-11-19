@@ -16,9 +16,9 @@ def _state(**overrides) -> BodyState:
     """Build a neutral body state with optional overrides."""
     values = {
         "persona_id": "test",
-        "hunger": 20.0,
-        "thirst": 20.0,
-        "fatigue": 20.0,
+        "satiety": 80.0,
+        "hydration": 80.0,
+        "energy": 80.0,
         "sleep_debt": 2.0,
         "bowel": 5.0,
         "skin": 10.0,
@@ -38,7 +38,7 @@ def test_comfortable_body_has_low_tension() -> None:
 
 
 def test_hunger_and_sleep_build_tension() -> None:
-    affect = build_affect(_state(hunger=92.0, fatigue=85.0, sleep_debt=18.0), None)
+    affect = build_affect(_state(satiety=8.0, energy=15.0, sleep_debt=18.0), None)
     assert affect["tension"] > 0.55
     assert affect["distress"] > 0.5
     assert affect["valence"] < 0.0
@@ -78,7 +78,7 @@ def test_match_emotion_by_persona_name() -> None:
 def test_publish_merges_personas(tmp_path) -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     first = _state(persona_id="a")
-    second = _state(persona_id="b", hunger=80.0)
+    second = _state(persona_id="b", satiety=20.0)
     publish(tmp_path, first, None, now)
     publish(tmp_path, second, None, now)
     payload = json.loads((tmp_path / "vitals.json").read_text(encoding="utf-8"))

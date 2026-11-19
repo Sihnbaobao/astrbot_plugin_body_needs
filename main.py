@@ -1,6 +1,6 @@
 """Body needs: a small, persistent physiology for the active Persona.
 
-The plugin gives the bot hunger, thirst, bladder pressure, hygiene, fatigue and
+The plugin gives the bot satiety, hydration, bladder pressure, cleanliness, energy and
 a reproductive cycle. State advances lazily from wall-clock time on every LLM
 request, so there is no background timer and no message is sent by the plugin
 itself.
@@ -648,8 +648,8 @@ class BodyNeedsPlugin(Star):
             )
             return (
                 f"{result.label}。{result.detail}。"
-                f"现在的身体：{round(state.hunger)}/100 饥饿，"
-                f"{round(state.thirst)}/100 口渴，{round(state.fatigue)}/100 精力。"
+                f"现在的身体：饱食度 {round(state.satiety)}/100，"
+                f"水分 {round(state.hydration)}/100，精力 {round(state.energy)}/100。"
             )
         except ValueError as exc:
             return f"这个动作现在不能记录：{exc}"

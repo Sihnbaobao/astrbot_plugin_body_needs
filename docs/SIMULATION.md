@@ -18,7 +18,7 @@
 3. 读取该 Persona 的 JSON 状态。
 4. 用 now - updated_at 算出经过时间，按 15 分钟（间隔 ≤ 24 小时）或 1 小时（更久）分段积分，最多回溯 60 天。
 5. 每段判断睡眠窗口占比、昼夜警觉度，更新七个内部变量。
-6. 用内部变量重新推导饥饿、口渴、膀胱、清洁、口腔、精力、欲望。
+6. 用隐藏储备重新推导饱食度、水分、精力、清洁、口腔、膀胱压力和欲望。
 7. 处理经期阶段、男性事件，写回 JSON。
 8. 生成提示块，附加到本次 LLM 请求；同时挂 body_status / body_action。
 9. 模型看到状态后自行决定要不要在回复里提。
@@ -33,39 +33,41 @@
 
 | 字段 | 范围 | 含义 |
 | --- | --- | --- |
-| stomach | 0-100 | 胃内容量；越高越饱 |
-| glucose | 0-100 | 血糖/可用能量代理；越低越饿 |
-| hydration | 0-100 | 水合程度；越低越渴 |
-| urine | 0-100 | 膀胱充盈度 |
-| gut | 0-100 | 肠道内容量；25 以下没有便意 |
-| skin | 0-100 | 皮肤脏度 |
-| oral | 0-100 | 口腔脏度 |
-| sleep_debt | 0-24 小时 | 睡眠债 |
+| satiety | 0-100 | 饱食度；越高越饱 |
+| hydration | 0-100 | 水分；越高越润 |
+| energy | 0-100 | 精力；越高越有精神 |
+| cleanliness | 0-100 | 清洁；越高越干净 |
+| oral_health | 0-100 | 口腔；越高越清爽 |
+| bladder | 0-100 | 膀胱压力；越高越急 |
 | desire | 0-100 | 亲密张力；条件不满足时恒为 0 |
+| stomach / glucose | 隐藏 | 胃内容、血糖，计算饱食度 |
+| urine | 隐藏 | 膀胱充盈度 |
+| gut | 隐藏 | 肠道内容量；25 以下没有便意 |
+| skin / oral | 隐藏 | 皮肤、口腔脏度，计算清洁 / 口腔 |
+| sleep_debt | 隐藏 | 0-24 小时，计算精力 |
 
 每个角色还有一套由人格 id 抽出的固定体质：`sleep_need` 7.0-9.2 小时、`metabolism` 0.9-1.1、`stomach_capacity` 0.85-1.15、`gut_transit` 0.75-1.25、`self_rate` 0.6-1.6。体质只缩放曲线，不改变功能开关。
 
-显示的指标是推导值，不是独立计数器：
+公开指标都是正向值，直接存储，显示层不再做 100 − x：
 
-    hunger = clamp(0.55 * (100 - stomach) + 0.45 * (100 - glucose) + (appetite - 1) * 20)
-    thirst = clamp(100 - hydration)
-    bladder = clamp(urine)
-    cleanliness = clamp(skin)
-    fatigue = clamp(0.55 * (sleep_debt / 24 * 100) + 0.45 * (100 - alertness) + penalties)
-    bowel = clamp(max(0, gut - 25) * 1.5)
+    satiety     = clamp(0.55 * stomach + 0.45 * glucose - (appetite - 1) * 20 - 情绪食欲项)
+    hydration   = 水合（直接存）
+    energy      = clamp(100 - [0.55 * (sleep_debt / 24 * 100) + 0.45 * (100 - alertness) + penalties])
+    cleanliness = clamp(100 - skin)
+    oral_health = clamp(100 - oral)
+    bladder     = clamp(urine)
+    bowel       = clamp(max(0, gut - 25) * 1.5)
 
 其中 penalties：
 
-    max(0, hunger - 60) * 0.20
-    + max(0, thirst - 60) * 0.25
+    max(0, 40 - satiety) * 0.20
+    + max(0, 40 - hydration) * 0.25
     + max(0, bowel - 70) * 0.10
     + 经期额外 4
 
 欲望不是推导值，它自己按速率积攒，只在 `adult and enable_intimate and gender in (female, male)` 时推进，否则每段直接归零。
 
-页面和状态卡不直接显示需求强度：饱食度 = 100 − hunger、水分 = 100 − thirst、精力 = 100 − fatigue、清洁/口腔 = 100 − 脏度，越高越好；膀胱压力和欲望仍按 100 = 最满显示。
-
-这层换算只写在 `core/prompt.py` 的 `display_meters()`：状态卡和插件页都调用它，测试锁死映射。内部状态**不翻转**，因为饥饿阈值（自己吃饭、没胃口）、提示词的“饿了”、情绪底色的 distress 都按需求值写；翻转会牵动状态迁移和每一处阈值，收益只是看起来统一。
+旧版状态文件（`hunger` / `thirst` / `fatigue` 和脏度语义）在 `BodyState.from_dict` 里一次性迁移：`satiety = 100 - hunger`、`energy = 100 - fatigue`、`cleanliness = 100 - 旧值`、`oral_health = 100 - 旧值`，迁移测试锁死这些等式。
 
 所以“胃很饱”但“血糖很低”时，仍然会饿；“睡够 8 小时”但凌晨三点，仍然会困。
 
@@ -83,7 +85,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 偏置 | 0.80 | 0.90 | 1.16 | 1.20 | 1.00 | 1.16 | 1.00 | 0.80 |
 
-偏置 1.20 会在饭点把饥饿值往上推一点，0.80 会在深夜压低一点。
+偏置 1.20 会在饭点把饱食度往下压一点，0.80 会在深夜抬高一点。
 
 ## 4. 每个时间段的积分
 
@@ -144,9 +146,9 @@
 
 | 行为 | 内部效果 | 显示结果 |
 | --- | --- | --- |
-| 吃饭 | 胃 +55，血糖 +28，水 +2，口腔 +4，睡眠债 -0.3h | 饥饿明显下降，短时间很饱 |
-| 零食 | 胃 +22，血糖 +12，水 +1，口腔 +3 | 饥饿下降，但不如正餐持久 |
-| 喝水 | 水 +32，膀胱 +12 | 口渴下降，过一会儿想上厕所 |
+| 吃饭 | 胃 +55，血糖 +28，水 +2，口腔 +4，睡眠债 -0.3h | 饱食度明显上升，短时间很饱 |
+| 零食 | 胃 +22，血糖 +12，水 +1，口腔 +3 | 饱食度上升，但不如正餐持久 |
+| 喝水 | 水 +32，膀胱 +12 | 水分上升，过一会儿想上厕所 |
 | 洗澡 | 皮肤 = 2，睡眠债 -0.3h | 清洁回到 2 |
 | 刷牙 | 口腔 = 2 | 口腔回到 2 |
 | 上厕所 | 膀胱 = 2 | 膀胱回到 2 |
@@ -177,7 +179,7 @@
     distress   0..1    身体负担（饿、渴、累、疼、憋、脏）
     tension    0..1    耐心被磨掉的程度
     pain       0..1    经期痛、头痛、腰酸
-    energy     0..1    1 - 疲劳
+    energy     0..1    1 - 疲劳（由精力折算）
     dirt/desire        清洁和欲望
     labels / line      给提示词用的短标签和一句话
 
@@ -185,7 +187,7 @@ persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低�
 
 反方向：情绪插件把人格级心情写到 `mood.json`，身体推进时读取（`_mood_effect`）：
 
-    hunger += 10*sadness + 5*anger - 4*joy
+    satiety -= 10*sadness + 5*anger - 4*joy
     desire *= 1 - 0.45*sadness - 0.2*anger + 0.1*joy
     follicular stress *= 1 + 0.12*fear + 0.04*anger
 

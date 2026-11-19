@@ -4,10 +4,10 @@ The model is still intentionally simpler than a medical simulation, but the
 primary meters are now derived from slower internal state instead of being
 constant linear ramps:
 
-- stomach fullness and glucose drive hunger
-- hydration drives thirst and urine production
+- stomach fullness and glucose drive satiety
+- hydration drives urine production and the hydration meter
 - urine volume drives bladder pressure
-- sleep debt and circadian alertness drive fatigue
+- sleep debt and circadian alertness drive energy
 - skin and oral dirtiness drive cleanliness
 - a simplified estrogen/progesterone curve drives cycle symptoms and desire
 
@@ -215,29 +215,29 @@ class BodyState:
     Primary meters are 0-100 and are what the prompt and page show. Internal
     values are slower signals that drive them:
 
-    - hunger is derived from stomach fullness and glucose
-    - thirst is derived from hydration
+    - satiety is derived from stomach fullness and glucose
+    - hydration is stored directly
     - bladder is urine volume
     - cleanliness is skin dirtiness
-    - fatigue is derived from sleep debt and circadian alertness
+    - energy is derived from sleep debt and circadian alertness
     - desire is a tension meter that only matters while ENABLE_INTIMATE is on
     """
 
     persona_id: str
     updated_at: float = 0.0
     last_active_at: float = 0.0
-    hunger: float = 20.0
-    thirst: float = 20.0
+    satiety: float = 80.0
+    hydration: float = 80.0
     bladder: float = 18.0
-    cleanliness: float = 18.0
-    oral: float = 20.0
-    fatigue: float = 22.0
+    cleanliness: float = 82.0
+    oral_health: float = 80.0
+    energy: float = 78.0
     desire: float = 10.0
     stomach: float = 72.0
     glucose: float = 78.0
-    hydration: float = 80.0
     urine: float = 18.0
     skin: float = 18.0
+    oral: float = 20.0
     gut: float = 8.0
     bowel: float = 0.0
     sleep_debt: float = 2.0
@@ -288,16 +288,16 @@ class BodyState:
             "persona_id": self.persona_id,
             "updated_at": self.updated_at,
             "last_active_at": self.last_active_at,
-            "hunger": self.hunger,
-            "thirst": self.thirst,
+            "satiety": self.satiety,
+            "hydration": self.hydration,
             "bladder": self.bladder,
             "cleanliness": self.cleanliness,
-            "oral": self.oral,
-            "fatigue": self.fatigue,
+            "oral_health": self.oral_health,
+            "energy": self.energy,
             "desire": self.desire,
+            "oral": self.oral,
             "stomach": self.stomach,
             "glucose": self.glucose,
-            "hydration": self.hydration,
             "urine": self.urine,
             "skin": self.skin,
             "gut": self.gut,
@@ -352,19 +352,20 @@ class BodyState:
         state.updated_at = _number(data.get("updated_at"))
         state.last_active_at = _number(data.get("last_active_at"))
         has_internal = "stomach" in data
+        legacy = "satiety" not in data
         for key in (
-            "hunger",
-            "thirst",
+            "satiety",
+            "hydration",
             "bladder",
             "cleanliness",
-            "oral",
-            "fatigue",
+            "oral_health",
+            "energy",
             "desire",
             "stomach",
             "glucose",
-            "hydration",
             "urine",
             "skin",
+            "oral",
             "gut",
             "bowel",
             "sleep_debt",
@@ -384,19 +385,31 @@ class BodyState:
             if key in data:
                 setattr(state, key, _number(data.get(key), getattr(state, key)))
 
+        if legacy:
+            # Old files stored needs: hunger, thirst, fatigue and dirt. Convert
+            # them once, so an existing persona keeps the same body.
+            if "hunger" in data:
+                state.satiety = 100.0 - _number(data.get("hunger"), 20.0)
+            if "fatigue" in data:
+                state.energy = 100.0 - _number(data.get("fatigue"), 22.0)
+            if "cleanliness" in data:
+                state.cleanliness = 100.0 - _number(data.get("cleanliness"), 18.0)
+            if "oral" in data:
+                state.oral_health = 100.0 - _number(data.get("oral"), 20.0)
+
         for key in (
-            "hunger",
-            "thirst",
+            "satiety",
+            "hydration",
             "bladder",
             "cleanliness",
-            "oral",
-            "fatigue",
+            "oral_health",
+            "energy",
             "desire",
             "stomach",
             "glucose",
-            "hydration",
             "urine",
             "skin",
+            "oral",
             "gut",
         ):
             setattr(state, key, _clamp(getattr(state, key)))
@@ -413,16 +426,17 @@ class BodyState:
                 state.stomach = _clamp(20.0 + 55.0 * math.exp(-0.32 * meal_hours))
                 state.glucose = _clamp(50.0 + 35.0 * math.exp(-0.18 * meal_hours))
             else:
-                state.stomach = _clamp(100.0 - state.hunger)
-                state.glucose = _clamp(100.0 - state.hunger * 0.7)
+                state.stomach = _clamp(state.satiety)
+                state.glucose = _clamp(30.0 + state.satiety * 0.7)
             if state.last_drink_at and reference:
                 drink_hours = max(0.0, (reference - state.last_drink_at) / 3600.0)
                 state.hydration = _clamp(40.0 + 60.0 * math.exp(-0.12 * drink_hours))
-            else:
-                state.hydration = _clamp(100.0 - state.thirst)
+            elif "thirst" in data:
+                state.hydration = _clamp(100.0 - _number(data.get("thirst"), 20.0))
             state.urine = _clamp(state.bladder)
-            state.skin = _clamp(state.cleanliness)
-            state.sleep_debt = _clamp(state.fatigue / 4.0, 0.0, 24.0)
+            state.skin = _clamp(100.0 - state.cleanliness)
+            state.oral = _clamp(100.0 - state.oral_health)
+            state.sleep_debt = _clamp((100.0 - state.energy) / 4.0, 0.0, 24.0)
             state.last_meal_kind = "meal"
             state.last_meal_size = 45.0
 
@@ -521,12 +535,12 @@ ACTION_LABELS = {
     "express": "喂了奶",
 }
 METER_TEXT = {
-    "hunger": "饥饿",
-    "thirst": "口渴",
-    "bladder": "膀胱",
+    "satiety": "饱食度",
+    "hydration": "水分",
+    "bladder": "膀胱压力",
     "cleanliness": "清洁",
-    "oral": "口腔",
-    "fatigue": "精力",
+    "oral_health": "口腔",
+    "energy": "精力",
     "desire": "欲望",
 }
 
@@ -762,7 +776,7 @@ def _mood_effect(mood: dict[str, Any] | None) -> tuple[float, float, float]:
         mood: Emotion values from the persona plugin, or None.
 
     Returns:
-        A (hunger delta, desire factor, follicular stress) tuple.
+        An (appetite pressure delta, desire factor, follicular stress) tuple.
     """
     if not mood:
         return 0.0, 1.0, 0.0
@@ -777,10 +791,10 @@ def _mood_effect(mood: dict[str, Any] | None) -> tuple[float, float, float]:
     anger = read("anger")
     fear = read("fear")
     joy = read("joy")
-    hunger = 10.0 * sadness + 5.0 * anger - 4.0 * joy
+    appetite = 10.0 * sadness + 5.0 * anger - 4.0 * joy
     desire = max(0.3, min(1.2, 1.0 - 0.45 * sadness - 0.2 * anger + 0.1 * joy))
     stress = min(0.2, 0.12 * fear + 0.04 * anger)
-    return hunger, desire, stress
+    return appetite, desire, stress
 
 
 def _cycle_stress(state: BodyState, mood: dict[str, Any] | None = None) -> float:
@@ -1637,29 +1651,29 @@ def _recompute_primary(
 ) -> None:
     """Refresh displayed meters from internal state after a time step."""
     appetite = appetite_level(now)
-    state.hunger = _clamp(
-        0.55 * (100.0 - state.stomach)
-        + 0.45 * (100.0 - state.glucose)
-        + (appetite - 1.0) * 20.0
-        + _mood_effect(mood)[0]
+    state.satiety = _clamp(
+        0.55 * state.stomach
+        + 0.45 * state.glucose
+        - (appetite - 1.0) * 20.0
+        - _mood_effect(mood)[0]
     )
-    state.thirst = _clamp(100.0 - state.hydration)
     state.bladder = _clamp(state.urine)
-    state.cleanliness = _clamp(state.skin)
+    state.cleanliness = _clamp(100.0 - state.skin)
+    state.oral_health = _clamp(100.0 - state.oral)
     alert = circadian_alertness(now)
     state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
-    penalty = max(0.0, state.hunger - 60.0) * 0.20
-    penalty += max(0.0, state.thirst - 60.0) * 0.25
+    penalty = max(0.0, 40.0 - state.satiety) * 0.20
+    penalty += max(0.0, 40.0 - state.hydration) * 0.25
     penalty += max(0.0, state.bowel - 70.0) * 0.10
     if in_period:
         penalty += 4.0
-    state.fatigue = _clamp(
-        0.55 * (state.sleep_debt / 24.0 * 100.0) + 0.45 * (100.0 - alert) + penalty
-    )
+    drain = 0.55 * (state.sleep_debt / 24.0 * 100.0) + 0.45 * (100.0 - alert) + penalty
+    state.energy = _clamp(100.0 - drain)
     if not settings.enable_hygiene:
         state.skin = 0.0
-        state.cleanliness = 0.0
         state.oral = 0.0
+        state.cleanliness = 100.0
+        state.oral_health = 100.0
     if not (profile.adult and settings.enable_intimate):
         state.desire = 0.0
 
@@ -1813,7 +1827,7 @@ def advance(
             rate = _desire_rate(state, view, profile, mood)
             comfort = 1.0
             comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
-            comfort -= min(0.3, max(0.0, state.hunger - 70.0) / 30.0 * 0.3)
+            comfort -= min(0.3, max(0.0, 30.0 - state.satiety) / 30.0 * 0.3)
             rate *= max(0.3, comfort)
             if profile.gender == "male" and state.refractory_until > cursor.timestamp():
                 rate *= 0.25
@@ -1869,8 +1883,9 @@ def advance(
         state.cycle_anchor = ""
     if not settings.enable_hygiene:
         state.skin = 0.0
-        state.cleanliness = 0.0
         state.oral = 0.0
+        state.cleanliness = 100.0
+        state.oral_health = 100.0
 
     cutoff = now_ts - settings.event_keep_days * 86400
     state.events = [
@@ -1888,12 +1903,12 @@ def advance(
 def _meter_snapshot(state: BodyState) -> dict[str, float]:
     """Return the displayed meters as a plain dict."""
     return {
-        "hunger": state.hunger,
-        "thirst": state.thirst,
+        "satiety": state.satiety,
+        "hydration": state.hydration,
         "bladder": state.bladder,
         "cleanliness": state.cleanliness,
-        "oral": state.oral,
-        "fatigue": state.fatigue,
+        "oral_health": state.oral_health,
+        "energy": state.energy,
         "desire": state.desire,
     }
 
@@ -2041,12 +2056,12 @@ def apply_action(
     after = _meter_snapshot(state)
     changes = []
     for key in (
-        "hunger",
-        "thirst",
+        "satiety",
+        "hydration",
         "bladder",
         "cleanliness",
-        "oral",
-        "fatigue",
+        "oral_health",
+        "energy",
         "desire",
     ):
         if round(before[key]) != round(after[key]):

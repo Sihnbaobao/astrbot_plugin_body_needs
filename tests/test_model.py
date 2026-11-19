@@ -53,18 +53,18 @@ def make_state(now: datetime) -> BodyState:
     return BodyState(
         persona_id="test",
         updated_at=now.timestamp(),
-        hunger=30,
-        thirst=20,
+        satiety=70,
+        hydration=80,
         bladder=20,
-        cleanliness=20,
-        oral=20,
-        fatigue=40,
+        cleanliness=80,
+        oral_health=80,
+        energy=60,
         desire=20,
         stomach=70,
         glucose=80,
-        hydration=80,
         urine=20,
         skin=20,
+        oral=20,
         sleep_debt=5,
         last_eat_at=now.timestamp() - 3 * 3600,
         last_drink_at=now.timestamp() - 2 * 3600,
@@ -77,9 +77,9 @@ def test_advance_awake_increases_needs() -> None:
     state.sleep_debt = 18
     settings = Settings(sleep_window="23:00-07:00")
     advance(state, now, make_profile(), settings)
-    assert state.hunger > 30
-    assert state.thirst > 20
-    assert state.fatigue > 40
+    assert state.satiety < 70
+    assert state.hydration < 80
+    assert state.energy < 60
     assert state.stomach < 70
     assert state.hydration < 80
     assert state.sleep_debt > 5
@@ -89,12 +89,12 @@ def test_advance_sleep_recovers_sleep_debt() -> None:
     now = datetime(2026, 11, 18, 8, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=8))
     state.sleep_debt = 20
-    state.fatigue = 70
+    state.energy = 30
     settings = Settings(sleep_window="00:00-08:00")
     advance(state, now, make_profile(), settings)
     assert state.sleep_debt < 20
-    assert state.fatigue < 70
-    assert state.hunger > 20
+    assert state.energy > 30
+    assert state.satiety < 75
 
 
 def test_recent_activity_keeps_sleep_window_awake() -> None:
@@ -107,7 +107,7 @@ def test_recent_activity_keeps_sleep_window_awake() -> None:
     settings = Settings(sleep_window="00:00-08:00")
     advance(active, now, make_profile(), settings)
     advance(sleeping, now, make_profile(), settings)
-    assert active.fatigue > sleeping.fatigue
+    assert active.energy < sleeping.energy
     assert active.sleep_debt > sleeping.sleep_debt
 
 
@@ -161,25 +161,26 @@ def test_actions_change_internal_state() -> None:
     state.skin = 70
     state.oral = 70
     state.sleep_debt = 20
-    state.hunger = 90
-    state.thirst = 80
+    state.satiety = 10
+    state.hydration = 20
     state.bladder = 80
     profile = make_profile()
     settings = Settings()
 
-    before_hunger = state.hunger
+    before_satiety = state.satiety
     result = apply_action(state, "eat", now, profile, settings)
-    assert state.hunger < before_hunger
+    assert state.satiety > before_satiety
     assert state.stomach > 50
-    assert "饥饿" in result.detail
+    assert "饱食度" in result.detail
 
-    before_thirst = state.thirst
+    before_hydration = state.hydration
     apply_action(state, "drink", now, profile, settings)
-    assert state.thirst < before_thirst
+    assert state.hydration > before_hydration
     assert state.urine > 80
 
     apply_action(state, "shower", now, profile, settings)
-    assert state.cleanliness == 2
+    assert state.skin == 2
+    assert state.cleanliness == 98
 
     apply_action(state, "brush", now, profile, settings)
     assert state.oral == 2
@@ -199,10 +200,10 @@ def test_digestion_after_meal() -> None:
     settings = Settings(sleep_window="23:00-07:00")
     apply_action(state, "eat", now, profile, settings)
     full_stomach = state.stomach
-    hungry_after = state.hunger
+    satiety_after = state.satiety
     advance(state, now + timedelta(hours=6), profile, settings)
     assert state.stomach < full_stomach
-    assert state.hunger > hungry_after
+    assert state.satiety < satiety_after
 
 
 def test_intimacy_is_adult_only_and_sets_refractory() -> None:
@@ -541,15 +542,15 @@ def test_idle_persona_looks_after_herself() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=30))
     state.last_active_at = now.timestamp() - 30 * 3600
-    state.hunger = 92.0
+    state.satiety = 8.0
     state.stomach = 5.0
     state.glucose = 20.0
     state.hydration = 30.0
     state.gut = 78.0
     state.bowel = 79.0
     advance(state, now, make_profile(), Settings())
-    assert state.hunger < 92.0
-    assert state.thirst < 70.0
+    assert state.satiety > 8.0
+    assert state.hydration > 30.0
     assert state.bowel < 75.0
     assert any(event["kind"] == "self_care" for event in state.events)
 
@@ -558,11 +559,11 @@ def test_autonomy_runs_even_during_a_chat() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=10))
     state.last_active_at = now.timestamp() - 60
-    state.hunger = 88.0
+    state.satiety = 12.0
     state.stomach = 8.0
     state.glucose = 22.0
     advance(state, now, make_profile(), Settings())
-    assert state.hunger < 88.0
+    assert state.satiety > 12.0
     assert any(event["kind"] == "self_care" for event in state.events)
 
 
@@ -722,7 +723,7 @@ def test_sad_mood_suppresses_appetite() -> None:
     sad = make_state(now - timedelta(hours=1))
     advance(calm, now, profile, settings)
     advance(sad, now, profile, settings, {"sadness": 1.0})
-    assert sad.hunger > calm.hunger
+    assert sad.satiety < calm.satiety
 
 
 def test_fear_stretches_the_cycle() -> None:

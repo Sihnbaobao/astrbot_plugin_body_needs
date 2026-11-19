@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- 状态文件改用正向指标：`satiety` / `hydration` / `energy` / `cleanliness` / `oral_health`，100 = 饱 / 润 / 有精神 / 干净 / 干净；界面层不再做 100 − x。
+- 旧状态自动迁移：`hunger → 100 - hunger`、`fatigue → 100 - fatigue`、`cleanliness` / `oral` 翻向；迁移测试覆盖，饿不会读成饱。
+- 提示词、状态卡、插件页、情绪底色统一读新字段；`stomach` / `glucose` / `urine` / `skin` / `oral` / `sleep_debt` 保留为隐藏储备。
+- 饱食度阈值、疲劳惩罚和行为结算随之改写；自动照料与 `/身体 调试` 行为不变。
+
 ## 0.7.6
 
 - 正向显示收敛到 `display_meters()` 一个函数，状态卡和插件页共用，避免两处各写一遍 100 − 需求。

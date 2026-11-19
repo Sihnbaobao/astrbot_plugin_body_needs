@@ -16,12 +16,12 @@ from .model import BodyState, CycleView, cycle_view
 from .profile import Profile, gender_label
 
 METER_NAMES = {
-    "hunger": "胃",
-    "thirst": "渴",
+    "satiety": "饱食度",
+    "hydration": "水分",
     "bladder": "膀胱",
     "cleanliness": "清洁",
-    "oral": "口腔",
-    "fatigue": "精力",
+    "oral_health": "口腔",
+    "energy": "精力",
     "desire": "欲望",
 }
 PHASE_LABELS = {
@@ -37,32 +37,32 @@ FLOW_LABELS = {1: "量少", 2: "量中等", 3: "量多"}
 DISCHARGE_LABELS = {0: "干爽", 1: "少量", 2: "偏多", 3: "蛋清样拉丝"}
 
 
-def hunger_label(value: float) -> str:
-    """Return a natural hunger description."""
-    if value < 12:
+def satiety_label(value: float) -> str:
+    """Return a natural fullness description for a 100 = full meter."""
+    if value >= 88:
         return "很饱"
-    if value < 30:
+    if value >= 70:
         return "不饿"
-    if value < 50:
+    if value >= 50:
         return "有点想吃"
-    if value < 70:
+    if value >= 30:
         return "饿了"
-    if value < 85:
+    if value >= 15:
         return "很饿"
     return "饿得难受"
 
 
-def thirst_label(value: float) -> str:
-    """Return a natural thirst description."""
-    if value < 12:
+def hydration_label(value: float) -> str:
+    """Return a natural hydration description for a 100 = well hydrated meter."""
+    if value >= 88:
         return "很润"
-    if value < 30:
+    if value >= 70:
         return "不渴"
-    if value < 50:
+    if value >= 50:
         return "有点渴"
-    if value < 70:
+    if value >= 30:
         return "渴了"
-    if value < 85:
+    if value >= 15:
         return "很渴"
     return "渴得难受"
 
@@ -123,17 +123,17 @@ def oral_label(value: float) -> str:
     return "嘴里发黏"
 
 
-def fatigue_label(value: float) -> str:
-    """Return a natural fatigue description."""
-    if value < 12:
+def energy_label(value: float) -> str:
+    """Return a natural energy description for a 100 = rested meter."""
+    if value >= 88:
         return "很有精神"
-    if value < 30:
+    if value >= 70:
         return "精神"
-    if value < 50:
+    if value >= 50:
         return "还行"
-    if value < 70:
+    if value >= 30:
         return "有点困"
-    if value < 85:
+    if value >= 15:
         return "很困"
     return "快撑不住了"
 
@@ -151,30 +151,15 @@ def desire_label(value: float) -> str:
     return "很强"
 
 
-def satiety_label(value: float) -> str:
-    """Return a fullness description for a 100 = very full meter."""
-    return hunger_label(100.0 - value)
-
-
-def hydration_label(value: float) -> str:
-    """Return a hydration description for a 100 = well hydrated meter."""
-    return thirst_label(100.0 - value)
-
-
-def energy_label(value: float) -> str:
-    """Return an energy description for a 100 = rested meter."""
-    return fatigue_label(100.0 - value)
-
-
 def meter_label(key: str, value: float) -> str:
     """Return the descriptive label for one meter."""
     labels = {
-        "hunger": hunger_label,
-        "thirst": thirst_label,
+        "satiety": satiety_label,
+        "hydration": hydration_label,
         "bladder": bladder_label,
         "cleanliness": clean_label,
-        "oral": oral_label,
-        "fatigue": fatigue_label,
+        "oral_health": oral_label,
+        "energy": energy_label,
         "desire": desire_label,
     }
     return labels.get(key, lambda _value: "正常")(value)
@@ -187,11 +172,11 @@ def display_meters(
 ) -> list[dict[str, Any]]:
     """Return meters in display space, where 100 is full, rested or clean.
 
-    The simulation stores needs: a higher hunger means more pressure. This is
-    the only place that turns hunger, thirst, fatigue and dirt into the
-    reserves shown on the page and in the status card. Bladder pressure and
-    desire stay pressures on purpose, because their labels describe the
-    pressure itself rather than a reserve.
+    The stored meters are reserves now: satiety, hydration, energy and
+    cleanliness all read 100 as the good end. This function only formats them
+    and applies the tone rules; it no longer inverts anything. Bladder
+    pressure and desire stay pressures on purpose, because their labels
+    describe the pressure itself rather than a reserve.
 
     Args:
         state: Advanced body state.
@@ -202,9 +187,9 @@ def display_meters(
         Meter dictionaries with key, label, name, value, level and tone.
     """
     rows = [
-        ("satiety", "饱食度", "胃", 100.0 - state.hunger, satiety_label, True),
-        ("hydration", "水分", "渴", 100.0 - state.thirst, hydration_label, True),
-        ("energy", "精力", "精力", 100.0 - state.fatigue, energy_label, True),
+        ("satiety", "饱食度", "胃", float(state.satiety), satiety_label, True),
+        ("hydration", "水分", "渴", float(state.hydration), hydration_label, True),
+        ("energy", "精力", "精力", float(state.energy), energy_label, True),
     ]
     if settings.enable_hygiene:
         rows.extend(
@@ -213,11 +198,18 @@ def display_meters(
                     "cleanliness",
                     "清洁",
                     "清洁",
-                    100.0 - state.cleanliness,
+                    float(state.cleanliness),
                     clean_label,
                     True,
                 ),
-                ("oral", "口腔", "口腔", 100.0 - state.oral, oral_label, True),
+                (
+                    "oral_health",
+                    "口腔",
+                    "口腔",
+                    float(state.oral_health),
+                    oral_label,
+                    True,
+                ),
             ]
         )
     rows.append(
@@ -488,21 +480,22 @@ def build_prompt_block(
 
     lines = [f"【身体状态｜{now:%H:%M}】"]
     values = {
-        "hunger": state.hunger,
-        "thirst": state.thirst,
+        "satiety": state.satiety,
+        "hydration": state.hydration,
         "bladder": state.bladder,
         "cleanliness": state.cleanliness,
-        "oral": state.oral,
-        "fatigue": state.fatigue,
+        "oral_health": state.oral_health,
+        "energy": state.energy,
         "desire": state.desire,
     }
 
     if settings.intensity == "subtle":
         important = [
             key
-            for key in ("hunger", "thirst", "bladder", "cleanliness", "oral", "fatigue")
-            if values[key] >= 48
+            for key in ("satiety", "hydration", "cleanliness", "oral_health", "energy")
+            if values[key] <= 52
         ]
+        important += ["bladder"] if values["bladder"] >= 48 else []
         if not important:
             lines.append("身体暂时没什么特别的感觉。")
         else:
@@ -510,10 +503,10 @@ def build_prompt_block(
                 lines.append(f"{METER_NAMES[key]}：{meter_label(key, values[key])}")
     elif show_all:
         lines.append(
-            f"胃：{hunger_label(state.hunger)}（{_ago(state.last_eat_at, now)}吃过东西）"
+            f"胃：{satiety_label(state.satiety)}（{_ago(state.last_eat_at, now)}吃过东西）"
         )
         lines.append(
-            f"渴：{thirst_label(state.thirst)}（{_ago(state.last_drink_at, now)}喝过水）"
+            f"渴：{hydration_label(state.hydration)}（{_ago(state.last_drink_at, now)}喝过水）"
         )
         lines.append(f"膀胱：{bladder_label(state.bladder)}")
         if state.bowel >= 35:
@@ -521,13 +514,13 @@ def build_prompt_block(
         if settings.enable_hygiene:
             lines.append(
                 f"清洁：{clean_label(state.cleanliness)}；"
-                f"口腔：{oral_label(state.oral)}"
+                f"口腔：{oral_label(state.oral_health)}"
             )
-        lines.append(f"精力：{fatigue_label(state.fatigue)}")
+        lines.append(f"精力：{energy_label(state.energy)}")
     else:
-        lines.append(f"胃：{hunger_label(state.hunger)}")
-        lines.append(f"渴：{thirst_label(state.thirst)}")
-        lines.append(f"精力：{fatigue_label(state.fatigue)}")
+        lines.append(f"胃：{satiety_label(state.satiety)}")
+        lines.append(f"渴：{hydration_label(state.hydration)}")
+        lines.append(f"精力：{energy_label(state.energy)}")
         if view is not None and view.phase == "menstrual" and view.cramps >= 2:
             lines.append("身体：肚子有点不舒服，不太想动。")
 
@@ -556,8 +549,8 @@ def build_prompt_block(
 
     if show_private:
         load = (
-            max(0.0, state.hunger - 65.0)
-            + max(0.0, state.thirst - 65.0)
+            max(0.0, 35.0 - state.satiety)
+            + max(0.0, 35.0 - state.hydration)
             + max(0.0, state.sleep_debt - 8.0) * 4.0
             + max(0.0, state.bowel - 60.0)
         )
@@ -627,7 +620,7 @@ def build_status_text(
         if settings.enable_hygiene:
             lines.append(
                 f"清洁：{meters['cleanliness']['level']}（{round(meters['cleanliness']['value'])}/100）"
-                f" · 口腔：{meters['oral']['level']}（{round(meters['oral']['value'])}/100）"
+                f" · 口腔：{meters['oral_health']['level']}（{round(meters['oral_health']['value'])}/100）"
             )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
@@ -704,7 +697,7 @@ def build_web_state(
         },
         {
             "key": "hydration",
-            "label": "水分",
+            "label": "水合",
             "value": round(state.hydration, 1),
             "unit": "%",
             "level": _hydration_text(state.hydration),
@@ -819,8 +812,8 @@ def build_web_state(
     }
 
     summary = (
-        f"{hunger_label(state.hunger)}，{thirst_label(state.thirst)}，"
-        f"{fatigue_label(state.fatigue)}"
+        f"{satiety_label(state.satiety)}，{hydration_label(state.hydration)}，"
+        f"{energy_label(state.energy)}"
     )
     if view is not None and view.phase == "menstrual":
         summary += f"，经期第 {view.day} 天"

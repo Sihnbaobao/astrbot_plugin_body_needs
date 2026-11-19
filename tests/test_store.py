@@ -40,11 +40,14 @@ def test_store_round_trip(tmp_path) -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     store = Store(tmp_path)
     state = new_state("璃月/测试", now)
-    state.hunger = 73.5
+    state.satiety = 73.5
     store.save(state)
     loaded = store.load("璃月/测试", now)
     assert loaded.persona_id == "璃月/测试"
-    assert loaded.hunger == 73.5
+    assert loaded.satiety == 73.5
+    saved = json.loads(store.path_for("璃月/测试").read_text(encoding="utf-8"))
+    assert "hunger" not in saved
+    assert saved["satiety"] == 73.5
     assert store.path_for("璃月/测试").exists()
 
 
@@ -74,6 +77,10 @@ def test_store_migrates_old_single_meter_state(tmp_path) -> None:
     assert loaded.hydration == pytest.approx(40)
     assert loaded.urine == pytest.approx(50)
     assert loaded.skin == pytest.approx(40)
+    assert loaded.satiety == pytest.approx(30)
+    assert loaded.energy == pytest.approx(80)
+    assert loaded.cleanliness == pytest.approx(60)
+    assert loaded.oral_health == pytest.approx(70)
 
 
 def test_store_repairs_corrupt_file(tmp_path) -> None:

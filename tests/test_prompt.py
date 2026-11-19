@@ -38,16 +38,15 @@ def make_state(now: datetime) -> BodyState:
     state = BodyState(
         persona_id="test",
         updated_at=now.timestamp(),
-        hunger=62,
-        thirst=22,
+        satiety=38,
+        hydration=78,
         bladder=38,
-        cleanliness=30,
-        oral=72,
-        fatigue=58,
+        cleanliness=70,
+        oral_health=28,
+        energy=42,
         desire=60,
         stomach=38,
         glucose=55,
-        hydration=78,
         urine=38,
         skin=30,
         sleep_debt=8,
@@ -96,8 +95,8 @@ def test_group_chat_hides_self_release() -> None:
 def test_loaded_body_adds_irritation_hint() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
-    state.hunger = 95.0
-    state.thirst = 95.0
+    state.satiety = 5.0
+    state.hydration = 5.0
     state.sleep_debt = 18.0
     state.bowel = 90.0
     block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
@@ -166,8 +165,8 @@ def test_status_card_and_web_payload() -> None:
     assert any(detail["key"] == "stomach" for detail in payload["details"])
     meters = {meter["key"]: meter for meter in payload["meters"]}
     # Fullness and hydration point the other way from the internal need value.
-    assert meters["satiety"]["value"] == pytest.approx(100 - state.hunger, abs=0.1)
-    assert meters["hydration"]["value"] == pytest.approx(100 - state.thirst, abs=0.1)
+    assert meters["satiety"]["value"] == pytest.approx(state.satiety, abs=0.1)
+    assert meters["hydration"]["value"] == pytest.approx(state.hydration, abs=0.1)
     # Pressure meters keep "full is strong".
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
     assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
@@ -211,16 +210,8 @@ def test_display_meters_is_the_only_conversion_point() -> None:
         meter["key"]: meter
         for meter in display_meters(state, make_profile(), Settings())
     }
-    for key, field in (
-        ("satiety", "hunger"),
-        ("hydration", "thirst"),
-        ("energy", "fatigue"),
-        ("cleanliness", "cleanliness"),
-        ("oral", "oral"),
-    ):
-        assert meters[key]["value"] == pytest.approx(
-            100 - getattr(state, field), abs=0.1
-        )
+    for key in ("satiety", "hydration", "energy", "cleanliness", "oral_health"):
+        assert meters[key]["value"] == pytest.approx(getattr(state, key), abs=0.1)
     # Pressure meters keep the internal value.
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
     assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
