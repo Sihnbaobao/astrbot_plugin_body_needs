@@ -745,7 +745,7 @@ class BodyNeedsPlugin(Star):
             FunctionTool(
                 name="body_action",
                 description=(
-                    "记录自己真的做了一件照顾身体的事：吃饭、吃零食、喝水、"
+                    "记录自己做过的一件照顾身体的事：吃饭、吃零食、喝水、"
                     + ("洗澡、刷牙、" if self.settings.enable_hygiene else "")
                     + "上厕所、小睡"
                     + ("、补卫生用品" if profile.gender == "female" else "")
@@ -761,7 +761,7 @@ class BodyNeedsPlugin(Star):
                         and self.settings.enable_intimate
                         else ""
                     )
-                    + "。只有角色真的做了才调用，不要为了把数值清零而调用。"
+                    + "。饿了、渴了、憋了或觉得脏时，角色可以自己去解决，不用等对方发话；只有真的做了才调用，不要为了把数值清零而调用。"
                 ),
                 parameters={
                     "type": "object",
