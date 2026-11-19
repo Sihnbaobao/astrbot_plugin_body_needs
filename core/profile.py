@@ -98,6 +98,7 @@ class Profile:
     race: str = "人类"
     lifespan: int = HUMAN_LIFESPAN
     pcos: bool = False
+    libido_trait: float = 1.0
 
     @property
     def physio_age(self) -> float | None:
@@ -139,12 +140,45 @@ def detect_age(text: str) -> int | None:
 
 
 _PCOS_WORDS = ("多囊", "pcos", "多囊卵巢")
+_LIBIDO_HIGH_WORDS = (
+    "性欲强",
+    "性欲很强",
+    "性欲旺盛",
+    "性欲很高",
+    "需求大",
+    "需求很大",
+    "欲求不满",
+    "每天都想要",
+    "一天几次",
+    "频繁自慰",
+)
+_LIBIDO_LOW_WORDS = ("性冷淡", "性欲低", "性欲淡", "禁欲", "无性", "不想做爱")
 
 
 def detect_pcos(text: str) -> bool:
     """Return whether the persona states a polycystic ovary condition."""
     lowered = (text or "").lower()
     return any(word in lowered for word in _PCOS_WORDS)
+
+
+def detect_libido_trait(text: str) -> float:
+    """Return a libido multiplier hinted by the persona prompt.
+
+    Args:
+        text: The persona system prompt.
+
+    Returns:
+        1.8 when the prompt states a strong drive, 0.35 when it states a low
+        one, and 1.0 otherwise.
+    """
+    lowered = (text or "").lower()
+    high = sum(word in lowered for word in _LIBIDO_HIGH_WORDS)
+    low = sum(word in lowered for word in _LIBIDO_LOW_WORDS)
+    if high > low:
+        return 1.8
+    if low > high:
+        return 0.35
+    return 1.0
 
 
 def detect_race(text: str) -> tuple[str, int]:
@@ -223,6 +257,7 @@ def detect_profile(
     if settings.lifespan > 0:
         race, lifespan = "自定义", settings.lifespan
     pcos = detect_pcos(prompt)
+    libido_trait = detect_libido_trait(prompt)
 
     # Age no longer participates in this decision: any persona whose gender can
     # be resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
@@ -240,4 +275,5 @@ def detect_profile(
         race=race,
         lifespan=lifespan,
         pcos=pcos,
+        libido_trait=libido_trait,
     )

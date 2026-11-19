@@ -88,7 +88,6 @@ GUT_PASSAGE = 0.35
 GUT_URGE_START = 25.0
 GUT_URGE_GAIN = 1.5
 # A persona only looks after herself once nobody has interacted for a while.
-SELF_CARE_IDLE_HOURS = 6.0
 # A long absence still has to leave the cycle in the right place, so the
 # simulation window is a year; beyond 60 days it takes coarser steps.
 MAX_SIM_DAYS = 365
@@ -171,7 +170,7 @@ def constitution(persona_id: str) -> Constitution:
         metabolism=0.9 + 0.2 * _roll(persona_id, "body", "metabolism"),
         stomach_capacity=0.85 + 0.3 * _roll(persona_id, "body", "stomach"),
         gut_transit=0.75 + 0.5 * _roll(persona_id, "body", "gut"),
-        self_rate=0.6 + 1.0 * _roll(persona_id, "body", "release"),
+        self_rate=0.4 + 3.6 * _roll(persona_id, "body", "release"),
     )
 
 
@@ -233,6 +232,7 @@ class BodyState:
     oral_health: float = 80.0
     energy: float = 78.0
     libido: float = 10.0
+    release_count: int = 0
     stomach: float = 72.0
     glucose: float = 78.0
     urine: float = 18.0
@@ -295,6 +295,7 @@ class BodyState:
             "oral_health": self.oral_health,
             "energy": self.energy,
             "libido": self.libido,
+            "release_count": self.release_count,
             "oral": self.oral,
             "stomach": self.stomach,
             "glucose": self.glucose,
@@ -387,6 +388,7 @@ class BodyState:
         if "libido" not in data and "desire" in data:
             # 0.8.1 and older stored the same meter under the broader name.
             state.libido = _number(data.get("desire"), 10.0)
+        state.release_count = max(0, int(_number(data.get("release_count"), 0)))
 
         if legacy:
             # Old files stored needs: hunger, thirst, fatigue and dirt. Convert
@@ -1226,22 +1228,22 @@ def _libido_rate(
     if profile.gender == "male":
         age = profile.physio_age or 30
         if age < 20:
-            rate = 2.0
+            rate = 70.0
         elif age < 30:
-            rate = 1.8
+            rate = 60.0
         elif age < 45:
-            rate = 1.4
+            rate = 45.0
         else:
-            rate = 1.0
+            rate = 28.0
     else:
-        rate = 0.9
+        rate = 30.0
         if view is not None:
-            rate += view.estrogen / 100.0 * 0.5
+            rate += view.estrogen / 100.0 * 15.0
             if view.phase == "ovulation":
-                rate += 0.6
+                rate += 20.0
             elif view.phase == "luteal":
-                rate += 0.2
-    return rate * _mood_effect(mood)[1]
+                rate += 8.0
+    return rate * _mood_effect(mood)[1] * profile.libido_trait
 
 
 def _emission_age_factor(age: float) -> float:
@@ -1388,55 +1390,69 @@ def _routine(
 
 def _maybe_release(
     state: BodyState,
-    now: datetime,
+    moment: datetime,
     profile: Profile,
     settings: Settings,
     const: Constitution,
-    idle: bool,
+    step_hours: float,
+    sleep_fraction: float,
 ) -> None:
-    """Roll at most one self-release per day once libido has built up.
+    """Roll a self-release for one simulation step.
 
-    Release does not depend on gender or age: both bodies have the drive, and
-    each persona keeps a stable habit multiplier. The event only reaches a
-    private chat, where the prompt filter allows it.
+    The chance scales with the persona habit and the current libido, so a
+    high-habit persona can release two or three times a day while a low-habit
+    one goes days between. Release does not depend on gender or age: both
+    bodies have the drive. The event only reaches a private chat, where the
+    prompt filter allows it.
 
     Args:
         state: Body state being advanced.
-        now: Current local instant.
+        moment: Midpoint of the current step.
         profile: Resolved persona profile.
         settings: Plugin settings.
         const: Per-persona baseline, including the habit multiplier.
-        idle: Whether nobody has interacted for a while.
+        step_hours: Length of the current step in hours.
+        sleep_fraction: Share of the step spent asleep.
     """
-    if not (profile.adult and settings.enable_intimate and idle):
+    if not (profile.adult and settings.enable_intimate):
         return
-    if state.libido < 55.0 or not 8 <= now.hour <= 23:
+    if profile.gender not in ("female", "male"):
         return
-    key = f"self-release:{now.date().isoformat()}"
-    if state.flags.get(key):
+    if state.libido < 12.0 or not 8 <= moment.hour <= 23:
         return
-    since = (
-        (now.timestamp() - state.last_self_at) / 86400.0 if state.last_self_at else 30.0
-    )
-    chance = min(
-        0.85,
-        max(0.0, since - 0.3) * 0.5 * const.self_rate * (state.libido / 60.0),
-    )
-    if _roll(profile.persona_id, key, "roll") >= chance:
+    stamp = moment.timestamp()
+    if profile.gender == "male" and state.refractory_until > stamp:
         return
-    state.libido = _clamp(state.libido - 55.0)
-    state.last_self_at = now.timestamp()
+    if state.last_self_at and stamp - state.last_self_at < 1800:
+        return
+
+    comfort = 1.0
+    comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
+    comfort -= min(0.3, max(0.0, 30.0 - state.satiety) / 30.0 * 0.3)
+    habit = const.self_rate * profile.libido_trait * max(0.3, comfort)
+    per_hour = min(0.4, habit * (0.3 + 0.7 * state.libido / 100.0) / 14.0)
+    if sleep_fraction > 0.5:
+        per_hour *= 0.15
+    chance = 1.0 - (1.0 - per_hour) ** max(1e-6, step_hours)
+    bucket = int(stamp // 900)
+    if _roll(profile.persona_id, f"self:{bucket}", "roll") >= chance:
+        return
+
+    state.libido = _clamp(state.libido - 30.0)
+    state.last_self_at = stamp
+    state.release_count += 1
     if profile.gender == "male":
         state.refractory_until = (
-            now.timestamp()
-            + (1.0 + _roll(profile.persona_id, key, "refractory") * 2.0) * 3600
+            stamp
+            + (1.0 + _roll(profile.persona_id, f"self:{bucket}", "refractory") * 2.0)
+            * 3600
         )
     _add_event(
         state,
-        now,
+        moment,
         "self_release",
         "自己解决了一次，身体松下来",
-        key=key,
+        key=f"self-release:{moment.date().isoformat()}",
     )
 
 
@@ -1712,10 +1728,6 @@ def advance(
     in_period = bool(view and view.phase == "menstrual")
     pubertal = _is_pubertal(profile.physio_age)
     const = constitution(profile.persona_id)
-    idle = (
-        state.last_active_at > 0
-        and now_ts - state.last_active_at > SELF_CARE_IDLE_HOURS * 3600
-    )
 
     cursor = start
     remaining = float(elapsed)
@@ -1835,6 +1847,12 @@ def advance(
             if profile.gender == "male" and state.refractory_until > cursor.timestamp():
                 rate *= 0.25
             state.libido = _clamp(state.libido + rate * step_hours / 24.0)
+            # Arousal fades on its own with a one-day half-life, so a persona
+            # who rarely acts settles at a lower level instead of pinning 100.
+            state.libido *= 0.5 ** (step_hours / 24.0)
+            _maybe_release(
+                state, midpoint, profile, settings, const, step_hours, sleep_fraction
+            )
         else:
             state.libido = 0.0
 
@@ -1852,7 +1870,6 @@ def advance(
         cursor = chunk_end
         remaining -= step_seconds
 
-    _maybe_release(state, now, profile, settings, const, idle)
     view = cycle_view(state, now, profile, settings, mood)
     in_period = bool(view and view.phase == "menstrual")
     _recompute_primary(state, now, profile, settings, in_period, mood)

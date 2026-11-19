@@ -227,7 +227,7 @@ def test_male_libido_rate_falls_with_age() -> None:
         _libido_rate(state, None, make_profile(gender="male", age=age))
         for age in (16, 25, 35, 50)
     ]
-    assert rates == [2.0, 1.8, 1.4, 1.0]
+    assert rates == [70.0, 60.0, 45.0, 28.0]
     assert rates == sorted(rates, reverse=True)
 
 
@@ -582,8 +582,33 @@ def test_self_release_lowers_libido() -> None:
         if any(event["kind"] == "self_release" for event in state.events):
             hits += 1
             assert state.libido < 95.0
-            assert state.last_self_at == now.timestamp()
+            assert now.timestamp() - 3600 <= state.last_self_at <= now.timestamp()
     assert hits > 0
+
+
+def test_release_frequency_follows_persona_trait() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    settings = Settings()
+
+    def run(trait: float) -> int:
+        profile = Profile("freq", "t", "male", 25, True, 28, 5, libido_trait=trait)
+        state = make_state(now - timedelta(days=30))
+        state.persona_id = profile.persona_id
+        state.last_active_at = state.updated_at
+        advance(state, now, profile, settings)
+        return state.release_count
+
+    low, normal, high = run(0.6), run(1.0), run(1.5)
+    assert low < normal < high
+    assert normal >= 10
+
+
+def test_libido_trait_reads_persona_prompt() -> None:
+    from core.profile import detect_libido_trait
+
+    assert detect_libido_trait("她性欲很强，需求很大。") == 1.8
+    assert detect_libido_trait("她性冷淡，对这件事没兴趣。") == 0.35
+    assert detect_libido_trait("一个普通的医生。") == 1.0
 
 
 def test_self_release_needs_intimate_enabled() -> None:
