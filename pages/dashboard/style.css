@@ -1922,3 +1922,111 @@ footer {
 .notes {
   margin-top: 24px;
 }
+
+/* editorial header and balanced chart row */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 0;
+  margin-bottom: 24px;
+  padding: 4px 0 22px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.hero::before,
+.hero::after {
+  display: none;
+}
+
+.hero h1 {
+  font-size: 30px;
+}
+
+.eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  vertical-align: middle;
+}
+
+.hero-clock {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: right;
+}
+
+.hero-clock span {
+  font-size: 20px;
+}
+
+.hero-clock small {
+  display: block;
+  margin-top: 2px;
+}
+
+.care-timeline-card {
+  grid-column: span 7;
+}
+
+.events-card {
+  grid-column: span 12;
+}
+
+.care-rows {
+  max-width: none;
+  margin: 0;
+}
+
+.care-axis {
+  max-width: none;
+  margin: 14px 0 4px 58px;
+  padding-left: 0;
+}
+
+@media (max-width: 900px) {
+  .care-timeline-card {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .hero-clock {
+    text-align: left;
+  }
+
+  .care-axis {
+    margin-left: 48px;
+  }
+}
+
+.events {
+  columns: 2;
+  column-gap: 24px;
+}
+
+.events li {
+  break-inside: avoid;
+}
+
+@media (max-width: 760px) {
+  .events {
+    columns: 1;
+  }
+}

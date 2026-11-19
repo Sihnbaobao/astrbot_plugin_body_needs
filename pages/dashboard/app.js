@@ -156,6 +156,12 @@ function renderHero(persona, now) {
       ? persona.gender_label + "性"
       : "性别未知";
   bits.push(gender);
+  if (persona.cycle && persona.cycle.phase_label) {
+    const day = Number(persona.cycle.day) || 0;
+    bits.push(
+      persona.cycle.phase_label + (day > 0 ? " · 第 " + day + " 天" : ""),
+    );
+  }
   el("profileLine").textContent = bits.join(" · ");
   el("clock").textContent = now ? clockText(now) : "—";
   el("subtitle").textContent = (persona.name || persona.id) + " · " + (persona.summary || "");
