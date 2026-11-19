@@ -204,29 +204,39 @@ function renderCare(care) {
   host.replaceChildren();
   const items = Array.isArray(care) ? care : [];
   const nowMinutes = Number(state.data && state.data.now_minutes);
+  const nowHour = Number.isFinite(nowMinutes) ? Math.floor(nowMinutes / 60) : -1;
   CARE_ROWS.forEach(function (rowDef) {
     const row = make("div", "care-row");
     row.appendChild(make("span", "care-row-label", rowDef[1]));
-    const lane = make("div", "care-lane");
+    const cells = make("div", "care-cells");
+    const byHour = {};
     items
       .filter(function (item) {
         return item.kind === rowDef[0];
       })
       .forEach(function (item) {
-        const dot = make("span", "care-dot " + item.kind);
         const minutes = Number(item.minutes);
-        dot.style.left =
-          Math.max(0.5, Math.min(99.5, ((Number.isFinite(minutes) ? minutes : 0) / 1440) * 100)) + "%";
-        dot.title = (item.at || "") + " " + (item.label || rowDef[1]);
-        lane.appendChild(dot);
+        const hour = Math.max(0, Math.min(23, Math.floor((Number.isFinite(minutes) ? minutes : 0) / 60)));
+        if (!byHour[hour]) byHour[hour] = [];
+        byHour[hour].push(item.at || "");
       });
-    if (Number.isFinite(nowMinutes)) {
-      const now = make("span", "care-now");
-      now.style.left = Math.max(0, Math.min(100, (nowMinutes / 1440) * 100)) + "%";
-      now.title = "现在";
-      lane.appendChild(now);
+    for (let hour = 0; hour < 24; hour += 1) {
+      const cell = make("span", "care-cell");
+      cell.title = String(hour).padStart(2, "0") + ":00";
+      if (byHour[hour]) {
+        cell.classList.add("on", rowDef[0]);
+        cell.title =
+          String(hour).padStart(2, "0") +
+          ":00 " +
+          rowDef[1] +
+          "（" +
+          byHour[hour].join("、") +
+          "）";
+      }
+      if (hour === nowHour) cell.classList.add("is-now");
+      cells.appendChild(cell);
     }
-    row.appendChild(lane);
+    row.appendChild(cells);
     host.appendChild(row);
   });
   if (!items.length) {
@@ -248,14 +258,12 @@ function renderSelfCare(care) {
       const slot = minutes < 600 ? "早饭" : minutes < 960 ? "午饭" : "晚饭";
       if (!mealTimes[slot]) mealTimes[slot] = item.at;
     });
-  const meals = make("div", "selfcare-meals");
+  const meals = make("div", "selfcare-line");
   ["早饭", "午饭", "晚饭"].forEach(function (name) {
-    const row = make("div", "selfcare-meal");
-    row.appendChild(make("span", "selfcare-label", name));
-    row.appendChild(
-      make("strong", "", mealTimes[name] ? "吃过了 " + mealTimes[name] : "还没吃"),
-    );
-    meals.appendChild(row);
+    const chip = make("span", "selfcare-chip");
+    chip.appendChild(make("b", "", name));
+    chip.appendChild(make("span", "", mealTimes[name] || "还没"));
+    meals.appendChild(chip);
   });
   host.appendChild(meals);
 
@@ -263,16 +271,16 @@ function renderSelfCare(care) {
   items.forEach(function (item) {
     if (counts[item.kind] !== undefined) counts[item.kind] += 1;
   });
-  const stats = make("div", "selfcare-stats");
+  const stats = make("div", "selfcare-line selfcare-counts");
   [
     ["喝水", counts.drink],
     ["厕所", counts.toilet],
     ["洗澡", counts.shower],
     ["刷牙", counts.brush],
   ].forEach(function (pair) {
-    const cell = make("div", "selfcare-stat");
-    cell.appendChild(make("b", "", String(pair[1])));
-    cell.appendChild(make("span", "", pair[0]));
+    const cell = make("span", "selfcare-chip");
+    cell.appendChild(make("b", "", pair[0]));
+    cell.appendChild(make("span", "", String(pair[1]) + " 次"));
     stats.appendChild(cell);
   });
   host.appendChild(stats);
