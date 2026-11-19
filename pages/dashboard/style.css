@@ -2030,3 +2030,33 @@ footer {
     columns: 1;
   }
 }
+
+/* keep hover from creating a scroll container */
+.care-scroll {
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.care-rows {
+  min-width: 0;
+}
+
+.care-cell:hover,
+.care-cell:focus-visible {
+  transform: none;
+  outline-color: var(--accent-2);
+  box-shadow: 0 0 0 1px var(--accent-2);
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 760px) {
+  .care-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .care-rows {
+    min-width: 560px;
+  }
+}
