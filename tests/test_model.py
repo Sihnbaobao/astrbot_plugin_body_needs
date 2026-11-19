@@ -11,10 +11,12 @@ from core.config import Settings
 from core.model import (
     PAD_RESTOCK,
     BodyState,
+    Constitution,
     _cycle_length_for,
     _fetal_count,
     _miscarriage_chance,
     _libido_rate,
+    _maybe_release,
     _emission_age_factor,
     _menarche_age,
     _menopause_age,
@@ -569,46 +571,39 @@ def test_autonomy_runs_even_during_a_chat() -> None:
 
 def test_self_release_lowers_libido() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
-    settings = Settings()
-    hits = 0
-    for index in range(16):
-        profile = Profile(f"rel{index}", "t", "female", 25, True, 28, 5)
-        state = make_state(now - timedelta(hours=1))
-        state.persona_id = profile.persona_id
-        state.last_active_at = now.timestamp() - 10 * 3600
-        state.libido = 95.0
-        state.last_self_at = now.timestamp() - 6 * 86400
-        advance(state, now, profile, settings)
-        if any(event["kind"] == "self_release" for event in state.events):
-            hits += 1
-            assert state.libido < 95.0
-            assert now.timestamp() - 3600 <= state.last_self_at <= now.timestamp()
-    assert hits > 0
+    profile = Profile("rel", "t", "female", 25, True, 28, 5)
+    state = make_state(now - timedelta(hours=1))
+    state.persona_id = profile.persona_id
+    state.libido = 95.0
+    state.last_self_at = now.timestamp() - 6 * 86400
+    const = Constitution(
+        sleep_need=8.0,
+        metabolism=1.0,
+        stomach_capacity=1.0,
+        gut_transit=1.0,
+        self_rate=20.0,
+    )
+    _maybe_release(state, now, profile, Settings(), const, 14.0, 0.0)
+    assert state.release_count == 1
+    assert state.libido < 95.0
+    assert state.last_self_at == now.timestamp()
 
 
-def test_release_frequency_follows_persona_trait() -> None:
+def test_release_frequency_is_stable_and_plausible() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     settings = Settings()
 
-    def run(trait: float) -> int:
-        profile = Profile("freq", "t", "male", 25, True, 28, 5, libido_trait=trait)
+    def run(persona_id: str) -> int:
+        profile = Profile(persona_id, "t", "male", 25, True, 28, 5)
         state = make_state(now - timedelta(days=30))
-        state.persona_id = profile.persona_id
+        state.persona_id = persona_id
         state.last_active_at = state.updated_at
         advance(state, now, profile, settings)
         return state.release_count
 
-    low, normal, high = run(0.6), run(1.0), run(1.5)
-    assert low < normal < high
-    assert normal >= 10
-
-
-def test_libido_trait_reads_persona_prompt() -> None:
-    from core.profile import detect_libido_trait
-
-    assert detect_libido_trait("她性欲很强，需求很大。") == 1.8
-    assert detect_libido_trait("她性冷淡，对这件事没兴趣。") == 0.35
-    assert detect_libido_trait("一个普通的医生。") == 1.0
+    first = run("freq-a")
+    assert first == run("freq-a")
+    assert 1 <= first <= 120
 
 
 def test_self_release_needs_intimate_enabled() -> None:

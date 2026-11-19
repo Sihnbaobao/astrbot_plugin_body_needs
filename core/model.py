@@ -170,7 +170,9 @@ def constitution(persona_id: str) -> Constitution:
         metabolism=0.9 + 0.2 * _roll(persona_id, "body", "metabolism"),
         stomach_capacity=0.85 + 0.3 * _roll(persona_id, "body", "stomach"),
         gut_transit=0.75 + 0.5 * _roll(persona_id, "body", "gut"),
-        self_rate=0.4 + 3.6 * _roll(persona_id, "body", "release"),
+        # Log-uniform 0.3-4.8: most personas sit near once a day, a few at
+        # either end; stable for the persona like sleep need.
+        self_rate=0.3 * (16.0 ** _roll(persona_id, "body", "release")),
     )
 
 
@@ -1228,22 +1230,22 @@ def _libido_rate(
     if profile.gender == "male":
         age = profile.physio_age or 30
         if age < 20:
-            rate = 70.0
+            rate = 80.0
         elif age < 30:
-            rate = 60.0
+            rate = 70.0
         elif age < 45:
-            rate = 45.0
+            rate = 50.0
         else:
-            rate = 28.0
+            rate = 32.0
     else:
-        rate = 30.0
+        rate = 45.0
         if view is not None:
             rate += view.estrogen / 100.0 * 15.0
             if view.phase == "ovulation":
                 rate += 20.0
             elif view.phase == "luteal":
                 rate += 8.0
-    return rate * _mood_effect(mood)[1] * profile.libido_trait
+    return rate * _mood_effect(mood)[1]
 
 
 def _emission_age_factor(age: float) -> float:
@@ -1429,7 +1431,7 @@ def _maybe_release(
     comfort = 1.0
     comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
     comfort -= min(0.3, max(0.0, 30.0 - state.satiety) / 30.0 * 0.3)
-    habit = const.self_rate * profile.libido_trait * max(0.3, comfort)
+    habit = const.self_rate * max(0.3, comfort)
     per_hour = min(0.4, habit * (0.3 + 0.7 * state.libido / 100.0) / 14.0)
     if sleep_fraction > 0.5:
         per_hour *= 0.15
@@ -1438,7 +1440,7 @@ def _maybe_release(
     if _roll(profile.persona_id, f"self:{bucket}", "roll") >= chance:
         return
 
-    state.libido = _clamp(state.libido - 30.0)
+    state.libido = _clamp(state.libido - 20.0)
     state.last_self_at = stamp
     state.release_count += 1
     if profile.gender == "male":
