@@ -1866,3 +1866,59 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+/* breathing room and visible tracks */
+.hero {
+  margin-bottom: 24px;
+}
+
+.grid {
+  gap: 24px;
+}
+
+.card {
+  padding: 22px 24px;
+}
+
+.card-head {
+  margin-bottom: 18px;
+}
+
+.meter {
+  padding: 10px 0;
+}
+
+.meter-bar,
+.inner-bar {
+  background: var(--line);
+}
+
+.inner-stats {
+  margin-top: 20px;
+  padding: 16px;
+}
+
+.inner-stat-head {
+  margin-bottom: 7px;
+}
+
+.care-axis {
+  margin: 16px auto 6px;
+}
+
+.care-rows {
+  gap: 5px;
+}
+
+.selfcare-body {
+  gap: 12px;
+}
+
+.last-row {
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.notes {
+  margin-top: 24px;
+}
