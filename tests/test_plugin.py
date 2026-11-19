@@ -241,4 +241,5 @@ async def test_genderless_persona_gets_no_intimacy_tool(monkeypatch, tmp_path) -
     body_action = next(tool for tool in tools.tools if tool.name == "body_action")
     assert "intimacy" not in body_action.parameters["properties"]["action"]["enum"]
     assert "去不去由她自己决定" in body_action.description
+    assert "不是行动按钮" in body_action.description
     await plugin.terminate()

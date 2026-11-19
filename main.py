@@ -761,7 +761,7 @@ class BodyNeedsPlugin(Star):
                         and self.settings.enable_intimate
                         else ""
                     )
-                    + "。饿了、渴了、憋了或觉得脏时，角色可以自己去，去不去由她自己决定；真的做了才调用，不要为了把数值清零而调用。"
+                    + "。饿了、渴了、憋了或觉得脏时，角色可以自己去，去不去由她自己决定；这个工具不是行动按钮，只负责记录：她真的做了，才记一笔，不要为了把数值清零而调用。"
                 ),
                 parameters={
                     "type": "object",
