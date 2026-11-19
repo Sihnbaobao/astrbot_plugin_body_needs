@@ -187,8 +187,8 @@ def display_meters(
         Meter dictionaries with key, label, name, value, level and tone.
     """
     rows = [
-        ("satiety", "饱食度", "胃", float(state.satiety), satiety_label, True),
-        ("hydration", "水分", "渴", float(state.hydration), hydration_label, True),
+        ("satiety", "饱食度", "饱食度", float(state.satiety), satiety_label, True),
+        ("hydration", "水分", "水分", float(state.hydration), hydration_label, True),
         ("energy", "精力", "精力", float(state.energy), energy_label, True),
     ]
     if settings.enable_hygiene:

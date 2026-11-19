@@ -169,6 +169,8 @@ def test_status_card_and_web_payload() -> None:
     meters = {meter["key"]: meter for meter in payload["meters"]}
     # Fullness and hydration point the other way from the internal need value.
     assert meters["satiety"]["value"] == pytest.approx(state.satiety, abs=0.1)
+    assert meters["satiety"]["name"] == "饱食度"
+    assert meters["hydration"]["name"] == "水分"
     assert meters["hydration"]["value"] == pytest.approx(state.hydration, abs=0.1)
     # Pressure meters keep "full is strong".
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
