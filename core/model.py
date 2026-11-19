@@ -489,14 +489,14 @@ class BodyState:
             ][-120:]
         # Seed any action the timeline is missing, so old files and files from
         # before a new care kind was added still show their last occurrence.
-        for kind, field in (
+        for kind, attr in (
             ("meal", "last_eat_at"),
             ("drink", "last_drink_at"),
             ("toilet", "last_toilet_at"),
             ("shower", "last_shower_at"),
             ("brush", "last_brush_at"),
         ):
-            stamp = getattr(state, field)
+            stamp = getattr(state, attr)
             if not stamp:
                 continue
             if any(

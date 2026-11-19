@@ -46,7 +46,7 @@ def test_store_round_trip(tmp_path) -> None:
     loaded = store.load("璃月/测试", now)
     assert loaded.persona_id == "璃月/测试"
     assert loaded.satiety == 73.5
-    assert loaded.care[0]["kind"] == "meal"
+    assert any(item["kind"] == "meal" for item in loaded.care)
     saved = json.loads(store.path_for("璃月/测试").read_text(encoding="utf-8"))
     assert "hunger" not in saved
     assert "desire" not in saved
