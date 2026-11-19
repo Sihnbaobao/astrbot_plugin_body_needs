@@ -1367,11 +1367,6 @@ def _routine(
         settings: Plugin settings; hygiene can be switched off.
         const: Per-persona baseline, used for the meal size.
     """
-    bucket = int(moment.timestamp() // 3600)
-    if state.flags.get("routine_hour") == bucket:
-        return
-    state.flags["routine_hour"] = float(bucket)
-
     hour = moment.hour
     day = moment.date().isoformat()
     since_meal = moment.timestamp() - state.last_eat_at
@@ -1389,7 +1384,10 @@ def _routine(
         if state.flags.get(key):
             break
         preferred = start + int(_roll(profile.persona_id, day, slot) * (end - start))
-        if hour < preferred or state.stomach > 90.0 or since_meal <= 3600:
+        preferred_minute = int(_roll(profile.persona_id, day, slot + "-min") * 60)
+        if hour < preferred or (hour == preferred and moment.minute < preferred_minute):
+            break
+        if state.stomach > 90.0 or since_meal <= 3600:
             break
         state.stomach = _clamp(state.stomach + portion / const.stomach_capacity)
         state.glucose = _clamp(state.glucose + 16.0)
@@ -1424,10 +1422,24 @@ def _routine(
 
     if settings.enable_hygiene:
         shower_pref = 7 + int(_roll(profile.persona_id, day, "shower-am") * 3)
+        shower_minute = int(_roll(profile.persona_id, day, "shower-am-min") * 60)
         evening_pref = 20 + int(_roll(profile.persona_id, day, "shower-pm") * 3)
+        evening_minute = int(_roll(profile.persona_id, day, "shower-pm-min") * 60)
         if state.skin >= 60.0 and (
-            (7 <= hour < 10 and hour >= shower_pref)
-            or (20 <= hour < 23 and hour >= evening_pref)
+            (
+                7 <= hour < 10
+                and (
+                    hour > shower_pref
+                    or (hour == shower_pref and moment.minute >= shower_minute)
+                )
+            )
+            or (
+                20 <= hour < 23
+                and (
+                    hour > evening_pref
+                    or (hour == evening_pref and moment.minute >= evening_minute)
+                )
+            )
         ):
             state.skin = 2.0
             state.last_shower_at = moment.timestamp()
@@ -1440,10 +1452,24 @@ def _routine(
                 key=f"self-shower:{day}",
             )
         brush_pref = 7 + int(_roll(profile.persona_id, day, "brush-am") * 3)
+        brush_minute = int(_roll(profile.persona_id, day, "brush-am-min") * 60)
         evening_brush = 21 + int(_roll(profile.persona_id, day, "brush-pm") * 3)
+        evening_brush_minute = int(_roll(profile.persona_id, day, "brush-pm-min") * 60)
         if state.oral >= 55.0 and (
-            (7 <= hour < 10 and hour >= brush_pref)
-            or (21 <= hour < 24 and hour >= evening_brush)
+            (
+                7 <= hour < 10
+                and (
+                    hour > brush_pref
+                    or (hour == brush_pref and moment.minute >= brush_minute)
+                )
+            )
+            or (
+                21 <= hour < 24
+                and (
+                    hour > evening_brush
+                    or (hour == evening_brush and moment.minute >= evening_brush_minute)
+                )
+            )
         ):
             state.oral = 2.0
             state.last_brush_at = moment.timestamp()

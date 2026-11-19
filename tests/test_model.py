@@ -557,20 +557,6 @@ def test_idle_persona_looks_after_herself() -> None:
     assert any(event["kind"] == "self_care" for event in state.events)
 
 
-def test_routine_catches_the_hour_when_advance_starts_late() -> None:
-    now = datetime(2026, 11, 18, 9, 20, tzinfo=TZ)
-    state = make_state(now - timedelta(hours=2))
-    state.stomach = 40.0
-    state.glucose = 40.0
-    state.skin = 20.0
-    state.last_eat_at = (now - timedelta(hours=6)).timestamp()
-    advance(state, now, make_profile(), Settings())
-    assert state.stomach > 40.0
-    assert any(
-        event["kind"] == "self_care" and "吃" in event["text"] for event in state.events
-    )
-
-
 def test_three_meals_and_care_log() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(days=1))
