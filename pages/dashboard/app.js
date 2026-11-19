@@ -418,9 +418,21 @@ function renderCycle(persona) {
     (cycle.phase_label || "周期") + " · 第 " + cycle.day + " 天";
 
   const hero = make("div", "cycle-hero");
-  hero.appendChild(make("b", "", "第 " + cycle.day + " 天"));
-  hero.appendChild(make("span", "", cycle.phase_label || ""));
+  const heroCopy = make("div", "cycle-hero-copy");
+  heroCopy.appendChild(make("b", "", "第 " + cycle.day + " 天"));
+  heroCopy.appendChild(make("span", "", cycle.phase_label || ""));
+  hero.appendChild(heroCopy);
+  hero.appendChild(
+    make("span", "cycle-hero-total", "共 " + cycle.cycle_length + " 天"),
+  );
   host.appendChild(hero);
+
+  const progress = make("div", "cycle-progress");
+  const progressFill = make("i");
+  progressFill.style.width =
+    Math.min(100, Math.max(0, (cycle.day / cycle.cycle_length) * 100)) + "%";
+  progress.appendChild(progressFill);
+  host.appendChild(progress);
 
   const facts = make("dl", "facts");
   const symptomBits = [];
@@ -448,20 +460,22 @@ function renderCycle(persona) {
     host.appendChild(make("p", "cycle-note", cycle.note));
   }
 
+  host.appendChild(make("div", "hormones-head", "激素水平 · 相对值 0-100"));
   const hormones = make("div", "hormones");
   [
     ["雌激素", "estrogen", "estrogen"],
     ["孕激素", "progesterone", "progesterone"],
     ["LH", "lh", "lh"],
   ].forEach(function (row) {
-    const value = Number(cycle[row[1]]) || 0;
+    const value = Math.min(100, Math.max(0, Number(cycle[row[1]]) || 0));
     const line = make("div", "hormone-row");
-    line.appendChild(make("span", "", row[0]));
+    line.appendChild(make("span", "hormone-name", row[0]));
     const bar = make("div", "hormone-bar");
     const fill = make("i", row[2]);
-    fill.style.width = Math.min(100, Math.max(0, value)) + "%";
+    fill.style.width = value + "%";
     bar.appendChild(fill);
     line.appendChild(bar);
+    line.appendChild(make("span", "hormone-value", String(Math.round(value))));
     hormones.appendChild(line);
   });
   host.appendChild(hormones);

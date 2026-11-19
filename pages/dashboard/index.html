@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>身体 · 生理需求</title>
-    <link rel="stylesheet" href="./style.css?v=6" />
+    <link rel="stylesheet" href="./style.css?v=7" />
   </head>
   <body>
     <header class="topbar">
@@ -55,7 +55,6 @@
             <p class="empty">正在读取…</p>
           </div>
           <div class="inner-stats" id="innerStats"></div>
-          <div class="last-row" id="lastRow"></div>
         </section>
 
         <section class="card cycle-card" id="cycleCard" hidden>
@@ -95,11 +94,11 @@
 
         <section class="card selfcare-card">
           <div class="card-head">
-            <h2>最近的自理</h2>
-            <span class="hint">24 小时 · 自己处理</span>
+            <h2>日常</h2>
+            <span class="hint">最近 24 小时</span>
           </div>
           <div id="selfCare" class="selfcare-body"></div>
-          <p class="hint care-note">吃饭、喝水、洗澡、上厕所由她按自己的状态和作息处理；聊天指令改不了这些数值。</p>
+          <div class="last-row" id="lastRow"></div>
         </section>
 
         <section class="card events-card">
@@ -179,6 +178,6 @@
     </footer>
 
     <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
-    <script type="module" src="./app.js?v=10"></script>
+    <script type="module" src="./app.js?v=11"></script>
   </body>
 </html>
