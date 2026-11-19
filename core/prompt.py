@@ -848,6 +848,7 @@ def build_web_state(
         "gender_label": gender_label(profile.gender),
         "gender_resolved": profile.gender_resolved,
         "summary": summary,
+        "now_minutes": now.hour * 60 + now.minute,
         "meters": meters,
         "details": details,
         "cycle": cycle,

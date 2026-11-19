@@ -78,14 +78,6 @@
           <div id="maleBody"></div>
         </section>
 
-        <section class="card care-card">
-          <div class="card-head">
-            <h2>她的身体</h2>
-            <span class="hint">只读</span>
-          </div>
-          <p class="hint">吃饭、喝水、洗澡、上厕所都由她按自己的状态和作息处理，页面不再提供“照顾”按钮；聊天里的指令也不再能改这些数值。</p>
-        </section>
-
         <section class="card care-timeline-card">
           <div class="card-head">
             <h2>今天的作息</h2>
@@ -94,13 +86,16 @@
           <div class="care-axis">
             <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
           </div>
-          <div class="care-track" id="careTrack"></div>
-          <div class="care-legend">
-            <span><i class="care-swatch meal"></i>吃饭</span>
-            <span><i class="care-swatch drink"></i>喝水</span>
-            <span><i class="care-swatch toilet"></i>厕所</span>
-            <span><i class="care-swatch hygiene"></i>洗澡/刷牙</span>
+          <div class="care-rows" id="careRows"></div>
+        </section>
+
+        <section class="card selfcare-card">
+          <div class="card-head">
+            <h2>今天的自理</h2>
+            <span class="hint">自己处理</span>
           </div>
+          <div id="selfCare" class="selfcare-body"></div>
+          <p class="hint care-note">吃饭、喝水、洗澡、上厕所由她按自己的状态和作息处理；聊天指令改不了这些数值。</p>
         </section>
 
         <section class="card events-card">
@@ -180,6 +175,6 @@
     </footer>
 
     <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
-    <script type="module" src="./app.js?v=7"></script>
+    <script type="module" src="./app.js?v=8"></script>
   </body>
 </html>

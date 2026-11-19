@@ -161,6 +161,7 @@ def test_status_card_and_web_payload() -> None:
     state.care = [{"t": now.timestamp() - 600, "kind": "drink"}]
     payload = build_web_state(state, now, profile, Settings())
     assert payload["care"][0]["label"] == "喝水"
+    assert payload["now_minutes"] == now.hour * 60 + now.minute
     assert payload["gender"] == "female"
     assert payload["cycle"]["phase"] == "menstrual"
     assert payload["cycle"]["estrogen"] > 0

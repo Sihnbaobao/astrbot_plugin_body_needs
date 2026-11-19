@@ -191,22 +191,91 @@ function renderMeters(meters) {
   });
 }
 
+const CARE_ROWS = [
+  ["meal", "吃饭"],
+  ["drink", "喝水"],
+  ["toilet", "厕所"],
+  ["shower", "洗澡"],
+  ["brush", "刷牙"],
+];
+
 function renderCare(care) {
-  const host = el("careTrack");
+  const host = el("careRows");
   host.replaceChildren();
-  if (!care || !care.length) {
-    host.appendChild(make("p", "empty", "最近 24 小时还没有记录。"));
-    return;
-  }
-  care.forEach(function (item) {
-    const dot = make("span", "care-dot " + (item.kind || ""));
-    const minutes = Number(item.minutes);
-    dot.style.left =
-      Math.max(1.5, Math.min(98.5, ((Number.isFinite(minutes) ? minutes : 0) / 1440) * 100)) + "%";
-    dot.title = (item.at || "") + " " + (item.label || "");
-    dot.appendChild(make("span", "care-dot-mark", (item.label || "?").slice(0, 1)));
-    host.appendChild(dot);
+  const items = Array.isArray(care) ? care : [];
+  const nowMinutes = Number(state.data && state.data.now_minutes);
+  CARE_ROWS.forEach(function (rowDef) {
+    const row = make("div", "care-row");
+    row.appendChild(make("span", "care-row-label", rowDef[1]));
+    const lane = make("div", "care-lane");
+    items
+      .filter(function (item) {
+        return item.kind === rowDef[0];
+      })
+      .forEach(function (item) {
+        const dot = make("span", "care-dot " + item.kind);
+        const minutes = Number(item.minutes);
+        dot.style.left =
+          Math.max(0.5, Math.min(99.5, ((Number.isFinite(minutes) ? minutes : 0) / 1440) * 100)) + "%";
+        dot.title = (item.at || "") + " " + (item.label || rowDef[1]);
+        lane.appendChild(dot);
+      });
+    if (Number.isFinite(nowMinutes)) {
+      const now = make("span", "care-now");
+      now.style.left = Math.max(0, Math.min(100, (nowMinutes / 1440) * 100)) + "%";
+      now.title = "现在";
+      lane.appendChild(now);
+    }
+    row.appendChild(lane);
+    host.appendChild(row);
   });
+  if (!items.length) {
+    host.appendChild(make("p", "empty", "最近 24 小时还没有记录。"));
+  }
+}
+
+function renderSelfCare(care) {
+  const host = el("selfCare");
+  host.replaceChildren();
+  const items = Array.isArray(care) ? care : [];
+  const mealTimes = {};
+  items
+    .filter(function (item) {
+      return item.kind === "meal";
+    })
+    .forEach(function (item) {
+      const minutes = Number(item.minutes) || 0;
+      const slot = minutes < 600 ? "早饭" : minutes < 960 ? "午饭" : "晚饭";
+      if (!mealTimes[slot]) mealTimes[slot] = item.at;
+    });
+  const meals = make("div", "selfcare-meals");
+  ["早饭", "午饭", "晚饭"].forEach(function (name) {
+    const row = make("div", "selfcare-meal");
+    row.appendChild(make("span", "selfcare-label", name));
+    row.appendChild(
+      make("strong", "", mealTimes[name] ? "吃过了 " + mealTimes[name] : "还没吃"),
+    );
+    meals.appendChild(row);
+  });
+  host.appendChild(meals);
+
+  const counts = { drink: 0, toilet: 0, shower: 0, brush: 0 };
+  items.forEach(function (item) {
+    if (counts[item.kind] !== undefined) counts[item.kind] += 1;
+  });
+  const stats = make("div", "selfcare-stats");
+  [
+    ["喝水", counts.drink],
+    ["厕所", counts.toilet],
+    ["洗澡", counts.shower],
+    ["刷牙", counts.brush],
+  ].forEach(function (pair) {
+    const cell = make("div", "selfcare-stat");
+    cell.appendChild(make("b", "", String(pair[1])));
+    cell.appendChild(make("span", "", pair[0]));
+    stats.appendChild(cell);
+  });
+  host.appendChild(stats);
 }
 
 
@@ -408,6 +477,8 @@ function render(data) {
     el("clock").textContent = "—";
     el("meters").replaceChildren(make("p", "empty", "没有可显示的身体指标。"));
     el("innerStats").replaceChildren();
+    el("careRows").replaceChildren();
+    el("selfCare").replaceChildren();
     el("lastRow").textContent = "";
     el("events").replaceChildren(make("li", "empty", "还没有值得记下的事。"));
     el("eventCount").textContent = "";
@@ -419,6 +490,7 @@ function render(data) {
   renderHero(persona, data.now);
   renderMeters(persona.meters);
   renderCare(persona.care);
+  renderSelfCare(persona.care);
   renderDetails(persona.details);
   renderLast(persona.last);
   renderCycle(persona);
