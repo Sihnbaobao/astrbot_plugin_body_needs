@@ -23,7 +23,7 @@ def _state(**overrides) -> BodyState:
         "bowel": 5.0,
         "skin": 10.0,
         "oral": 10.0,
-        "desire": 10.0,
+        "libido": 10.0,
     }
     values.update(overrides)
     return BodyState(**values)

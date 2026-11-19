@@ -9,7 +9,7 @@ constant linear ramps:
 - urine volume drives bladder pressure
 - sleep debt and circadian alertness drive energy
 - skin and oral dirtiness drive cleanliness
-- a simplified estrogen/progesterone curve drives cycle symptoms and desire
+- a simplified estrogen/progesterone curve drives cycle symptoms and libido
 
 All time integration is piecewise: 15-minute steps for the first day, hourly
 steps afterwards. That keeps a 60-day absence cheap while letting digestion and
@@ -220,7 +220,7 @@ class BodyState:
     - bladder is urine volume
     - cleanliness is skin dirtiness
     - energy is derived from sleep debt and circadian alertness
-    - desire is a tension meter that only matters while ENABLE_INTIMATE is on
+    - libido is a tension meter that only matters while ENABLE_INTIMATE is on
     """
 
     persona_id: str
@@ -232,7 +232,7 @@ class BodyState:
     cleanliness: float = 82.0
     oral_health: float = 80.0
     energy: float = 78.0
-    desire: float = 10.0
+    libido: float = 10.0
     stomach: float = 72.0
     glucose: float = 78.0
     urine: float = 18.0
@@ -294,7 +294,7 @@ class BodyState:
             "cleanliness": self.cleanliness,
             "oral_health": self.oral_health,
             "energy": self.energy,
-            "desire": self.desire,
+            "libido": self.libido,
             "oral": self.oral,
             "stomach": self.stomach,
             "glucose": self.glucose,
@@ -360,7 +360,7 @@ class BodyState:
             "cleanliness",
             "oral_health",
             "energy",
-            "desire",
+            "libido",
             "stomach",
             "glucose",
             "urine",
@@ -384,6 +384,9 @@ class BodyState:
         ):
             if key in data:
                 setattr(state, key, _number(data.get(key), getattr(state, key)))
+        if "libido" not in data and "desire" in data:
+            # 0.8.1 and older stored the same meter under the broader name.
+            state.libido = _number(data.get("desire"), 10.0)
 
         if legacy:
             # Old files stored needs: hunger, thirst, fatigue and dirt. Convert
@@ -404,7 +407,7 @@ class BodyState:
             "cleanliness",
             "oral_health",
             "energy",
-            "desire",
+            "libido",
             "stomach",
             "glucose",
             "urine",
@@ -541,7 +544,7 @@ METER_TEXT = {
     "cleanliness": "清洁",
     "oral_health": "口腔",
     "energy": "精力",
-    "desire": "欲望",
+    "libido": "性欲",
 }
 
 
@@ -776,7 +779,7 @@ def _mood_effect(mood: dict[str, Any] | None) -> tuple[float, float, float]:
         mood: Emotion values from the persona plugin, or None.
 
     Returns:
-        An (appetite pressure delta, desire factor, follicular stress) tuple.
+        An (appetite pressure delta, libido factor, follicular stress) tuple.
     """
     if not mood:
         return 0.0, 1.0, 0.0
@@ -792,9 +795,9 @@ def _mood_effect(mood: dict[str, Any] | None) -> tuple[float, float, float]:
     fear = read("fear")
     joy = read("joy")
     appetite = 10.0 * sadness + 5.0 * anger - 4.0 * joy
-    desire = max(0.3, min(1.2, 1.0 - 0.45 * sadness - 0.2 * anger + 0.1 * joy))
+    libido = max(0.3, min(1.2, 1.0 - 0.45 * sadness - 0.2 * anger + 0.1 * joy))
     stress = min(0.2, 0.12 * fear + 0.04 * anger)
-    return appetite, desire, stress
+    return appetite, libido, stress
 
 
 def _cycle_stress(state: BodyState, mood: dict[str, Any] | None = None) -> float:
@@ -1213,13 +1216,13 @@ def _advance_cycle_events(
     state.cycle_start = view.cycle_start.isoformat()
 
 
-def _desire_rate(
+def _libido_rate(
     state: BodyState,
     view: CycleView | None,
     profile: Profile,
     mood: dict[str, Any] | None = None,
 ) -> float:
-    """Return the daily desire increase for the current profile."""
+    """Return the daily libido increase for the current profile."""
     if profile.gender == "male":
         age = profile.physio_age or 30
         if age < 20:
@@ -1391,7 +1394,7 @@ def _maybe_release(
     const: Constitution,
     idle: bool,
 ) -> None:
-    """Roll at most one self-release per day once desire has built up.
+    """Roll at most one self-release per day once libido has built up.
 
     Release does not depend on gender or age: both bodies have the drive, and
     each persona keeps a stable habit multiplier. The event only reaches a
@@ -1407,7 +1410,7 @@ def _maybe_release(
     """
     if not (profile.adult and settings.enable_intimate and idle):
         return
-    if state.desire < 55.0 or not 8 <= now.hour <= 23:
+    if state.libido < 55.0 or not 8 <= now.hour <= 23:
         return
     key = f"self-release:{now.date().isoformat()}"
     if state.flags.get(key):
@@ -1417,11 +1420,11 @@ def _maybe_release(
     )
     chance = min(
         0.85,
-        max(0.0, since - 0.3) * 0.5 * const.self_rate * (state.desire / 60.0),
+        max(0.0, since - 0.3) * 0.5 * const.self_rate * (state.libido / 60.0),
     )
     if _roll(profile.persona_id, key, "roll") >= chance:
         return
-    state.desire = _clamp(state.desire - 55.0)
+    state.libido = _clamp(state.libido - 55.0)
     state.last_self_at = now.timestamp()
     if profile.gender == "male":
         state.refractory_until = (
@@ -1594,7 +1597,7 @@ def _advance_male_events(
                     )
                     _add_event(state, at, "wet_dream", "昨晚梦遗了", key=key)
                     state.last_release_at = at.timestamp()
-                    state.desire = _clamp(state.desire - 50)
+                    state.libido = _clamp(state.libido - 50)
                     state.refractory_until = (
                         at.timestamp()
                         + (
@@ -1628,7 +1631,7 @@ def _advance_male_events(
         key = f"arousal:{now.date().isoformat()}"
         if (
             not state.flags.get(key)
-            and state.desire >= 70
+            and state.libido >= 70
             and _roll(profile.persona_id, now.date().isoformat(), "arousal") < 0.12
         ):
             _add_event(
@@ -1638,7 +1641,7 @@ def _advance_male_events(
                 "白天身体有点反应，过一会儿自己消了",
                 key=key,
             )
-            state.desire = _clamp(state.desire - 8)
+            state.libido = _clamp(state.libido - 8)
 
 
 def _recompute_primary(
@@ -1675,7 +1678,7 @@ def _recompute_primary(
         state.cleanliness = 100.0
         state.oral_health = 100.0
     if not (profile.adult and settings.enable_intimate):
-        state.desire = 0.0
+        state.libido = 0.0
 
 
 def advance(
@@ -1824,16 +1827,16 @@ def advance(
             and settings.enable_intimate
             and profile.gender in ("female", "male")
         ):
-            rate = _desire_rate(state, view, profile, mood)
+            rate = _libido_rate(state, view, profile, mood)
             comfort = 1.0
             comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
             comfort -= min(0.3, max(0.0, 30.0 - state.satiety) / 30.0 * 0.3)
             rate *= max(0.3, comfort)
             if profile.gender == "male" and state.refractory_until > cursor.timestamp():
                 rate *= 0.25
-            state.desire = _clamp(state.desire + rate * step_hours / 24.0)
+            state.libido = _clamp(state.libido + rate * step_hours / 24.0)
         else:
-            state.desire = 0.0
+            state.libido = 0.0
 
         if in_period_now:
             flow_now = 3 if cycle_day <= 2 else (2 if cycle_day <= 4 else 1)
@@ -1909,7 +1912,7 @@ def _meter_snapshot(state: BodyState) -> dict[str, float]:
         "cleanliness": state.cleanliness,
         "oral_health": state.oral_health,
         "energy": state.energy,
-        "desire": state.desire,
+        "libido": state.libido,
     }
 
 
@@ -2009,7 +2012,7 @@ def apply_action(
                     "怀孕了",
                     key=f"conceived:{int(now_ts)}",
                 )
-        state.desire = 0.0
+        state.libido = 0.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.4, 0.0, 24.0)
         state.skin = _clamp(state.skin + 4.0)
         state.last_release_at = now_ts
@@ -2020,7 +2023,7 @@ def apply_action(
                 * 3600
             )
     elif action == "release":
-        state.desire = 0.0
+        state.libido = 0.0
         state.last_self_at = now_ts
         if profile.gender == "male":
             state.refractory_until = (
@@ -2062,7 +2065,7 @@ def apply_action(
         "cleanliness",
         "oral_health",
         "energy",
-        "desire",
+        "libido",
     ):
         if round(before[key]) != round(after[key]):
             changes.append(

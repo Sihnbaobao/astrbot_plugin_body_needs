@@ -44,7 +44,7 @@ def make_state(now: datetime) -> BodyState:
         cleanliness=70,
         oral_health=28,
         energy=42,
-        desire=60,
+        libido=60,
         stomach=38,
         glucose=55,
         urine=38,
@@ -110,14 +110,14 @@ def test_private_block_contains_cycle_and_adult_lines() -> None:
     )
     assert "【身体状态｜14:32】" in block
     assert "经期：第 2 天" in block
-    assert "欲望" in block
+    assert "性欲" in block
     assert "body_action" in block
 
 
 def test_profile_without_adult_flag_has_no_adult_state() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
-    state.desire = 0
+    state.libido = 0
     block = build_prompt_block(
         state,
         now,
@@ -126,7 +126,7 @@ def test_profile_without_adult_flag_has_no_adult_state() -> None:
         private=True,
     )
     assert "经期：第 2 天" in block
-    assert "欲望" not in block
+    assert "性欲" not in block
     assert "梦遗" not in block
 
 
@@ -137,7 +137,7 @@ def test_group_basic_hides_cycle() -> None:
     )
     assert "周期" not in block
     assert "经期：" not in block
-    assert "欲望" not in block
+    assert "性欲" not in block
     assert "胃：" in block
 
 
@@ -148,7 +148,7 @@ def test_group_full_shows_cycle_but_not_adult() -> None:
         make_state(now), now, make_profile(), settings, private=False
     )
     assert "经期：第 2 天" in block
-    assert "欲望" not in block
+    assert "性欲" not in block
 
 
 def test_status_card_and_web_payload() -> None:
@@ -169,7 +169,7 @@ def test_status_card_and_web_payload() -> None:
     assert meters["hydration"]["value"] == pytest.approx(state.hydration, abs=0.1)
     # Pressure meters keep "full is strong".
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
-    assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
+    assert meters["libido"]["value"] == pytest.approx(state.libido, abs=0.1)
     assert "饱食度" in text
 
 
@@ -185,7 +185,7 @@ def test_status_card_hides_male_events_when_intimate_off() -> None:
         private=True,
     )
     assert "梦遗" not in text
-    assert "欲望" not in text
+    assert "性欲" not in text
 
 
 def test_status_card_has_no_age_line() -> None:
@@ -227,7 +227,7 @@ def test_display_meters_is_the_only_conversion_point() -> None:
         assert meters[key]["value"] == pytest.approx(getattr(state, key), abs=0.1)
     # Pressure meters keep the internal value.
     assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
-    assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
+    assert meters["libido"]["value"] == pytest.approx(state.libido, abs=0.1)
 
 
 def test_web_state_omits_hygiene_when_disabled() -> None:

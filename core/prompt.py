@@ -22,7 +22,7 @@ METER_NAMES = {
     "cleanliness": "清洁",
     "oral_health": "口腔",
     "energy": "精力",
-    "desire": "欲望",
+    "libido": "性欲",
 }
 PHASE_LABELS = {
     "menstrual": "经期",
@@ -138,8 +138,8 @@ def energy_label(value: float) -> str:
     return "快撑不住了"
 
 
-def desire_label(value: float) -> str:
-    """Return a restrained adult desire description."""
+def libido_label(value: float) -> str:
+    """Return a restrained adult libido description."""
     if value < 15:
         return "平静"
     if value < 35:
@@ -160,7 +160,7 @@ def meter_label(key: str, value: float) -> str:
         "cleanliness": clean_label,
         "oral_health": oral_label,
         "energy": energy_label,
-        "desire": desire_label,
+        "libido": libido_label,
     }
     return labels.get(key, lambda _value: "正常")(value)
 
@@ -175,7 +175,7 @@ def display_meters(
     The stored meters are reserves now: satiety, hydration, energy and
     cleanliness all read 100 as the good end. This function only formats them
     and applies the tone rules; it no longer inverts anything. Bladder
-    pressure and desire stay pressures on purpose, because their labels
+    pressure and libido stay pressures on purpose, because their labels
     describe the pressure itself rather than a reserve.
 
     Args:
@@ -217,7 +217,7 @@ def display_meters(
     )
     if profile.adult and settings.enable_intimate:
         rows.append(
-            ("desire", "欲望", "欲望", float(state.desire), desire_label, False)
+            ("libido", "性欲", "性欲", float(state.libido), libido_label, False)
         )
 
     meters: list[dict[str, Any]] = []
@@ -486,7 +486,7 @@ def build_prompt_block(
         "cleanliness": state.cleanliness,
         "oral_health": state.oral_health,
         "energy": state.energy,
-        "desire": state.desire,
+        "libido": state.libido,
     }
 
     if settings.intensity == "subtle":
@@ -542,9 +542,9 @@ def build_prompt_block(
         male = _male_text(state, now, profile)
         if male:
             lines.append(male)
-        if state.desire >= 35:
+        if state.libido >= 35:
             lines.append(
-                f"欲望：{desire_label(state.desire)}（私密，只在合适的时候自然流露）"
+                f"性欲：{libido_label(state.libido)}（私密，只在合适的时候自然流露）"
             )
 
     if show_private:
@@ -624,9 +624,9 @@ def build_status_text(
             )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
-        if settings.enable_intimate and profile.adult and state.desire >= 20:
+        if settings.enable_intimate and profile.adult and state.libido >= 20:
             lines.append(
-                f"欲望：{desire_label(state.desire)}（{round(state.desire)}/100）"
+                f"性欲：{libido_label(state.libido)}（{round(state.libido)}/100）"
             )
         if view is not None and settings.enable_cycle:
             lines.append(_cycle_text(view))

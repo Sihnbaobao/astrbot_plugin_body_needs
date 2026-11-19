@@ -47,6 +47,7 @@ def test_store_round_trip(tmp_path) -> None:
     assert loaded.satiety == 73.5
     saved = json.loads(store.path_for("璃月/测试").read_text(encoding="utf-8"))
     assert "hunger" not in saved
+    assert "desire" not in saved
     assert saved["satiety"] == 73.5
     assert store.path_for("璃月/测试").exists()
 
@@ -81,6 +82,7 @@ def test_store_migrates_old_single_meter_state(tmp_path) -> None:
     assert loaded.energy == pytest.approx(80)
     assert loaded.cleanliness == pytest.approx(60)
     assert loaded.oral_health == pytest.approx(70)
+    assert loaded.libido == pytest.approx(0)
 
 
 def test_store_repairs_corrupt_file(tmp_path) -> None:

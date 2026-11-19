@@ -5,7 +5,7 @@ first sentence, so a small heuristic is enough; the plugin config can always
 override the result.
 
 Age is informational only. It never gates a feature: it feeds the age curves of
-the male physiology (desire rate and nocturnal-emission odds).
+the male physiology (libido rate and nocturnal-emission odds).
 """
 
 from __future__ import annotations

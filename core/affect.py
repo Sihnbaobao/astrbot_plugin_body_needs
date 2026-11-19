@@ -43,7 +43,7 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
     sleep = _clamp(state.sleep_debt / 24.0)
     bowel = _clamp(state.bowel / 100.0)
     dirt = _clamp(max(state.skin, state.oral) / 100.0)
-    desire = _clamp(state.desire / 100.0)
+    libido = _clamp(state.libido / 100.0)
     pain = 0.0
     cycle_mood = 0.0
     if view is not None:
@@ -78,7 +78,7 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
             0.55 * (0.45 - distress) + 0.25 * cycle_mood + 0.20 * (energy - 0.5),
         ),
     )
-    arousal = _clamp(0.25 + 0.35 * tension + 0.20 * (1.0 - energy) + 0.20 * desire)
+    arousal = _clamp(0.25 + 0.35 * tension + 0.20 * (1.0 - energy) + 0.20 * libido)
 
     labels: list[str] = []
     if hunger >= 0.65:
@@ -93,7 +93,7 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
         labels.append("憋")
     if dirt >= 0.6:
         labels.append("脏")
-    if desire >= 0.65:
+    if libido >= 0.65:
         labels.append("想要")
 
     if labels:
@@ -116,7 +116,7 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
         "pain": round(pain, 3),
         "energy": round(energy, 3),
         "dirt": round(dirt, 3),
-        "desire": round(desire, 3),
+        "libido": round(libido, 3),
         "labels": labels,
         "line": line,
     }

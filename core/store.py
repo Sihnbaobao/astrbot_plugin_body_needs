@@ -56,7 +56,7 @@ def new_state(persona_id: str, now: datetime) -> BodyState:
         cleanliness=cleanliness,
         oral_health=oral_health,
         energy=energy,
-        desire=rng.uniform(5, 20),
+        libido=rng.uniform(5, 20),
         stomach=max(10.0, satiety * 0.95),
         glucose=max(10.0, satiety * 0.9),
         urine=bladder,

@@ -14,7 +14,7 @@ from core.model import (
     _cycle_length_for,
     _fetal_count,
     _miscarriage_chance,
-    _desire_rate,
+    _libido_rate,
     _emission_age_factor,
     _menarche_age,
     _menopause_age,
@@ -59,7 +59,7 @@ def make_state(now: datetime) -> BodyState:
         cleanliness=80,
         oral_health=80,
         energy=60,
-        desire=20,
+        libido=20,
         stomach=70,
         glucose=80,
         urine=20,
@@ -216,15 +216,15 @@ def test_intimacy_is_adult_only_and_sets_refractory() -> None:
 
     male = make_profile(gender="male")
     apply_action(state, "intimacy", now, male, settings)
-    assert state.desire == 0
+    assert state.libido == 0
     assert state.refractory_until > now.timestamp()
 
 
-def test_male_desire_rate_falls_with_age() -> None:
+def test_male_libido_rate_falls_with_age() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)
     rates = [
-        _desire_rate(state, None, make_profile(gender="male", age=age))
+        _libido_rate(state, None, make_profile(gender="male", age=age))
         for age in (16, 25, 35, 50)
     ]
     assert rates == [2.0, 1.8, 1.4, 1.0]
@@ -567,7 +567,7 @@ def test_autonomy_runs_even_during_a_chat() -> None:
     assert any(event["kind"] == "self_care" for event in state.events)
 
 
-def test_self_release_lowers_desire() -> None:
+def test_self_release_lowers_libido() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     settings = Settings()
     hits = 0
@@ -576,12 +576,12 @@ def test_self_release_lowers_desire() -> None:
         state = make_state(now - timedelta(hours=1))
         state.persona_id = profile.persona_id
         state.last_active_at = now.timestamp() - 10 * 3600
-        state.desire = 95.0
+        state.libido = 95.0
         state.last_self_at = now.timestamp() - 6 * 86400
         advance(state, now, profile, settings)
         if any(event["kind"] == "self_release" for event in state.events):
             hits += 1
-            assert state.desire < 95.0
+            assert state.libido < 95.0
             assert state.last_self_at == now.timestamp()
     assert hits > 0
 
@@ -591,7 +591,7 @@ def test_self_release_needs_intimate_enabled() -> None:
     settings = Settings(enable_intimate=False)
     state = make_state(now - timedelta(hours=1))
     state.last_active_at = now.timestamp() - 10 * 3600
-    state.desire = 95.0
+    state.libido = 95.0
     advance(state, now, make_profile(), settings)
     assert not any(event["kind"] == "self_release" for event in state.events)
 
