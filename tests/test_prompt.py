@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from core.config import Settings
 from core.model import BodyState
 from core.profile import Profile
@@ -162,8 +164,14 @@ def test_status_card_and_web_payload() -> None:
     assert payload["cycle"]["phase"] == "menstrual"
     assert payload["cycle"]["estrogen"] > 0
     assert any(detail["key"] == "stomach" for detail in payload["details"])
-    assert any(meter["key"] == "hunger" for meter in payload["meters"])
-    assert any(meter["key"] == "desire" for meter in payload["meters"])
+    meters = {meter["key"]: meter for meter in payload["meters"]}
+    # Fullness and hydration point the other way from the internal need value.
+    assert meters["satiety"]["value"] == pytest.approx(100 - state.hunger, abs=0.1)
+    assert meters["hydration"]["value"] == pytest.approx(100 - state.thirst, abs=0.1)
+    # Pressure meters keep "full is strong".
+    assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
+    assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
+    assert "饱食度" in text
 
 
 def test_status_card_hides_male_events_when_intimate_off() -> None:
