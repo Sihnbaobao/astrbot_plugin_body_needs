@@ -558,8 +558,8 @@ def test_idle_persona_looks_after_herself() -> None:
 
 
 def test_routine_catches_the_hour_when_advance_starts_late() -> None:
-    now = datetime(2026, 11, 18, 8, 20, tzinfo=TZ)
-    state = make_state(now - timedelta(hours=1))
+    now = datetime(2026, 11, 18, 9, 20, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=2))
     state.stomach = 40.0
     state.glucose = 40.0
     state.skin = 20.0

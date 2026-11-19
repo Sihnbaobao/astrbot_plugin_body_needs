@@ -38,8 +38,8 @@ GLUCOSE_USE_SLEEP = 0.55
 GLUCOSE_RELEASE = 0.35
 HYDRATION_USE_AWAKE = 1.1
 HYDRATION_USE_SLEEP = 0.55
-URINE_BASE_AWAKE = 2.0
-URINE_BASE_SLEEP = 1.0
+URINE_BASE_AWAKE = 4.0
+URINE_BASE_SLEEP = 2.0
 SKIN_AWAKE = 1.1
 SKIN_SLEEP = 0.55
 SKIN_PERIOD_EXTRA = 0.8
@@ -1373,33 +1373,62 @@ def _routine(
     state.flags["routine_hour"] = float(bucket)
 
     hour = moment.hour
+    day = moment.date().isoformat()
     since_meal = moment.timestamp() - state.last_eat_at
-    if hour in (8, 13, 19) and state.stomach <= 90.0 and since_meal > 3600:
-        portion = {8: 30.0, 13: 32.0, 19: 32.0}[hour]
+
+    # Meals live in a three-hour window, but the preferred hour is drawn once
+    # per persona and day, so breakfast is not always exactly 08:00.
+    for start, end, slot, portion in (
+        (7, 10, "breakfast", 30.0),
+        (12, 15, "lunch", 32.0),
+        (18, 21, "dinner", 32.0),
+    ):
+        if not start <= hour < end:
+            continue
+        key = f"self-meal:{day}:{slot}"
+        if state.flags.get(key):
+            break
+        preferred = start + int(_roll(profile.persona_id, day, slot) * (end - start))
+        if hour < preferred or state.stomach > 90.0 or since_meal <= 3600:
+            break
         state.stomach = _clamp(state.stomach + portion / const.stomach_capacity)
         state.glucose = _clamp(state.glucose + 16.0)
         state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
+        state.hydration = _clamp(state.hydration + 2.0)
         state.last_eat_at = moment.timestamp()
         state.last_meal_kind = "meal"
         _add_care(state, moment, "meal")
-        meal_name = {8: "早饭", 13: "午饭", 19: "晚饭"}[hour]
+        meal_name = {"breakfast": "早饭", "lunch": "午饭", "dinner": "晚饭"}[slot]
         _add_event(
             state,
             moment,
             "self_care",
             f"自己吃了{meal_name}",
-            key=f"self-meal:{moment.date().isoformat()}:{hour}",
+            key=key,
         )
-    if hour in (8, 11, 14, 17, 20, 23) and state.hydration <= 70.0:
-        state.hydration = _clamp(state.hydration + 12.0)
+        break
+
+    if (
+        7 <= hour <= 23
+        and state.hydration <= 72.0
+        and moment.timestamp() - state.last_drink_at > 3600
+    ):
+        state.hydration = _clamp(state.hydration + 10.0)
         state.last_drink_at = moment.timestamp()
         _add_care(state, moment, "drink")
-    if hour in (7, 11, 15, 19, 22) and (hour == 7 or state.bladder >= 8.0):
+
+    if 7 <= hour <= 23 and (state.urine >= 30.0 or (hour == 7 and state.urine >= 10.0)):
         state.urine = 2.0
         state.last_toilet_at = moment.timestamp()
         _add_care(state, moment, "toilet")
+
     if settings.enable_hygiene:
-        if hour in (7, 21) and state.skin >= 60.0:
+        shower_pref = 7 + int(_roll(profile.persona_id, day, "shower-am") * 3)
+        evening_pref = 20 + int(_roll(profile.persona_id, day, "shower-pm") * 3)
+        if state.skin >= 60.0 and (
+            (7 <= hour < 10 and hour >= shower_pref)
+            or (20 <= hour < 23 and hour >= evening_pref)
+        ):
             state.skin = 2.0
             state.last_shower_at = moment.timestamp()
             _add_care(state, moment, "shower")
@@ -1408,9 +1437,14 @@ def _routine(
                 moment,
                 "self_care",
                 "洗了个澡",
-                key=f"self-shower:{moment.date().isoformat()}",
+                key=f"self-shower:{day}",
             )
-        if hour in (8, 22) and state.oral >= 55.0:
+        brush_pref = 7 + int(_roll(profile.persona_id, day, "brush-am") * 3)
+        evening_brush = 21 + int(_roll(profile.persona_id, day, "brush-pm") * 3)
+        if state.oral >= 55.0 and (
+            (7 <= hour < 10 and hour >= brush_pref)
+            or (21 <= hour < 24 and hour >= evening_brush)
+        ):
             state.oral = 2.0
             state.last_brush_at = moment.timestamp()
             _add_care(state, moment, "brush")
