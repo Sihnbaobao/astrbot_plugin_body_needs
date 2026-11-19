@@ -89,6 +89,10 @@ GUT_URGE_START = 25.0
 GUT_URGE_GAIN = 1.5
 # A persona only looks after herself once nobody has interacted for a while.
 SELF_CARE_IDLE_HOURS = 6.0
+# A long absence still has to leave the cycle in the right place, so the
+# simulation window is a year; beyond 60 days it takes coarser steps.
+MAX_SIM_DAYS = 365
+LONG_GAP_DAYS = 60
 
 # Circadian anchor points. Hour is local wall clock; value is 0-100 alertness.
 _ALERT_POINTS = (
@@ -1677,15 +1681,17 @@ def advance(
 
     start = datetime.fromtimestamp(state.updated_at, now.tzinfo)
     elapsed = now_ts - state.updated_at
-    if elapsed > 60 * 86400:
-        # A year away should not run a year of hourly steps. Cap the simulation
-        # window; all meters clamp anyway.
-        start = now - timedelta(days=60)
-        elapsed = 60 * 86400
+    if elapsed > MAX_SIM_DAYS * 86400:
+        # Beyond a year only the last year matters; the meters clamp anyway.
+        start = now - timedelta(days=MAX_SIM_DAYS)
+        elapsed = MAX_SIM_DAYS * 86400
     window = (
         parse_sleep_window(settings.sleep_window) if settings.enable_sleep else None
     )
-    view = cycle_view(state, now, profile, settings, mood)
+    # Seed and seed-phase against the moment the replay starts, not against
+    # now: a persona who was away for months must live through those cycles
+    # instead of having the current cycle back-dated over the whole gap.
+    view = cycle_view(state, start, profile, settings, mood)
     in_period = bool(view and view.phase == "menstrual")
     pubertal = _is_pubertal(profile.physio_age)
     const = constitution(profile.persona_id)
@@ -1699,8 +1705,12 @@ def advance(
     while remaining > 1e-6:
         if elapsed <= 86400:
             step_seconds = min(900.0, remaining)
-        else:
+        elif elapsed <= LONG_GAP_DAYS * 86400:
             step_seconds = min(3600.0, remaining)
+        else:
+            # A month away is replayed at two-hour resolution: enough for the
+            # cycle and the meters, without a year of hourly steps.
+            step_seconds = min(7200.0, remaining)
         step_hours = step_seconds / 3600.0
         chunk_end = cursor + timedelta(seconds=step_seconds)
         sleep_seconds = 0.0

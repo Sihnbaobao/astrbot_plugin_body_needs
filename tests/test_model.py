@@ -681,6 +681,39 @@ def test_fetal_count_is_rare_but_possible() -> None:
     assert counts.count(1) > counts.count(2) > 0
 
 
+def _away_state(now, days: int) -> BodyState:
+    """Build a state whose owner has been away for the given number of days."""
+    stamp = (now - timedelta(days=days)).timestamp()
+    state = BodyState(persona_id="test", updated_at=stamp)
+    state.cycle_anchor = (now - timedelta(days=days)).date().isoformat()
+    state.cycle_start = state.cycle_anchor
+    state.last_active_at = stamp
+    return state
+
+
+def test_long_absence_keeps_the_cycle_phase() -> None:
+    now = datetime(2026, 11, 19, 12, 0, tzinfo=TZ)
+    profile = make_profile(age=28)
+    settings = Settings(sleep_window="00:00-08:00")
+    state = _away_state(now, 90)
+    advance(state, now, profile, settings)
+    view = cycle_view(state, now, profile, settings)
+    # 90 days is three cycles plus six days: around day seven, not a luteal day.
+    assert 5 <= view.day <= 10
+    assert view.phase in ("menstrual", "follicular")
+
+
+def test_year_absence_settles_the_cycle() -> None:
+    now = datetime(2026, 11, 19, 12, 0, tzinfo=TZ)
+    profile = make_profile(age=28)
+    settings = Settings(sleep_window="00:00-08:00")
+    state = _away_state(now, 365)
+    advance(state, now, profile, settings)
+    assert 1 <= state.cycle_day <= 28
+    assert 0.0 <= state.estrogen <= 100.0
+    assert state.ovulation_day == 0 or state.ovulation_day <= state.cycle_day
+
+
 def test_sad_mood_suppresses_appetite() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     settings = Settings()
