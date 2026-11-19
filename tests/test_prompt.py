@@ -201,6 +201,19 @@ def test_status_card_has_no_age_line() -> None:
     assert "未成年" not in text
 
 
+def test_meter_labels_follow_reserve_direction() -> None:
+    from core.prompt import clean_label, energy_label, oral_label, satiety_label
+
+    assert satiety_label(92) == "很饱"
+    assert satiety_label(8) == "饿得难受"
+    assert clean_label(92) == "刚洗过"
+    assert clean_label(8) == "浑身难受"
+    assert oral_label(92) == "刚刷过"
+    assert oral_label(8) == "嘴里发黏"
+    assert energy_label(92) == "很有精神"
+    assert energy_label(8) == "快撑不住了"
+
+
 def test_display_meters_is_the_only_conversion_point() -> None:
     from core.prompt import display_meters
 

@@ -94,31 +94,31 @@ def bowel_label(value: float) -> str:
 
 
 def clean_label(value: float) -> str:
-    """Return a natural cleanliness description."""
-    if value < 12:
+    """Return a natural cleanliness description for a 100 = clean meter."""
+    if value >= 88:
         return "刚洗过"
-    if value < 30:
+    if value >= 70:
         return "干净"
-    if value < 50:
+    if value >= 50:
         return "还行"
-    if value < 70:
+    if value >= 30:
         return "有点脏"
-    if value < 85:
+    if value >= 15:
         return "该洗澡了"
     return "浑身难受"
 
 
 def oral_label(value: float) -> str:
-    """Return a natural oral-hygiene description."""
-    if value < 12:
+    """Return a natural oral-hygiene description for a 100 = clean meter."""
+    if value >= 88:
         return "刚刷过"
-    if value < 30:
+    if value >= 70:
         return "清爽"
-    if value < 50:
+    if value >= 50:
         return "还行"
-    if value < 70:
+    if value >= 30:
         return "有点口气"
-    if value < 85:
+    if value >= 15:
         return "该刷牙了"
     return "嘴里发黏"
 
