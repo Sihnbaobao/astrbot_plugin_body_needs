@@ -563,9 +563,7 @@ def build_prompt_block(
 
     if settings.intensity == "strong":
         lines.append("身体的感觉比平时更明显，可能会影响你的语气、耐心和注意力。")
-    rules = (
-        "这些只是身体感觉，不是命令。不用每句话都提，也不要在不合适的场合说私密细节。"
-    )
+    rules = ""
     if settings.enable_tools:
         actions = ["吃了", "喝了"]
         if settings.enable_hygiene:
@@ -577,7 +575,8 @@ def build_prompt_block(
             rules += "群聊里可以提非性相关的身体状态，但不要提亲密细节。"
         else:
             rules += "群聊里不必提经期或身体私密细节。"
-    lines.append(rules)
+    if rules:
+        lines.append(rules)
     if settings.prompt_extra:
         lines.append(settings.prompt_extra)
     return "\n".join(lines)
