@@ -86,6 +86,9 @@ class Profile:
             by the human-equivalent age, not the raw one.
         pcos: Whether the persona is written with polycystic ovary syndrome,
             which makes ovulation rare and cycles long.
+        libido_habit: Explicit release tendency for this persona, usually
+            judged from the persona prompt; None keeps the stable random
+            baseline from the constitution.
     """
 
     persona_id: str
@@ -98,6 +101,7 @@ class Profile:
     race: str = "人类"
     lifespan: int = HUMAN_LIFESPAN
     pcos: bool = False
+    libido_habit: float | None = None
 
     @property
     def physio_age(self) -> float | None:

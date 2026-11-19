@@ -589,6 +589,14 @@ def test_self_release_lowers_libido() -> None:
     assert state.last_self_at == now.timestamp()
 
 
+def test_persona_habit_scales_libido_rate() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now)
+    low = Profile("test", "test", "female", 25, True, 28, 5, libido_habit=0.3)
+    high = Profile("test", "test", "female", 25, True, 28, 5, libido_habit=4.8)
+    assert _libido_rate(state, None, high) > _libido_rate(state, None, low)
+
+
 def test_release_frequency_is_stable_and_plausible() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     settings = Settings()

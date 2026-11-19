@@ -22,7 +22,7 @@ import hashlib
 import math
 import random
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -1245,7 +1245,10 @@ def _libido_rate(
                 rate += 20.0
             elif view.phase == "luteal":
                 rate += 8.0
-    return rate * _mood_effect(mood)[1]
+    scale = 1.0
+    if profile.libido_habit is not None:
+        scale = max(0.25, min(4.0, profile.libido_habit / 1.2))
+    return rate * _mood_effect(mood)[1] * scale
 
 
 def _emission_age_factor(age: float) -> float:
@@ -1730,6 +1733,8 @@ def advance(
     in_period = bool(view and view.phase == "menstrual")
     pubertal = _is_pubertal(profile.physio_age)
     const = constitution(profile.persona_id)
+    if profile.libido_habit is not None:
+        const = replace(const, self_rate=profile.libido_habit)
 
     cursor = start
     remaining = float(elapsed)

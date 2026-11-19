@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from astrbot.api.provider import ProviderRequest
@@ -191,6 +193,42 @@ async def test_page_tracks_one_persona(monkeypatch, tmp_path) -> None:
     ok, message, values = plugin._apply_config_updates({"PERSONA_ID": "test"})
     assert ok, message
     assert values["PERSONA_ID"] == "test"
+    await plugin.terminate()
+
+
+def test_parse_libido_score() -> None:
+    parse = plugin_module._parse_libido_score
+    assert parse('{"libido": 73}') == 73
+    assert parse("性欲：82") == 82
+    assert parse("完全无法判断") is None
+    assert parse('{"libido": 140}') == 100
+
+
+@pytest.mark.asyncio
+async def test_libido_score_is_cached(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "一个主动又温柔的人。")
+
+    class FakeResponse:
+        completion_text = '{"libido": 90}'
+
+    class FakeProvider:
+        async def text_chat(self, **_kwargs):
+            return FakeResponse()
+
+    async def fake_provider():
+        return FakeProvider()
+
+    monkeypatch.setattr(
+        plugin.context, "get_using_provider_async", fake_provider, raising=False
+    )
+    prompt = "一个主动又温柔的人。"
+    digest = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12]
+    await plugin._score_libido("test", prompt, digest)
+    assert plugin._libido_scores["test"]["score"] == 90
+    assert (plugin.data_dir / "libido_scores.json").exists()
+    profile = plugin._profile_for("test", "test", prompt)
+    assert profile.libido_habit is not None
+    assert 0.3 <= profile.libido_habit <= 4.8
     await plugin.terminate()
 
 
