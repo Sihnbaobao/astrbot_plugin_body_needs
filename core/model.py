@@ -487,6 +487,25 @@ class BodyState:
                 for item in care
                 if isinstance(item, dict) and item.get("kind")
             ][-120:]
+        # Seed any action the timeline is missing, so old files and files from
+        # before a new care kind was added still show their last occurrence.
+        for kind, field in (
+            ("meal", "last_eat_at"),
+            ("drink", "last_drink_at"),
+            ("toilet", "last_toilet_at"),
+            ("shower", "last_shower_at"),
+            ("brush", "last_brush_at"),
+        ):
+            stamp = getattr(state, field)
+            if not stamp:
+                continue
+            if any(
+                item["kind"] == kind and abs(item["t"] - stamp) < 120
+                for item in state.care
+            ):
+                continue
+            state.care.append({"t": stamp, "kind": kind})
+        state.care.sort(key=lambda item: item["t"])
         flags = data.get("flags")
         if isinstance(flags, dict):
             state.flags = {
