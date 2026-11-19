@@ -1322,6 +1322,11 @@ def _routine(
         settings: Plugin settings; hygiene can be switched off.
         const: Per-persona baseline, used for the meal size.
     """
+    bucket = int(moment.timestamp() // 3600)
+    if state.flags.get("routine_hour") == bucket:
+        return
+    state.flags["routine_hour"] = float(bucket)
+
     hour = moment.hour
     since_meal = moment.timestamp() - state.last_eat_at
     if hour in (8, 13, 19) and state.stomach <= 55.0 and since_meal > 2 * 3600:
@@ -1769,8 +1774,14 @@ def advance(
         midpoint = cursor + timedelta(seconds=step_seconds / 2.0)
         alert = circadian_alertness(midpoint)
         _step_cycle(state, chunk_end, profile, settings, step_hours, mood)
-        if chunk_end.hour != cursor.hour:
-            _routine(state, chunk_end, profile, settings, const)
+        # Run the daily rhythm once per clock hour, including the hour the
+        # step starts in. Checking only hour changes skipped meals whenever an
+        # advance happened to start after the scheduled hour.
+        _routine(state, cursor, profile, settings, const)
+        mark = cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        while mark <= chunk_end:
+            _routine(state, mark, profile, settings, const)
+            mark += timedelta(hours=1)
         cycle_day = state.cycle_day
         in_period_now = (
             profile.gender == "female"
