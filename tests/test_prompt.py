@@ -19,7 +19,7 @@ def make_profile(
     *,
     gender: str = "female",
     age: int | None = 25,
-    adult: bool = True,
+    gender_resolved: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
     return Profile(
@@ -27,7 +27,7 @@ def make_profile(
         name="test",
         gender=gender,
         age=age,
-        adult=adult,
+        gender_resolved=gender_resolved,
         cycle_length=28,
         period_length=5,
     )
@@ -121,7 +121,7 @@ def test_profile_without_adult_flag_has_no_adult_state() -> None:
     block = build_prompt_block(
         state,
         now,
-        make_profile(adult=False),
+        make_profile(gender_resolved=False),
         Settings(),
         private=True,
     )

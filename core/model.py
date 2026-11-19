@@ -1419,7 +1419,7 @@ def _maybe_release(
         step_hours: Length of the current step in hours.
         sleep_fraction: Share of the step spent asleep.
     """
-    if not (profile.adult and settings.enable_intimate):
+    if not (profile.gender_resolved and settings.enable_intimate):
         return
     if profile.gender not in ("female", "male"):
         return
@@ -1588,7 +1588,11 @@ def _advance_male_events(
     settings: Settings,
 ) -> None:
     """Roll nocturnal emissions, morning erections and daytime arousal."""
-    if not (profile.adult and settings.enable_intimate and profile.gender == "male"):
+    if not (
+        profile.gender_resolved
+        and settings.enable_intimate
+        and profile.gender == "male"
+    ):
         return
     if state.last_release_at <= 0:
         state.last_release_at = start_ts - 3 * 86400
@@ -1698,7 +1702,7 @@ def _recompute_primary(
         state.oral = 0.0
         state.cleanliness = 100.0
         state.oral_health = 100.0
-    if not (profile.adult and settings.enable_intimate):
+    if not (profile.gender_resolved and settings.enable_intimate):
         state.libido = 0.0
 
 
@@ -1842,7 +1846,7 @@ def advance(
         )
 
         if (
-            profile.adult
+            profile.gender_resolved
             and settings.enable_intimate
             and profile.gender in ("female", "male")
         ):
@@ -1953,9 +1957,9 @@ def apply_action(
     if action in ("shower", "brush") and not settings.enable_hygiene:
         raise ValueError("hygiene module is disabled")
     if action in ("intimacy", "release") and not (
-        profile.adult and settings.enable_intimate
+        profile.gender_resolved and settings.enable_intimate
     ):
-        raise ValueError("intimacy is only available for adult personas")
+        raise ValueError("intimacy requires a resolved gender")
     if action == "prenatal" and not state.pregnant:
         raise ValueError("现在没有怀孕")
     if action == "express" and (not state.lactating or profile.gender != "female"):

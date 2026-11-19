@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.2
+
+- `Profile.adult` 重命名为 `gender_resolved`：它只表示性别能识别，不是年龄闸门；错误提示、调试日志和页面 payload 同步改名。
+
 ## 0.10.1
 
 - 性欲基线判断增加 `result_chain` 文本回退，部分 provider 只填 result_chain 时也能解析。

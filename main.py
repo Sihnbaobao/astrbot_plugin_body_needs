@@ -480,7 +480,7 @@ class BodyNeedsPlugin(Star):
         entry = self._libido_scores.get(persona_id)
         if entry is not None and entry.get("hash") == digest:
             return float(entry["habit"])
-        if profile.adult and self.settings.enable_intimate and prompt.strip():
+        if profile.gender_resolved and self.settings.enable_intimate and prompt.strip():
             self._schedule_libido_score(persona_id, prompt, digest)
         return None
 
@@ -687,11 +687,11 @@ class BodyNeedsPlugin(Star):
                 req.extra_user_content_parts = parts
             if self.settings.debug:
                 logger.info(
-                    "[body] 注入 %s：gender=%s age=%s adult=%s chars=%d",
+                    "[body] 注入 %s：gender=%s age=%s gender_resolved=%s chars=%d",
                     persona_id,
                     profile.gender,
                     profile.age,
-                    profile.adult,
+                    profile.gender_resolved,
                     len(block),
                 )
             if self.settings.enable_tools:
@@ -726,7 +726,7 @@ class BodyNeedsPlugin(Star):
             actions.extend(["shower", "brush"])
         if profile.gender == "female" and self.settings.enable_cycle:
             actions.append("supplies")
-        if private and profile.adult and self.settings.enable_intimate:
+        if private and profile.gender_resolved and self.settings.enable_intimate:
             actions.append("intimacy")
             actions.append("release")
         if profile.gender == "female" and self.settings.enable_pregnancy:
@@ -756,7 +756,9 @@ class BodyNeedsPlugin(Star):
                     )
                     + (
                         "、亲密、自己解决"
-                        if private and profile.adult and self.settings.enable_intimate
+                        if private
+                        and profile.gender_resolved
+                        and self.settings.enable_intimate
                         else ""
                     )
                     + "。只有角色真的做了才调用，不要为了把数值清零而调用。"

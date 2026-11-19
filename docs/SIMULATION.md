@@ -65,7 +65,7 @@
     + max(0, bowel - 70) * 0.10
     + 经期额外 4
 
-性欲不是推导值，它自己按速率积攒，只在 `adult and enable_intimate and gender in (female, male)` 时推进，否则每段直接归零。
+性欲不是推导值，它自己按速率积攒，只在 `gender_resolved and enable_intimate` 时推进，否则每段直接归零。
 
 旧版状态文件（`hunger` / `thirst` / `fatigue` 和脏度语义）在 `BodyState.from_dict` 里一次性迁移：`satiety = 100 - hunger`、`energy = 100 - fatigue`、`cleanliness = 100 - 旧值`、`oral_health = 100 - 旧值`，迁移测试锁死这些等式。
 
@@ -441,7 +441,7 @@ persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低�
 
 - 配置 GENDER 不是 auto 时直接使用。
 - auto 时对人格正文做词频评分：少女/女性/她 vs 少年/男性/他，明确的“性别：女/男”权重更高。
-- adult = gender in (female, male)。性别判不出来就是 none，只有饥渴清洁，没有周期和亲密。
+- gender_resolved = gender in (female, male)。它只表示“性别能识别”，不是年龄判断；性别判不出来就是 none，只有饥渴清洁，没有周期和亲密。
 
 年龄只喂生理曲线，不拦任何功能：
 

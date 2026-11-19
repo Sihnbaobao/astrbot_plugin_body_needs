@@ -26,14 +26,14 @@ def test_detect_profile_does_not_gate_on_stated_age() -> None:
     profile = detect_profile("kid", "kid", "她今年17岁，是一个女孩子。", settings)
     assert profile.gender == "female"
     assert profile.age == 17
-    assert profile.adult is True
+    assert profile.gender_resolved is True
 
 
 def test_detect_profile_uses_config_gender() -> None:
     settings = Settings(gender="male", age=30)
     profile = detect_profile("doc", "doc", "一个冷静的医生。", settings)
     assert profile.gender == "male"
-    assert profile.adult is True
+    assert profile.gender_resolved is True
 
 
 def test_store_round_trip(tmp_path) -> None:

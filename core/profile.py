@@ -78,7 +78,10 @@ class Profile:
         gender: One of female, male, none.
         age: Detected or configured age, or None when unknown. Only used by
             the age curves; it never enables or disables a feature.
-        adult: Whether adult-only physiology is allowed.
+        gender_resolved: Whether a gender could be resolved. This is not an
+            age check: it only says the persona has the physiology, while
+            ENABLE_INTIMATE and the private-chat check decide what reaches the
+            model.
         cycle_length: Cycle length in days from settings.
         period_length: Menstrual days from settings.
         race: Detected species label, for display only.
@@ -95,7 +98,7 @@ class Profile:
     name: str
     gender: str
     age: int | None
-    adult: bool
+    gender_resolved: bool
     cycle_length: int
     period_length: int
     race: str = "人类"
@@ -228,17 +231,17 @@ def detect_profile(
         race, lifespan = "自定义", settings.lifespan
     pcos = detect_pcos(prompt)
 
-    # Age no longer participates in this decision: any persona whose gender can
-    # be resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
+    # Age never participates in this decision: any persona whose gender can be
+    # resolved has the physiology, and ENABLE_INTIMATE plus the private-chat
     # check decide what actually reaches the model.
-    adult = gender in ("female", "male")
+    gender_resolved = gender in ("female", "male")
 
     return Profile(
         persona_id=persona_id,
         name=name or persona_id,
         gender=gender,
         age=age,
-        adult=adult,
+        gender_resolved=gender_resolved,
         cycle_length=settings.cycle_length,
         period_length=settings.period_length,
         race=race,

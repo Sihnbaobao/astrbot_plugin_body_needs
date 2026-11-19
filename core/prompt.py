@@ -215,7 +215,7 @@ def display_meters(
     rows.append(
         ("bladder", "膀胱压力", "膀胱", float(state.bladder), bladder_label, False)
     )
-    if profile.adult and settings.enable_intimate:
+    if profile.gender_resolved and settings.enable_intimate:
         rows.append(
             ("libido", "性欲", "性欲", float(state.libido), libido_label, False)
         )
@@ -423,7 +423,7 @@ def _supply_text(state: BodyState, view: CycleView | None) -> str:
 
 def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
     """Build the private adult-male line."""
-    if not (profile.adult and profile.gender == "male"):
+    if not (profile.gender_resolved and profile.gender == "male"):
         return ""
     days = max(0, int((now.timestamp() - state.last_release_at) // 86400))
     recent_wet = any(
@@ -538,7 +538,7 @@ def build_prompt_block(
             lines.append(supply)
         if show_private and state.lactating:
             lines.append(_lactation_text(state))
-    if show_private and settings.enable_intimate and profile.adult:
+    if show_private and settings.enable_intimate and profile.gender_resolved:
         male = _male_text(state, now, profile)
         if male:
             lines.append(male)
@@ -624,7 +624,7 @@ def build_status_text(
             )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
-        if settings.enable_intimate and profile.adult and state.libido >= 20:
+        if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
             lines.append(
                 f"性欲：{libido_label(state.libido)}（{round(state.libido)}/100）"
             )
@@ -782,7 +782,11 @@ def build_web_state(
         }
 
     male = None
-    if profile.adult and profile.gender == "male" and settings.enable_intimate:
+    if (
+        profile.gender_resolved
+        and profile.gender == "male"
+        and settings.enable_intimate
+    ):
         days = max(0, int((now.timestamp() - state.last_release_at) // 86400))
         refractory_hours = max(0.0, state.refractory_until - now.timestamp()) / 3600
         male = {
@@ -823,7 +827,7 @@ def build_web_state(
         "name": profile.name,
         "gender": profile.gender,
         "gender_label": gender_label(profile.gender),
-        "adult": profile.adult,
+        "gender_resolved": profile.gender_resolved,
         "summary": summary,
         "meters": meters,
         "details": details,
@@ -832,5 +836,5 @@ def build_web_state(
         "male": male,
         "events": events,
         "last": last,
-        "can_intimacy": bool(profile.adult and settings.enable_intimate),
+        "can_intimacy": bool(profile.gender_resolved and settings.enable_intimate),
     }

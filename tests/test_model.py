@@ -36,7 +36,7 @@ def make_profile(
     *,
     gender: str = "female",
     age: int | None = 25,
-    adult: bool = True,
+    gender_resolved: bool = True,
 ) -> Profile:
     """Build a profile without invoking persona detection."""
     return Profile(
@@ -44,7 +44,7 @@ def make_profile(
         name="test",
         gender=gender,
         age=age,
-        adult=adult,
+        gender_resolved=gender_resolved,
         cycle_length=28,
         period_length=5,
     )
@@ -212,7 +212,7 @@ def test_intimacy_is_adult_only_and_sets_refractory() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)
     settings = Settings()
-    gated = make_profile(adult=False)
+    gated = make_profile(gender_resolved=False)
     with pytest.raises(ValueError):
         apply_action(state, "intimacy", now, gated, settings)
 
@@ -626,11 +626,11 @@ def test_self_release_needs_intimate_enabled() -> None:
 
 def test_adult_follows_detected_gender() -> None:
     male = detect_profile("doc", "doc", "一个冷静的医生。", Settings(gender="male"))
-    assert male.adult is True
+    assert male.gender_resolved is True
 
     unknown = detect_profile("anon", "anon", "一个普通的助手。", Settings())
     assert unknown.gender == "none"
-    assert unknown.adult is False
+    assert unknown.gender_resolved is False
 
 
 def test_birth_starts_lactation() -> None:
