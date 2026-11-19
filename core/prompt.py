@@ -180,6 +180,74 @@ def meter_label(key: str, value: float) -> str:
     return labels.get(key, lambda _value: "正常")(value)
 
 
+def display_meters(
+    state: BodyState,
+    profile: Profile,
+    settings: Settings,
+) -> list[dict[str, Any]]:
+    """Return meters in display space, where 100 is full, rested or clean.
+
+    The simulation stores needs: a higher hunger means more pressure. This is
+    the only place that turns hunger, thirst, fatigue and dirt into the
+    reserves shown on the page and in the status card. Bladder pressure and
+    desire stay pressures on purpose, because their labels describe the
+    pressure itself rather than a reserve.
+
+    Args:
+        state: Advanced body state.
+        profile: Resolved persona profile.
+        settings: Plugin settings.
+
+    Returns:
+        Meter dictionaries with key, label, name, value, level and tone.
+    """
+    rows = [
+        ("satiety", "饱食度", "胃", 100.0 - state.hunger, satiety_label, True),
+        ("hydration", "水分", "渴", 100.0 - state.thirst, hydration_label, True),
+        ("energy", "精力", "精力", 100.0 - state.fatigue, energy_label, True),
+    ]
+    if settings.enable_hygiene:
+        rows.extend(
+            [
+                (
+                    "cleanliness",
+                    "清洁",
+                    "清洁",
+                    100.0 - state.cleanliness,
+                    clean_label,
+                    True,
+                ),
+                ("oral", "口腔", "口腔", 100.0 - state.oral, oral_label, True),
+            ]
+        )
+    rows.append(
+        ("bladder", "膀胱压力", "膀胱", float(state.bladder), bladder_label, False)
+    )
+    if profile.adult and settings.enable_intimate:
+        rows.append(
+            ("desire", "欲望", "欲望", float(state.desire), desire_label, False)
+        )
+
+    meters: list[dict[str, Any]] = []
+    for key, label, name, value, labeler, higher_is_better in rows:
+        value = max(0.0, min(100.0, value))
+        if higher_is_better:
+            tone = "hot" if value < 15 else ("warn" if value < 35 else "ok")
+        else:
+            tone = "hot" if value >= 80 else ("warn" if value >= 55 else "ok")
+        meters.append(
+            {
+                "key": key,
+                "label": label,
+                "name": name,
+                "value": round(value, 1),
+                "level": labeler(value),
+                "tone": tone,
+            }
+        )
+    return meters
+
+
 def _ago(stamp: float, now: datetime) -> str:
     """Describe how long ago a timestamp was."""
     if not stamp:
@@ -544,25 +612,24 @@ def build_status_text(
     view = cycle_view(state, now, profile, settings)
     lines = [f"{profile.name} · 身体"]
     lines.append(f"现在 {now:%H:%M}")
-    satiety = 100.0 - state.hunger
-    hydration = 100.0 - state.thirst
-    energy = 100.0 - state.fatigue
+    meters = {meter["key"]: meter for meter in display_meters(state, profile, settings)}
+    satiety = meters["satiety"]
+    hydration = meters["hydration"]
+    energy = meters["energy"]
     if private:
         lines.extend(
             [
-                f"饱食度：{satiety_label(satiety)}（{round(satiety)}/100，{_ago(state.last_eat_at, now)}吃过东西）",
-                f"水分：{hydration_label(hydration)}（{round(hydration)}/100，{_ago(state.last_drink_at, now)}喝过水）",
-                f"膀胱压力：{bladder_label(state.bladder)}（{round(state.bladder)}/100）",
+                f"饱食度：{satiety['level']}（{round(satiety['value'])}/100，{_ago(state.last_eat_at, now)}吃过东西）",
+                f"水分：{hydration['level']}（{round(hydration['value'])}/100，{_ago(state.last_drink_at, now)}喝过水）",
+                f"膀胱压力：{meters['bladder']['level']}（{round(meters['bladder']['value'])}/100）",
             ]
         )
         if settings.enable_hygiene:
-            clean = 100.0 - state.cleanliness
-            oral = 100.0 - state.oral
             lines.append(
-                f"清洁：{clean_label(clean)}（{round(clean)}/100）"
-                f" · 口腔：{oral_label(oral)}（{round(oral)}/100）"
+                f"清洁：{meters['cleanliness']['level']}（{round(meters['cleanliness']['value'])}/100）"
+                f" · 口腔：{meters['oral']['level']}（{round(meters['oral']['value'])}/100）"
             )
-        lines.append(f"精力：{energy_label(energy)}（{round(energy)}/100）")
+        lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
         if settings.enable_intimate and profile.adult and state.desire >= 20:
             lines.append(
@@ -577,9 +644,9 @@ def build_status_text(
     else:
         lines.extend(
             [
-                f"饱食度：{satiety_label(satiety)}（{round(satiety)}/100）",
-                f"水分：{hydration_label(hydration)}（{round(hydration)}/100）",
-                f"精力：{energy_label(energy)}（{round(energy)}/100）",
+                f"饱食度：{satiety['level']}（{round(satiety['value'])}/100）",
+                f"水分：{hydration['level']}（{round(hydration['value'])}/100）",
+                f"精力：{energy['level']}（{round(energy['value'])}/100）",
             ]
         )
         if view is not None and view.phase == "menstrual" and view.cramps >= 2:
@@ -612,53 +679,7 @@ def build_web_state(
         A JSON-compatible state summary.
     """
     view = cycle_view(state, now, profile, settings)
-    # The page shows satiety, hydration, energy and cleanliness as "full is
-    # good" bars. Bladder pressure and desire stay "full is strong" because
-    # those labels describe the pressure itself, not a reserve.
-    rows = [
-        ("satiety", "饱食度", "胃", 100.0 - state.hunger, satiety_label, True),
-        ("hydration", "水分", "渴", 100.0 - state.thirst, hydration_label, True),
-        ("energy", "精力", "精力", 100.0 - state.fatigue, energy_label, True),
-    ]
-    if settings.enable_hygiene:
-        rows.extend(
-            [
-                (
-                    "cleanliness",
-                    "清洁",
-                    "清洁",
-                    100.0 - state.cleanliness,
-                    clean_label,
-                    True,
-                ),
-                ("oral", "口腔", "口腔", 100.0 - state.oral, oral_label, True),
-            ]
-        )
-    rows.append(
-        ("bladder", "膀胱压力", "膀胱", float(state.bladder), bladder_label, False)
-    )
-    if profile.adult and settings.enable_intimate:
-        rows.append(
-            ("desire", "欲望", "欲望", float(state.desire), desire_label, False)
-        )
-
-    meters = []
-    for key, label, name, value, labeler, higher_is_better in rows:
-        value = max(0.0, min(100.0, value))
-        if higher_is_better:
-            tone = "hot" if value < 15 else ("warn" if value < 35 else "ok")
-        else:
-            tone = "hot" if value >= 80 else ("warn" if value >= 55 else "ok")
-        meters.append(
-            {
-                "key": key,
-                "label": label,
-                "name": name,
-                "value": round(value, 1),
-                "level": labeler(value),
-                "tone": tone,
-            }
-        )
+    meters = display_meters(state, profile, settings)
 
     details = [
         {

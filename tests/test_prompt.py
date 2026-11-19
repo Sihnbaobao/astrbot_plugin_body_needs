@@ -202,6 +202,30 @@ def test_status_card_has_no_age_line() -> None:
     assert "未成年" not in text
 
 
+def test_display_meters_is_the_only_conversion_point() -> None:
+    from core.prompt import display_meters
+
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    meters = {
+        meter["key"]: meter
+        for meter in display_meters(state, make_profile(), Settings())
+    }
+    for key, field in (
+        ("satiety", "hunger"),
+        ("hydration", "thirst"),
+        ("energy", "fatigue"),
+        ("cleanliness", "cleanliness"),
+        ("oral", "oral"),
+    ):
+        assert meters[key]["value"] == pytest.approx(
+            100 - getattr(state, field), abs=0.1
+        )
+    # Pressure meters keep the internal value.
+    assert meters["bladder"]["value"] == pytest.approx(state.bladder, abs=0.1)
+    assert meters["desire"]["value"] == pytest.approx(state.desire, abs=0.1)
+
+
 def test_web_state_omits_hygiene_when_disabled() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     payload = build_web_state(
