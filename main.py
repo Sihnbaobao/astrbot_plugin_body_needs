@@ -519,9 +519,12 @@ class BodyNeedsPlugin(Star):
                 system_prompt=_LIBIDO_SYSTEM,
                 contexts=[],
             )
-            score = _parse_libido_score(
-                str(getattr(response, "completion_text", "") or "")
-            )
+            text = str(getattr(response, "completion_text", "") or "")
+            if not text:
+                chain = getattr(response, "result_chain", None)
+                if chain is not None and hasattr(chain, "get_plain_text"):
+                    text = str(chain.get_plain_text() or "")
+            score = _parse_libido_score(text)
             if score is None:
                 self._libido_cooldown[persona_id] = (digest, self._now().timestamp())
                 logger.debug("[body] 性欲基线判断没有返回可用分数")
