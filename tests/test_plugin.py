@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime
-
 import pytest
 
 from astrbot.api.provider import ProviderRequest
@@ -201,7 +198,6 @@ async def test_page_tracks_one_persona(monkeypatch, tmp_path) -> None:
 async def test_genderless_persona_gets_no_intimacy_tool(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "一个普通的助手。")
     await plugin.initialize()
-    event = FakeEvent()
     profile = plugin._profile_for("test", "test", "一个普通的助手。")
     tools = plugin._body_tools(profile, True)
     body_action = next(tool for tool in tools.tools if tool.name == "body_action")
