@@ -205,9 +205,34 @@ function renderCare(care) {
   const items = Array.isArray(care) ? care : [];
   const nowMinutes = Number(state.data && state.data.now_minutes);
   const nowHour = Number.isFinite(nowMinutes) ? Math.floor(nowMinutes / 60) : -1;
+  const summary = el("careSummary");
+  if (summary) {
+    const counts = { meal: 0, drink: 0, toilet: 0, shower: 0, brush: 0 };
+    items.forEach(function (item) {
+      if (counts[item.kind] !== undefined) counts[item.kind] += 1;
+    });
+    const nowLabel = Number.isFinite(nowMinutes)
+      ? String(Math.floor(nowMinutes / 60)).padStart(2, "0") +
+        ":" +
+        String(nowMinutes % 60).padStart(2, "0")
+      : "";
+    summary.textContent =
+      "吃饭 " +
+      counts.meal +
+      " · 喝水 " +
+      counts.drink +
+      " · 厕所 " +
+      counts.toilet +
+      " · 澡/刷 " +
+      (counts.shower + counts.brush) +
+      (nowLabel ? "　现在 " + nowLabel : "");
+  }
   CARE_ROWS.forEach(function (rowDef) {
     const row = make("div", "care-row");
-    row.appendChild(make("span", "care-row-label", rowDef[1]));
+    const label = make("span", "care-row-label");
+    label.appendChild(make("i", "care-key " + rowDef[0]));
+    label.appendChild(document.createTextNode(rowDef[1]));
+    row.appendChild(label);
     const cells = make("div", "care-cells");
     const byHour = {};
     items
@@ -222,18 +247,20 @@ function renderCare(care) {
       });
     for (let hour = 0; hour < 24; hour += 1) {
       const cell = make("span", "care-cell");
-      cell.title = String(hour).padStart(2, "0") + ":00";
+      const hourLabel = String(hour).padStart(2, "0") + ":00";
+      const lines = [hourLabel];
+      cell.title = hourLabel;
       if (byHour[hour]) {
         cell.classList.add("on", rowDef[0]);
-        cell.title =
-          String(hour).padStart(2, "0") +
-          ":00 " +
-          rowDef[1] +
-          "（" +
-          byHour[hour].join("、") +
-          "）";
+        cell.title = hourLabel + " " + rowDef[1] + "（" + byHour[hour].join("、") + "）";
+        byHour[hour].forEach(function (at) {
+          lines.push(at + " " + rowDef[1]);
+        });
+      } else {
+        lines.push("没有记录");
       }
       if (hour === nowHour) cell.classList.add("is-now");
+      attachCareTip(cell, lines);
       cells.appendChild(cell);
     }
     row.appendChild(cells);
@@ -242,6 +269,43 @@ function renderCare(care) {
   if (!items.length) {
     host.appendChild(make("p", "empty", "最近 24 小时还没有记录。"));
   }
+}
+
+function attachCareTip(cell, lines) {
+  cell.tabIndex = 0;
+  cell.addEventListener("mouseenter", function () {
+    showCareTip(cell, lines);
+  });
+  cell.addEventListener("focus", function () {
+    showCareTip(cell, lines);
+  });
+  cell.addEventListener("mouseleave", hideCareTip);
+  cell.addEventListener("blur", hideCareTip);
+  cell.addEventListener("click", function (event) {
+    event.stopPropagation();
+    showCareTip(cell, lines);
+  });
+}
+
+function showCareTip(cell, lines) {
+  const tip = el("careTip");
+  const card = cell.closest(".care-timeline-card");
+  if (!tip || !card) return;
+  tip.replaceChildren();
+  lines.forEach(function (line, index) {
+    tip.appendChild(make(index === 0 ? "strong" : "span", "care-tip-line", line));
+  });
+  tip.hidden = false;
+  const cardRect = card.getBoundingClientRect();
+  const cellRect = cell.getBoundingClientRect();
+  const left = cellRect.left - cardRect.left + cellRect.width / 2;
+  tip.style.left = Math.max(90, Math.min(cardRect.width - 90, left)) + "px";
+  tip.style.top = cellRect.top - cardRect.top - 8 + "px";
+}
+
+function hideCareTip() {
+  const tip = el("careTip");
+  if (tip) tip.hidden = true;
 }
 
 function renderSelfCare(care) {
@@ -729,6 +793,9 @@ async function boot() {
     showNotice("页面桥接响应超时，如果下面一直是空白，刷新一次页面。", "error");
   }
   bind();
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest || !event.target.closest(".care-cell")) hideCareTip();
+  });
   await refresh();
   await loadConfig();
   state.timer = setInterval(refresh, 15000);

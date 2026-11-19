@@ -396,6 +396,10 @@ textarea:focus-visible {
   grid-column: span 5;
 }
 
+.selfcare-card {
+  grid-column: span 5;
+}
+
 .events-card {
   grid-column: span 7;
 }
@@ -1066,7 +1070,14 @@ footer {
 }
 
 .care-timeline-card {
+  position: relative;
   grid-column: 1 / -1;
+}
+
+.care-summary {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .care-axis {
@@ -1097,9 +1108,36 @@ footer {
 }
 
 .care-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
   color: var(--muted);
   font-size: 12px;
-  text-align: right;
+}
+
+.care-key {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.care-key.meal {
+  background: #f0c274;
+}
+
+.care-key.drink {
+  background: #6cc7e8;
+}
+
+.care-key.toilet {
+  background: #9d9df0;
+}
+
+.care-key.shower,
+.care-key.brush {
+  background: #8fd6a8;
 }
 
 .care-cells {
@@ -1111,7 +1149,18 @@ footer {
 .care-cell {
   aspect-ratio: 1;
   border-radius: 3px;
+  outline: 1px solid transparent;
   background: rgba(255, 255, 255, 0.045);
+  transition:
+    transform 0.12s ease,
+    outline-color 0.12s ease;
+}
+
+.care-cell:hover,
+.care-cell:focus-visible {
+  outline-color: var(--accent-2);
+  transform: scale(1.16);
+  z-index: 2;
 }
 
 .care-cell.on.meal {
@@ -1136,7 +1185,34 @@ footer {
 }
 
 .care-cell.is-now {
-  box-shadow: 0 0 0 1px rgba(120, 235, 200, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(120, 235, 200, 0.85);
+}
+
+.care-tip {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 112px;
+  padding: 8px 10px;
+  transform: translate(-50%, -100%);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-soft);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.care-tip[hidden] {
+  display: none;
+}
+
+.care-tip strong {
+  color: var(--text);
+  font-size: 12px;
 }
 
 .selfcare-body {
@@ -1171,6 +1247,12 @@ footer {
 
 .care-note {
   margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .selfcare-card {
+    grid-column: span 12;
+  }
 }
 
 @media (max-width: 760px) {
