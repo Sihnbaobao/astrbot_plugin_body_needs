@@ -282,6 +282,7 @@ class BodyState:
     last_meal_size: float = 0.0
     last_drink_ml: float = 0.0
     events: list[dict[str, Any]] = field(default_factory=list)
+    care: list[dict[str, Any]] = field(default_factory=list)
     flags: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -345,6 +346,7 @@ class BodyState:
             "last_meal_size": self.last_meal_size,
             "last_drink_ml": self.last_drink_ml,
             "events": list(self.events),
+            "care": list(self.care),
             "flags": dict(self.flags),
         }
 
@@ -478,6 +480,13 @@ class BodyState:
             state.events = [
                 item for item in events if isinstance(item, dict) and item.get("text")
             ][:100]
+        care = data.get("care")
+        if isinstance(care, list):
+            state.care = [
+                {"t": _number(item.get("t")), "kind": str(item.get("kind"))}
+                for item in care
+                if isinstance(item, dict) and item.get("kind")
+            ][-120:]
         flags = data.get("flags")
         if isinstance(flags, dict):
             state.flags = {
@@ -1168,6 +1177,23 @@ def cycle_view(
     )
 
 
+CARE_LABELS = {
+    "meal": "吃饭",
+    "snack": "零食",
+    "drink": "喝水",
+    "toilet": "厕所",
+    "shower": "洗澡",
+    "brush": "刷牙",
+}
+
+
+def _add_care(state: BodyState, at: datetime, kind: str) -> None:
+    """Append one self-care action for the page timeline."""
+    state.care.append({"t": at.timestamp(), "kind": kind})
+    if len(state.care) > 120:
+        state.care = state.care[-120:]
+
+
 def _add_event(
     state: BodyState,
     at: datetime,
@@ -1329,26 +1355,35 @@ def _routine(
 
     hour = moment.hour
     since_meal = moment.timestamp() - state.last_eat_at
-    if hour in (8, 13, 19) and state.stomach <= 55.0 and since_meal > 2 * 3600:
-        state.stomach = _clamp(state.stomach + 42.0 / const.stomach_capacity)
-        state.glucose = _clamp(state.glucose + 18.0)
+    if hour in (8, 13, 19) and state.stomach <= 90.0 and since_meal > 3600:
+        portion = {8: 30.0, 13: 32.0, 19: 32.0}[hour]
+        state.stomach = _clamp(state.stomach + portion / const.stomach_capacity)
+        state.glucose = _clamp(state.glucose + 16.0)
         state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
         state.last_eat_at = moment.timestamp()
         state.last_meal_kind = "meal"
+        _add_care(state, moment, "meal")
+        meal_name = {8: "早饭", 13: "午饭", 19: "晚饭"}[hour]
         _add_event(
             state,
             moment,
             "self_care",
-            "自己吃了点东西",
-            key=f"self-meal:{moment.date().isoformat()}",
+            f"自己吃了{meal_name}",
+            key=f"self-meal:{moment.date().isoformat()}:{hour}",
         )
-    if hour in (10, 16, 21) and state.hydration <= 55.0:
-        state.hydration = _clamp(state.hydration + 22.0)
+    if hour in (8, 11, 14, 17, 20, 23) and state.hydration <= 70.0:
+        state.hydration = _clamp(state.hydration + 12.0)
         state.last_drink_at = moment.timestamp()
+        _add_care(state, moment, "drink")
+    if hour in (7, 11, 15, 19, 22) and (hour == 7 or state.bladder >= 8.0):
+        state.urine = 2.0
+        state.last_toilet_at = moment.timestamp()
+        _add_care(state, moment, "toilet")
     if settings.enable_hygiene:
         if hour in (7, 21) and state.skin >= 60.0:
             state.skin = 2.0
             state.last_shower_at = moment.timestamp()
+            _add_care(state, moment, "shower")
             _add_event(
                 state,
                 moment,
@@ -1359,6 +1394,7 @@ def _routine(
         if hour in (8, 22) and state.oral >= 55.0:
             state.oral = 2.0
             state.last_brush_at = moment.timestamp()
+            _add_care(state, moment, "brush")
     if (
         profile.gender == "female"
         and settings.enable_cycle
@@ -1389,6 +1425,7 @@ def _routine(
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
         state.last_bowel_at = moment.timestamp()
         state.last_toilet_at = moment.timestamp()
+        _add_care(state, moment, "toilet")
         _add_event(
             state,
             moment,
@@ -1935,6 +1972,10 @@ def advance(
     ]
     state.events.sort(key=lambda event: _parse_ts(event.get("at")))
     state.events = state.events[-settings.max_events :]
+    care_cutoff = now_ts - 2 * 86400
+    state.care = [item for item in state.care if _number(item.get("t")) >= care_cutoff][
+        -120:
+    ]
     flag_cutoff = now_ts - 60 * 86400
     state.flags = {
         key: value for key, value in state.flags.items() if value >= flag_cutoff
@@ -1989,6 +2030,7 @@ def apply_action(
         state.last_eat_at = now_ts
         state.last_meal_kind = "meal"
         state.last_meal_size = 55.0
+        _add_care(state, now, "meal")
     elif action == "snack":
         state.stomach = _clamp(state.stomach + 22.0 / const.stomach_capacity)
         state.gut = _clamp(state.gut + GUT_RESIDUE_SNACK)
@@ -1998,18 +2040,22 @@ def apply_action(
         state.last_eat_at = now_ts
         state.last_meal_kind = "snack"
         state.last_meal_size = 22.0
+        _add_care(state, now, "snack")
     elif action == "drink":
         state.hydration = _clamp(state.hydration + 32.0)
         state.urine = _clamp(state.urine + 12.0)
         state.last_drink_at = now_ts
         state.last_drink_ml = 300.0
+        _add_care(state, now, "drink")
     elif action == "shower":
         state.skin = 2.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_shower_at = now_ts
+        _add_care(state, now, "shower")
     elif action == "brush":
         state.oral = 2.0
         state.last_brush_at = now_ts
+        _add_care(state, now, "brush")
     elif action == "toilet":
         if state.bowel >= 20.0:
             state.gut = max(0.0, state.gut - 85.0)
@@ -2017,6 +2063,7 @@ def apply_action(
             state.last_bowel_at = now_ts
         state.urine = 2.0
         state.last_toilet_at = now_ts
+        _add_care(state, now, "toilet")
     elif action == "nap":
         state.sleep_debt = _clamp(state.sleep_debt - 2.5, 0.0, 24.0)
         state.last_nap_at = now_ts

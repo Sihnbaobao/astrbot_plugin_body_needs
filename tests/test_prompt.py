@@ -158,7 +158,9 @@ def test_status_card_and_web_payload() -> None:
     text = build_status_text(state, now, profile, Settings(), private=True)
     assert "test · 身体" in text
     assert "经期：" in text
+    state.care = [{"t": now.timestamp() - 600, "kind": "drink"}]
     payload = build_web_state(state, now, profile, Settings())
+    assert payload["care"][0]["label"] == "喝水"
     assert payload["gender"] == "female"
     assert payload["cycle"]["phase"] == "menstrual"
     assert payload["cycle"]["estrogen"] > 0

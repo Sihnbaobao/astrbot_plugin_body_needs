@@ -41,10 +41,12 @@ def test_store_round_trip(tmp_path) -> None:
     store = Store(tmp_path)
     state = new_state("璃月/测试", now)
     state.satiety = 73.5
+    state.care = [{"t": now.timestamp(), "kind": "meal"}]
     store.save(state)
     loaded = store.load("璃月/测试", now)
     assert loaded.persona_id == "璃月/测试"
     assert loaded.satiety == 73.5
+    assert loaded.care[0]["kind"] == "meal"
     saved = json.loads(store.path_for("璃月/测试").read_text(encoding="utf-8"))
     assert "hunger" not in saved
     assert "desire" not in saved

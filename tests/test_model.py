@@ -571,6 +571,25 @@ def test_routine_catches_the_hour_when_advance_starts_late() -> None:
     )
 
 
+def test_three_meals_and_care_log() -> None:
+    now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(days=1))
+    state.stomach = 20.0
+    state.glucose = 30.0
+    state.hydration = 60.0
+    state.urine = 2.0
+    advance(state, now, make_profile(), Settings())
+    meals = [
+        event
+        for event in state.events
+        if event["kind"] == "self_care" and "吃" in event["text"]
+    ]
+    assert len(meals) == 3
+    kinds = {item["kind"] for item in state.care}
+    assert {"meal", "drink", "toilet"} <= kinds
+    assert state.care == sorted(state.care, key=lambda item: item["t"])
+
+
 def test_autonomy_runs_even_during_a_chat() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=10))

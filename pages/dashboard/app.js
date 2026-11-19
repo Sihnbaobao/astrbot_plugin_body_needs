@@ -191,6 +191,25 @@ function renderMeters(meters) {
   });
 }
 
+function renderCare(care) {
+  const host = el("careTrack");
+  host.replaceChildren();
+  if (!care || !care.length) {
+    host.appendChild(make("p", "empty", "最近 24 小时还没有记录。"));
+    return;
+  }
+  care.forEach(function (item) {
+    const dot = make("span", "care-dot " + (item.kind || ""));
+    const minutes = Number(item.minutes);
+    dot.style.left =
+      Math.max(1.5, Math.min(98.5, ((Number.isFinite(minutes) ? minutes : 0) / 1440) * 100)) + "%";
+    dot.title = (item.at || "") + " " + (item.label || "");
+    dot.appendChild(make("span", "care-dot-mark", (item.label || "?").slice(0, 1)));
+    host.appendChild(dot);
+  });
+}
+
+
 function renderDetails(details) {
   const host = el("innerStats");
   host.replaceChildren();
@@ -399,6 +418,7 @@ function render(data) {
   }
   renderHero(persona, data.now);
   renderMeters(persona.meters);
+  renderCare(persona.care);
   renderDetails(persona.details);
   renderLast(persona.last);
   renderCycle(persona);

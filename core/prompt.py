@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .config import Settings
-from .model import BodyState, CycleView, cycle_view
+from .model import CARE_LABELS, BodyState, CycleView, cycle_view
 from .profile import Profile, gender_label
 
 METER_NAMES = {
@@ -673,6 +673,25 @@ def build_web_state(
     """
     view = cycle_view(state, now, profile, settings)
     meters = display_meters(state, profile, settings)
+    care = []
+    for item in state.care:
+        try:
+            stamp = float(item.get("t") or 0)
+        except (TypeError, ValueError):
+            continue
+        if stamp <= 0 or now.timestamp() - stamp > 86400:
+            continue
+        moment = datetime.fromtimestamp(stamp, now.tzinfo)
+        kind = str(item.get("kind") or "")
+        care.append(
+            {
+                "kind": kind,
+                "label": CARE_LABELS.get(kind, kind),
+                "at": f"{moment:%H:%M}",
+                "minutes": moment.hour * 60 + moment.minute,
+            }
+        )
+    care.sort(key=lambda item: item["minutes"])
 
     details = [
         {
@@ -835,6 +854,7 @@ def build_web_state(
         "lactation": lactation,
         "male": male,
         "events": events,
+        "care": care,
         "last": last,
         "can_intimacy": bool(profile.gender_resolved and settings.enable_intimate),
     }

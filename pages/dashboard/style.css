@@ -1065,6 +1065,95 @@ footer {
   }
 }
 
+.care-timeline-card {
+  grid-column: 1 / -1;
+}
+
+.care-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 2px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.care-track {
+  position: relative;
+  height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.06) 0 1px,
+      transparent 1px calc(100% / 24)
+    ),
+    rgba(255, 255, 255, 0.03);
+}
+
+.care-dot {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25);
+  color: #08110d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.care-dot.meal,
+.care-swatch.meal {
+  background: #f0c274;
+}
+
+.care-dot.snack,
+.care-swatch.snack {
+  background: #e0a95c;
+}
+
+.care-dot.drink,
+.care-swatch.drink {
+  background: #6cc7e8;
+}
+
+.care-dot.toilet,
+.care-swatch.toilet {
+  background: #9d9df0;
+}
+
+.care-dot.shower,
+.care-dot.brush,
+.care-swatch.hygiene {
+  background: #8fd6a8;
+}
+
+.care-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.care-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.care-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
