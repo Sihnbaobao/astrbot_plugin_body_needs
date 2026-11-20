@@ -2895,3 +2895,27 @@ footer {
   width: 100%;
   height: 100%;
 }
+
+/* two independent columns: no stretched cards or exposed gaps */
+.grid {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: start;
+}
+
+.grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.grid .card {
+  grid-column: auto;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

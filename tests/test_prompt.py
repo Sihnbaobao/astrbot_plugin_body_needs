@@ -74,17 +74,6 @@ def test_bowel_pressure_appears_when_it_matters() -> None:
     assert "排便：" in block
 
 
-def test_private_block_includes_hair_and_nails() -> None:
-    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
-    state = make_state(now)
-    state.hair_growth = 80.0
-    state.nail_growth = 74.0
-    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
-    assert "头发：" in block and "该剪了" in block
-    assert "指甲：" in block and "该剪了" in block
-    assert " cm" in block and " mm" in block
-
-
 def test_private_block_shows_cold_and_pain() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)

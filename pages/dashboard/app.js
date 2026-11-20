@@ -202,8 +202,6 @@ const CARE_ROWS = [
   ["meal", "吃饭"],
   ["drink", "喝水"],
   ["toilet", "厕所"],
-  ["haircut", "剪发"],
-  ["nails", "指甲"],
   ["shower", "洗澡"],
   ["brush", "刷牙"],
 ];
@@ -1408,7 +1406,25 @@ function bind() {
   });
 }
 
+function arrangeGrid() {
+  const grid = document.querySelector(".grid");
+  if (!grid || grid.dataset.columnized) return;
+  const main = make("div", "grid-col main");
+  const side = make("div", "grid-col side");
+  [".meters-card", ".care-timeline-card", ".events-card"].forEach(function (selector) {
+    const card = grid.querySelector(selector);
+    if (card) main.appendChild(card);
+  });
+  ["#cycleCard", "#maleCard", ".selfcare-card"].forEach(function (selector) {
+    const card = grid.querySelector(selector);
+    if (card) side.appendChild(card);
+  });
+  grid.replaceChildren(main, side);
+  grid.dataset.columnized = "1";
+}
+
 async function boot() {
+  arrangeGrid();
   bridge = await waitForBridge(5000);
   if (!bridge) {
     showNotice(

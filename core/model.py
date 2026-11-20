@@ -1634,29 +1634,6 @@ def _routine(
             "去了趟厕所",
             key=f"self-toilet:{moment.date().isoformat()}",
         )
-    if 9 <= hour <= 22:
-        if state.hair_growth >= HAIR_TRIM_AT:
-            state.hair_growth = 0.0
-            state.last_haircut_at = moment.timestamp()
-            _add_care(state, moment, "haircut")
-            _add_event(
-                state,
-                moment,
-                "self_care",
-                "剪了头发",
-                key=f"self-hair:{moment.date().isoformat()}",
-            )
-        if state.nail_growth >= NAIL_TRIM_AT:
-            state.nail_growth = 0.0
-            state.last_nails_at = moment.timestamp()
-            _add_care(state, moment, "nails")
-            _add_event(
-                state,
-                moment,
-                "self_care",
-                "剪了指甲",
-                key=f"self-nails:{moment.date().isoformat()}",
-            )
     if hour == 8 and not state.illness:
         day = moment.date().isoformat()
         check_key = f"illness-check:{day}"
@@ -2101,14 +2078,6 @@ def advance(
             state.gut + (GUT_BASE - GUT_PASSAGE * const.gut_transit) * step_hours
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
-        day_fraction = step_seconds / 86400.0
-        hair_span = state.hair_span_cm or const.hair_span_cm
-        nail_span = state.nail_span_mm or const.nail_span_mm
-        hair_rate = const.hair_growth_cm_day / max(0.5, hair_span) * 100.0
-        nail_rate = const.nail_growth_mm_day / max(0.5, nail_span) * 100.0
-        state.hair_growth = _clamp(state.hair_growth + hair_rate * day_fraction)
-        state.nail_growth = _clamp(state.nail_growth + nail_rate * day_fraction)
-
         if state.lactating:
             state.milk = _clamp(state.milk + MILK_RATE * step_hours)
             if state.milk >= 95.0:

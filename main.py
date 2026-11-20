@@ -158,10 +158,6 @@ ACTION_ALIASES = {
     "亲密": "intimacy",
     "做爱": "intimacy",
     "舒缓": "intimacy",
-    "剪头发": "haircut",
-    "头发": "haircut",
-    "剪指甲": "nails",
-    "指甲": "nails",
     "自己解决": "release",
     "释放": "release",
     "自慰": "release",
@@ -713,11 +709,8 @@ class BodyNeedsPlugin(Star):
                 polling passes False so it does not suppress sleep recovery.
             umo: Unified message origin used for the knowledge-base lookup.
         """
-        traits = await self._kb_traits_for(umo, profile)
         async with self._lock:
             state = self.store.load(persona_id, now)
-            if traits:
-                self._apply_appearance_traits(state, traits)
             mood = self._emotion_for(persona_id)
             advance(state, now, profile, self.settings, mood)
             self._consume_body_request(state, profile, now)
@@ -903,7 +896,7 @@ class BodyNeedsPlugin(Star):
 
     def _body_tools(self, profile: Profile, private: bool) -> ToolSet:
         """Build the small tool set offered during a chat turn."""
-        actions = ["eat", "snack", "drink", "toilet", "haircut", "nails", "nap"]
+        actions = ["eat", "snack", "drink", "toilet", "nap"]
         if self.settings.enable_hygiene:
             actions.extend(["shower", "brush"])
         if profile.gender == "female" and self.settings.enable_cycle:
@@ -940,7 +933,7 @@ class BodyNeedsPlugin(Star):
                 description=(
                     "记录自己做过的一件照顾身体的事，并结算身体变化：吃饭、吃零食、喝水、"
                     + ("洗澡、刷牙、" if self.settings.enable_hygiene else "")
-                    + "上厕所、剪头发、剪指甲、小睡"
+                    + "上厕所、小睡"
                     + ("、补卫生用品" if profile.gender == "female" else "")
                     + (
                         "、产检、喂奶"
@@ -1078,7 +1071,7 @@ class BodyNeedsPlugin(Star):
                 action = name.lower()
             if action is None:
                 yield event.plain_result(
-                    "用法：/身体 调试 <喂|零食|喝水|洗澡|刷牙|上厕所|剪头发|剪指甲|小睡|做爱|自己解决|产检|哺乳|补货>\n"
+                    "用法：/身体 调试 <喂|零食|喝水|洗澡|刷牙|上厕所|小睡|做爱|自己解决|产检|哺乳|补货>\n"
                     "这是维护用的调试口，不是她的日常；正常聊天里她做了什么由 body_action 记录。"
                 )
                 return

@@ -19,8 +19,6 @@ from .model import (
     BodyState,
     CycleView,
     cycle_view,
-    hair_length_cm,
-    nail_length_mm,
 )
 from .profile import Profile, gender_label
 
@@ -608,13 +606,6 @@ def build_prompt_block(
             lines.append(f"小便：{bladder_label(state.bladder)}")
         if state.bowel >= 35:
             lines.append(f"排便：{bowel_label(state.bowel)}")
-        if state.hair_growth >= 55 or state.nail_growth >= 50:
-            lines.append(
-                f"头发：{hair_length_cm(state, profile):.0f} cm，"
-                f"{hair_label(state.hair_growth)}；"
-                f"指甲：{nail_length_mm(state, profile):.1f} mm，"
-                f"{nail_label(state.nail_growth)}"
-            )
         if state.temperature < 36.3 or state.temperature >= 36.9:
             lines.append(
                 f"体温：{state.temperature:.1f}℃"
@@ -753,12 +744,6 @@ def build_status_text(
                 f" · 口腔：{meters['oral_health']['level']}（{round(meters['oral_health']['value'])}/100）"
             )
         lines.append(
-            f"头发：{hair_length_cm(state, profile):.0f} cm，"
-            f"{hair_label(state.hair_growth)} · "
-            f"指甲：{nail_length_mm(state, profile):.1f} mm，"
-            f"{nail_label(state.nail_growth)}"
-        )
-        lines.append(
             f"体温：{state.temperature:.1f}℃（{temperature_label(state.temperature)}）"
         )
         if state.sweat >= 15:
@@ -893,28 +878,6 @@ def build_web_state(
 
     details.extend(
         [
-            {
-                "key": "hair",
-                "label": "头发",
-                "value": round(state.hair_growth, 1),
-                "unit": "%",
-                "display": f"{hair_length_cm(state, profile):.0f} cm",
-                "level": hair_label(state.hair_growth),
-                "tone": "hot"
-                if state.hair_growth >= 90
-                else ("warn" if state.hair_growth >= 75 else "ok"),
-            },
-            {
-                "key": "nails",
-                "label": "指甲",
-                "value": round(state.nail_growth, 1),
-                "unit": "%",
-                "display": f"{nail_length_mm(state, profile):.1f} mm",
-                "level": nail_label(state.nail_growth),
-                "tone": "hot"
-                if state.nail_growth >= 88
-                else ("warn" if state.nail_growth >= 70 else "ok"),
-            },
             {
                 "key": "temperature",
                 "label": "体温",
