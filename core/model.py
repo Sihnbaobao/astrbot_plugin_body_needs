@@ -2201,7 +2201,7 @@ def apply_action(
             state,
             now,
             "intimacy",
-            "做爱了一次" + ("，被内射了" if ejaculated else ""),
+            "做爱了一次" + ("，受精了" if ejaculated else ""),
             key=f"intimacy:{int(now_ts)}",
         )
         can_conceive = (

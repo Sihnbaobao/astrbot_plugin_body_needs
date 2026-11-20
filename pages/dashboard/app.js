@@ -1004,7 +1004,7 @@ function renderFertility(persona) {
   const contraception = { none: "无避孕", condom: "避孕套", pill: "避孕药" };
   [
     ["做爱", data.count + " 次"],
-    ["内射", data.inseminations + " 次"],
+    ["受精", data.inseminations + " 次"],
     ["自慰", (data.self_releases || 0) + " 次"],
     ["湿润", data.wetness + " · " + wetnessLabel],
     ["单次概率", data.chance + "%"],
@@ -1012,7 +1012,7 @@ function renderFertility(persona) {
     ["避孕", contraception[data.contraception] || data.contraception || "—"],
     ["性欲基线", data.baseline || "默认"],
     ["上次做爱", data.last_at || "—"],
-    ["上次内射", data.last_insemination || "—"],
+    ["上次受精", data.last_insemination || "—"],
   ].forEach(function (pair) {
     const item = make("div", "fertility-metric");
     item.appendChild(make("span", "fertility-metric-label", pair[0]));
