@@ -817,29 +817,6 @@ function startFertilityArt(data) {
     ctx.arc(cx, cy, r * 1.85, 0, Math.PI * 2);
     ctx.fill();
 
-    for (let index = 0; index < 28; index += 1) {
-      const angle = (Math.PI * 2 * index) / 28 + t * 0.018;
-      const radius = r * 1.235 + Math.sin(t * 1.4 + index * 0.7) * r * 0.018;
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
-      const size = r * (0.055 + (index % 5) * 0.008);
-      const cell = ctx.createRadialGradient(
-        x - size * 0.3,
-        y - size * 0.35,
-        size * 0.12,
-        x,
-        y,
-        size,
-      );
-      cell.addColorStop(0, "rgba(255, 240, 232, 0.98)");
-      cell.addColorStop(0.55, "rgba(255, 105, 128, 0.78)");
-      cell.addColorStop(1, "rgba(112, 20, 52, 0.35)");
-      ctx.beginPath();
-      ctx.fillStyle = cell;
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
     const zona = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
     zona.addColorStop(0, "rgba(255, 245, 236, 0.96)");
     zona.addColorStop(0.45, "rgba(255, 118, 145, 0.58)");
