@@ -117,6 +117,9 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
         "energy": round(energy, 3),
         "dirt": round(dirt, 3),
         "libido": round(libido, 3),
+        "wetness": round(_clamp(state.wetness / 100.0), 3),
+        "away_until": state.away_until,
+        "away_reason": state.away_reason,
         "labels": labels,
         "line": line,
     }

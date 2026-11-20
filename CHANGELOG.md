@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.0
+
+- `vitals.json` 新增 `away_until`、`away_reason`、`wetness`，供 persona_presence 的参与判断读取。
+- 私聊 direct 模式下，persona_presence 会因身体处于“刚自慰/忙碌”状态而进入决策 AI，由人格决定是否保持安静；body 自带的硬闸门默认关闭（`ENABLE_AWAY=false`），避免抢在 persona_presence 前面。
+- body 仍保留 `ENABLE_AWAY` 作为独立运行时的静默开关。
+
 ## 0.18.0
 
 - 新增 `ENABLE_AWAY`：私聊里她自慰后的 4-12 分钟内会真的不回复消息，而不是只在后台改数值；命令类消息仍然放行。

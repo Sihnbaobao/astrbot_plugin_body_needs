@@ -104,7 +104,7 @@ class Settings:
     intensity: str = "natural"
     enable_cycle: bool = True
     enable_intimate: bool = True
-    enable_away: bool = True
+    enable_away: bool = False
     enable_pregnancy: bool = True
     contraception: str = "none"
     enable_hygiene: bool = True
@@ -164,7 +164,7 @@ class Settings:
             intensity=_choice(get("INTENSITY", "natural"), INTENSITIES, "natural"),
             enable_cycle=_as_bool(get("ENABLE_CYCLE", True), True),
             enable_intimate=_as_bool(get("ENABLE_INTIMATE", True), True),
-            enable_away=_as_bool(get("ENABLE_AWAY", True), True),
+            enable_away=_as_bool(get("ENABLE_AWAY", False), False),
             enable_pregnancy=_as_bool(get("ENABLE_PREGNANCY", True), True),
             contraception=_choice(get("CONTRACEPTION", "none"), CONTRACEPTIONS, "none"),
             enable_hygiene=_as_bool(get("ENABLE_HYGIENE", True), True),

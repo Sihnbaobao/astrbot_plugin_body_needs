@@ -102,8 +102,8 @@
   "ENABLE_AWAY": {
     "description": "自慰后暂时不回消息",
     "type": "bool",
-    "default": true,
-    "hint": "私聊里她自慰后的 4-12 分钟内不回复消息；这是行为静默，不是报错。关掉后照常回复。"
+    "default": false,
+    "hint": "独立运行时由 body 自己静默；接 persona_presence 时建议关掉，让它读 vitals 决定回不回。"
   },
   "ENABLE_PREGNANCY": {
     "description": "启用怀孕",
