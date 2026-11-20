@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>身体 · 生理需求</title>
-    <link rel="stylesheet" href="./style.css?v=12" />
+    <link rel="stylesheet" href="./style.css?v=13" />
   </head>
   <body>
     <header class="topbar">
@@ -63,11 +63,12 @@
             <span class="hint" id="cyclePhase"></span>
           </div>
           <div id="cycleBody"></div>
-          <div class="fertility-card" id="fertilityCard" hidden></div>
-          <div class="card-actions" id="cycleActions" hidden>
-            <button class="btn ghost" data-cycle="start" type="button">今天开始</button>
-            <button class="btn ghost" data-cycle="delay" type="button">延后一天</button>
+          <div class="card-actions cycle-actions" id="cycleActions" hidden>
+            <span class="cycle-actions-label">经期记录</span>
+            <button class="btn ghost" data-cycle="start" type="button">记录经期开始</button>
+            <button class="btn ghost" data-cycle="delay" type="button">周期顺延一天</button>
           </div>
+          <div class="fertility-card" id="fertilityCard" hidden></div>
         </section>
 
         <section class="card cycle-card" id="maleCard" hidden>
@@ -179,6 +180,6 @@
     </footer>
 
     <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
-    <script type="module" src="./app.js?v=16"></script>
+    <script type="module" src="./app.js?v=17"></script>
   </body>
 </html>

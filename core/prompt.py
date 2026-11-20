@@ -832,6 +832,10 @@ def build_web_state(
         if view is not None and view.fertile and not state.pregnant:
             factor = CONTRACEPTION_FACTOR.get(settings.contraception, 1.0)
             chance = CONCEPTION_BASE * factor
+        habit = profile.libido_habit
+        baseline = "默认"
+        if habit is not None:
+            baseline = "高" if habit >= 2.5 else "中" if habit >= 1.2 else "低"
         intimacy = {
             "count": state.intimacy_count,
             "inseminations": state.insemination_count,
@@ -842,6 +846,9 @@ def build_web_state(
             "chance": round(chance * 100.0, 1),
             "pregnant": state.pregnant,
             "contraception": settings.contraception,
+            "self_releases": state.release_count,
+            "last_self": _ago(state.last_self_at, now),
+            "baseline": baseline,
         }
 
     lactation = None

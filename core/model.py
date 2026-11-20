@@ -2239,6 +2239,14 @@ def apply_action(
         state.libido = 0.0
         state.wetness = max(0.0, state.wetness - 30.0)
         state.last_self_at = now_ts
+        state.release_count += 1
+        _add_event(
+            state,
+            now,
+            "self_release",
+            "自己解决了一次，身体松下来",
+            key=f"self-release-action:{int(now_ts)}",
+        )
         if profile.gender == "male":
             state.refractory_until = (
                 now_ts

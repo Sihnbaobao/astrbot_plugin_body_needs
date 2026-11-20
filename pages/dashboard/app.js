@@ -415,6 +415,7 @@ function renderCycle(persona) {
       });
       host.appendChild(facts);
     }
+    el("cycleActions").hidden = true;
     return;
   }
 
@@ -578,7 +579,9 @@ function renderFertility(persona) {
       ? "等待受精"
       : data.fertile
         ? "易孕中"
-        : "未受精";
+        : data.count > 0
+          ? "未受精"
+          : "未尝试";
   const head = make("div", "fertility-head");
   head.appendChild(make("span", "fertility-title", "受精"));
   head.appendChild(
@@ -586,24 +589,79 @@ function renderFertility(persona) {
   );
   host.appendChild(head);
 
-  const stage = make("div", "fertility-stage" + (data.pregnant ? " is-pregnant" : ""));
-  const egg = make("span", "fertility-egg" + (data.pregnant ? " on" : ""));
-  egg.appendChild(make("i"));
-  stage.appendChild(egg);
-  const sperm = make("span", "fertility-sperm");
-  for (let index = 0; index < 4; index += 1) {
-    sperm.appendChild(make("i"));
-  }
-  stage.appendChild(sperm);
-  stage.appendChild(make("span", "fertility-arrow", "→"));
-  stage.appendChild(
-    make("span", "fertility-result" + (data.pregnant ? " on" : ""), status),
+  const stage = make(
+    "div",
+    "fertility-stage" +
+      (data.pregnant ? " is-pregnant" : data.fertile ? " is-fertile" : ""),
   );
+  const visual = make("div", "fertility-visual");
+  visual.innerHTML = `
+    <svg class="fertility-svg" viewBox="0 0 240 100" role="img" aria-label="受精示意">
+      <defs>
+        <radialGradient id="eggFill" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#f6dfb2"/>
+          <stop offset="100%" stop-color="#c99633"/>
+        </radialGradient>
+        <filter id="eggGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4"/>
+        </filter>
+      </defs>
+      <circle class="egg-halo" cx="70" cy="50" r="33"/>
+      <circle class="egg-corona" cx="70" cy="50" r="27"/>
+      <circle class="egg-zona" cx="70" cy="50" r="20"/>
+      <circle class="egg-core" cx="70" cy="50" r="13"/>
+      <circle class="egg-nucleus" cx="66" cy="46" r="4"/>
+      <g class="sperm-group">
+        <g class="sperm" transform="translate(190 24)"><g class="sperm-body" style="--delay:0s">
+          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
+          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
+        </g></g>
+        <g class="sperm" transform="translate(190 42)"><g class="sperm-body" style="--delay:0.7s">
+          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
+          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
+        </g></g>
+        <g class="sperm" transform="translate(190 58)"><g class="sperm-body" style="--delay:1.4s">
+          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
+          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
+        </g></g>
+        <g class="sperm" transform="translate(190 76)"><g class="sperm-body" style="--delay:2.1s">
+          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
+          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
+        </g></g>
+      </g>
+      <g class="zygote-group">
+        <circle class="zygote" cx="70" cy="50" r="15"/>
+        <circle class="pronucleus" cx="65" cy="47" r="3.2"/>
+        <circle class="pronucleus" cx="75" cy="52" r="3.2"/>
+      </g>
+    </svg>`;
+  stage.appendChild(visual);
+  const caption = make("div", "fertility-caption");
+  caption.appendChild(
+    make("strong", "fertility-result" + (data.pregnant ? " on" : ""), status),
+  );
+  caption.appendChild(
+    make(
+      "span",
+      "hint",
+      data.pregnant
+        ? "受精卵已着床"
+        : waiting
+          ? "精子已进入，等待判定"
+          : data.fertile
+            ? "易孕窗口内"
+            : data.count > 0
+              ? "不在易孕窗口"
+              : "还没有亲密记录",
+    ),
+  );
+  stage.appendChild(caption);
   host.appendChild(stage);
 
   const stats = make("div", "fertility-stats");
   stats.appendChild(make("span", "", "亲密 " + data.count + " 次"));
   stats.appendChild(make("span", "", "射精 " + data.inseminations + " 次"));
+  stats.appendChild(make("span", "", "自慰 " + data.self_releases + " 次"));
   const wetnessLabel =
     data.wetness >= 75
       ? "内裤湿了一小片"
@@ -621,6 +679,7 @@ function renderFertility(persona) {
   meta.appendChild(make("span", "", "上次 " + (data.last_at || "—")));
   meta.appendChild(make("span", "", "易孕 " + (data.fertile ? "是" : "否")));
   meta.appendChild(make("span", "", "单次 " + data.chance + "%"));
+  meta.appendChild(make("span", "", "性欲基线 " + data.baseline));
   const contraception = { none: "无避孕", condom: "避孕套", pill: "避孕药" };
   meta.appendChild(
     make("span", "", contraception[data.contraception] || data.contraception || "—"),
