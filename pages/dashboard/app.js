@@ -590,6 +590,7 @@ function startFertilityArt(data) {
     last: 0,
     sperm: [],
     particles: [],
+    bokeh: [],
     observer: null,
     reduce:
       window.matchMedia &&
@@ -602,16 +603,19 @@ function startFertilityArt(data) {
   };
   state.fertilityAnim = anim;
 
+  function maxRadius() {
+    return Math.min(anim.width, anim.height) * 0.55;
+  }
+
   function spawnSperm(initial) {
-    const maxR = Math.min(anim.width, anim.height) * 0.54;
-    const radius = initial
-      ? anim.eggR * 1.2 + Math.random() * Math.max(20, maxR - anim.eggR * 1.2)
-      : maxR + Math.random() * 24;
+    const outer = maxRadius();
     return {
       angle: Math.random() * Math.PI * 2,
-      radius: radius,
-      speed: 3.4 + Math.random() * 7.2,
-      size: 0.72 + Math.random() * 0.62,
+      radius: initial
+        ? anim.eggR * 1.3 + Math.random() * Math.max(16, outer - anim.eggR * 1.3)
+        : outer + 12 + Math.random() * 28,
+      speed: 4.2 + Math.random() * 5.6,
+      size: 1.02 + Math.random() * 0.62,
       phase: Math.random() * Math.PI * 2,
       depth: Math.random(),
     };
@@ -619,19 +623,32 @@ function startFertilityArt(data) {
 
   function seed() {
     anim.sperm = [];
-    for (let index = 0; index < 18; index += 1) {
+    for (let index = 0; index < 11; index += 1) {
       anim.sperm.push(spawnSperm(true));
     }
     anim.particles = [];
-    for (let index = 0; index < 34; index += 1) {
+    for (let index = 0; index < 42; index += 1) {
       anim.particles.push({
         x: Math.random() * anim.width,
         y: Math.random() * anim.height,
-        r: 0.7 + Math.random() * 2.2,
-        speed: 3 + Math.random() * 9,
-        drift: (Math.random() - 0.5) * 4,
-        alpha: 0.08 + Math.random() * 0.35,
-        warm: Math.random() > 0.45,
+        r: 0.6 + Math.random() * 1.8,
+        speed: 2.5 + Math.random() * 8,
+        drift: (Math.random() - 0.5) * 5,
+        alpha: 0.08 + Math.random() * 0.34,
+        warm: Math.random() > 0.5,
+      });
+    }
+    anim.bokeh = [];
+    for (let index = 0; index < 11; index += 1) {
+      anim.bokeh.push({
+        x: Math.random() * anim.width,
+        y: Math.random() * anim.height,
+        r: 16 + Math.random() * 54,
+        alpha: 0.05 + Math.random() * 0.09,
+        drift: 6 + Math.random() * 18,
+        speed: 0.12 + Math.random() * 0.22,
+        phase: Math.random() * Math.PI * 2,
+        cool: Math.random() > 0.7,
       });
     }
   }
@@ -651,62 +668,76 @@ function startFertilityArt(data) {
     anim.height = height;
     anim.cx = width / 2;
     anim.cy = height * 0.5;
-    anim.eggR = Math.min(width, height) * 0.225;
+    anim.eggR = Math.min(width, height) * 0.235;
     if (sizeChanged || !anim.sperm.length) seed();
   }
 
   function drawBackground() {
     const grad = ctx.createRadialGradient(
       anim.cx,
-      anim.cy * 0.86,
+      anim.cy * 0.9,
       0,
       anim.cx,
       anim.cy,
-      Math.max(anim.width, anim.height) * 0.75,
+      Math.max(anim.width, anim.height) * 0.78,
     );
-    grad.addColorStop(0, "#3b0d32");
-    grad.addColorStop(0.48, "#16081f");
-    grad.addColorStop(1, "#05030a");
+    grad.addColorStop(0, "#2b1039");
+    grad.addColorStop(0.42, "#10081d");
+    grad.addColorStop(1, "#05040b");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, anim.width, anim.height);
 
     const bloom = ctx.createRadialGradient(
-      anim.cx - anim.width * 0.24,
-      anim.cy - anim.height * 0.26,
+      anim.cx - anim.width * 0.23,
+      anim.cy - anim.height * 0.28,
       0,
-      anim.cx - anim.width * 0.24,
-      anim.cy - anim.height * 0.26,
-      Math.max(anim.width, anim.height) * 0.62,
+      anim.cx - anim.width * 0.23,
+      anim.cy - anim.height * 0.28,
+      Math.max(anim.width, anim.height) * 0.7,
     );
-    bloom.addColorStop(0, "rgba(255, 48, 138, 0.18)");
-    bloom.addColorStop(0.55, "rgba(190, 30, 110, 0.06)");
-    bloom.addColorStop(1, "rgba(190, 30, 110, 0)");
+    bloom.addColorStop(0, "rgba(255, 42, 133, 0.2)");
+    bloom.addColorStop(0.52, "rgba(178, 24, 106, 0.08)");
+    bloom.addColorStop(1, "rgba(178, 24, 106, 0)");
     ctx.fillStyle = bloom;
     ctx.fillRect(0, 0, anim.width, anim.height);
 
     const cool = ctx.createRadialGradient(
-      anim.cx + anim.width * 0.28,
-      anim.cy + anim.height * 0.24,
+      anim.cx + anim.width * 0.3,
+      anim.cy + anim.height * 0.28,
       0,
-      anim.cx + anim.width * 0.28,
-      anim.cy + anim.height * 0.24,
-      Math.max(anim.width, anim.height) * 0.5,
+      anim.cx + anim.width * 0.3,
+      anim.cy + anim.height * 0.28,
+      Math.max(anim.width, anim.height) * 0.55,
     );
-    cool.addColorStop(0, "rgba(68, 92, 255, 0.08)");
-    cool.addColorStop(1, "rgba(68, 92, 255, 0)");
+    cool.addColorStop(0, "rgba(78, 94, 255, 0.09)");
+    cool.addColorStop(1, "rgba(78, 94, 255, 0)");
     ctx.fillStyle = cool;
     ctx.fillRect(0, 0, anim.width, anim.height);
+
+    anim.bokeh.forEach(function (b) {
+      const x = b.x + Math.sin(anim.time * b.speed + b.phase) * b.drift;
+      const y = b.y + Math.cos(anim.time * b.speed * 0.8 + b.phase) * b.drift;
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, b.r);
+      const color = b.cool ? "110, 150, 255" : "255, 112, 162";
+      glow.addColorStop(0, "rgba(" + color + ", " + b.alpha + ")");
+      glow.addColorStop(0.6, "rgba(" + color + ", " + b.alpha * 0.35 + ")");
+      glow.addColorStop(1, "rgba(" + color + ", 0)");
+      ctx.beginPath();
+      ctx.fillStyle = glow;
+      ctx.arc(x, y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
 
     const vignette = ctx.createRadialGradient(
       anim.cx,
       anim.cy,
-      Math.min(anim.width, anim.height) * 0.18,
+      Math.min(anim.width, anim.height) * 0.16,
       anim.cx,
       anim.cy,
-      Math.max(anim.width, anim.height) * 0.68,
+      Math.max(anim.width, anim.height) * 0.7,
     );
     vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.62)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.68)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, anim.width, anim.height);
   }
@@ -723,17 +754,16 @@ function startFertilityArt(data) {
       if (p.x > anim.width + 8) p.x = -8;
       ctx.beginPath();
       ctx.fillStyle = p.warm
-        ? "rgba(255, 244, 232, " + p.alpha + ")"
-        : "rgba(255, 150, 188, " + p.alpha + ")";
+        ? "rgba(255, 246, 234, " + p.alpha + ")"
+        : "rgba(255, 142, 184, " + p.alpha + ")";
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
     });
   }
 
   function drawSperm(s, dt) {
-    const maxR = Math.min(anim.width, anim.height) * 0.54;
     s.radius -= s.speed * dt;
-    s.angle += 0.018 * dt;
+    s.angle += (0.024 + (s.depth - 0.5) * 0.014) * dt;
     if (s.radius < anim.eggR * 1.18) {
       const next = spawnSperm(false);
       s.angle = next.angle;
@@ -743,11 +773,12 @@ function startFertilityArt(data) {
       s.phase = next.phase;
       s.depth = next.depth;
     }
-    if (s.radius > maxR + 60) s.radius = maxR + 60;
+    if (s.radius > maxRadius() + 60) s.radius = maxRadius() + 60;
     const x = anim.cx + Math.cos(s.angle) * s.radius;
     const y = anim.cy + Math.sin(s.angle) * s.radius;
-    const fade = Math.min(1, Math.max(0, (s.radius - anim.eggR * 1.2) / 34));
-    const alpha = (s.depth < 0.45 ? 0.38 : 0.88) * fade;
+    const fade = Math.min(1, Math.max(0, (s.radius - anim.eggR * 1.2) / 30));
+    const alpha =
+      (s.depth < 0.45 ? 0.32 : 0.92) * fade * (anim.data.pregnant ? 0.15 : 1);
     if (alpha <= 0.01) return;
     ctx.save();
     ctx.translate(x, y);
@@ -755,133 +786,156 @@ function startFertilityArt(data) {
     ctx.scale(s.size, s.size);
     ctx.globalAlpha = alpha;
 
-    const tailLength = 64;
-    const segments = 15;
-    let px = 7;
-    let py = 0;
-    for (let index = 1; index <= segments; index += 1) {
-      const t = index / segments;
-      const nx = 7 + t * tailLength;
-      const ny =
-        Math.sin(t * 6.1 - anim.time * 3.1 + s.phase) * 6.2 * (1 - t * 0.45);
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(nx, ny);
-      ctx.lineWidth = 2.35 * (1 - t * 0.62);
-      ctx.strokeStyle = "rgba(255, 246, 238, 0.9)";
-      ctx.lineCap = "round";
-      ctx.stroke();
-      px = nx;
-      py = ny;
+    const tailLength = 78;
+    const segments = 18;
+    for (let pass = 0; pass < 2; pass += 1) {
+      let px = 7.5;
+      let py = 0;
+      for (let index = 1; index <= segments; index += 1) {
+        const t = index / segments;
+        const nx = 7.5 + t * tailLength;
+        const ny =
+          Math.sin(t * 6.8 - anim.time * 3.4 + s.phase) * 6.4 * (1 - t * 0.35);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(nx, ny);
+        ctx.lineWidth = pass === 0 ? 6.2 * (1 - t * 0.6) : 2.5 * (1 - t * 0.55);
+        ctx.strokeStyle =
+          pass === 0 ? "rgba(255, 224, 214, 0.12)" : "rgba(255, 250, 244, 0.92)";
+        ctx.lineCap = "round";
+        ctx.stroke();
+        px = nx;
+        py = ny;
+      }
     }
 
-    const head = ctx.createRadialGradient(-3.2, -2.1, 0.5, 0, 0, 10);
-    head.addColorStop(0, "#fffdf8");
-    head.addColorStop(0.55, "#ffe9d8");
-    head.addColorStop(1, "#dca08a");
-    ctx.shadowColor = "rgba(255, 236, 222, 0.55)";
-    ctx.shadowBlur = 7;
+    const head = ctx.createRadialGradient(-3.4, -2.2, 0.4, 0, 0, 11.5);
+    head.addColorStop(0, "#ffffff");
+    head.addColorStop(0.48, "#fff0df");
+    head.addColorStop(1, "#e0a58e");
+    ctx.shadowColor = "rgba(255, 236, 220, 0.7)";
+    ctx.shadowBlur = 10;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 9.2, 5.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 10.4, 6.2, 0, 0, Math.PI * 2);
     ctx.fillStyle = head;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255, 248, 240, 0.75)";
-    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = "rgba(255, 250, 244, 0.8)";
+    ctx.lineWidth = 0.9;
     ctx.stroke();
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.arc(-5.8, 0, 2.1, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.arc(-6.4, 0, 2.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.ellipse(-2, -1.8, 2.6, 1.15, -0.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+    ctx.ellipse(-2.2, -2, 2.9, 1.3, -0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
   function drawEgg() {
     const t = anim.time;
-    const pulse = 1 + Math.sin(t * 1.25) * 0.014;
+    const pulse = 1 + Math.sin(t * 1.25) * 0.012;
     const r = anim.eggR * pulse;
     const cx = anim.cx;
     const cy = anim.cy;
     const fertile = anim.data.fertile || anim.data.pregnant;
 
-    const halo = ctx.createRadialGradient(cx, cy, r * 0.62, cx, cy, r * 1.85);
-    halo.addColorStop(0, fertile ? "rgba(255, 45, 130, 0.4)" : "rgba(255, 120, 155, 0.16)");
-    halo.addColorStop(0.55, fertile ? "rgba(255, 70, 145, 0.14)" : "rgba(255, 120, 155, 0.05)");
-    halo.addColorStop(1, "rgba(255, 70, 145, 0)");
+    const bloom = ctx.createRadialGradient(cx, cy, r * 0.58, cx, cy, r * 2.05);
+    bloom.addColorStop(0, fertile ? "rgba(255, 46, 122, 0.3)" : "rgba(255, 120, 150, 0.13)");
+    bloom.addColorStop(0.5, fertile ? "rgba(255, 60, 125, 0.1)" : "rgba(255, 120, 150, 0.04)");
+    bloom.addColorStop(1, "rgba(255, 60, 125, 0)");
     ctx.beginPath();
-    ctx.fillStyle = halo;
-    ctx.arc(cx, cy, r * 1.85, 0, Math.PI * 2);
+    ctx.fillStyle = bloom;
+    ctx.arc(cx, cy, r * 2.05, 0, Math.PI * 2);
     ctx.fill();
 
-    const zona = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    zona.addColorStop(0, "rgba(255, 245, 236, 0.96)");
-    zona.addColorStop(0.45, "rgba(255, 118, 145, 0.58)");
-    zona.addColorStop(1, "rgba(122, 18, 50, 0.82)");
+    const jelly = ctx.createRadialGradient(cx, cy, r * 0.78, cx, cy, r * 1.22);
+    jelly.addColorStop(0, "rgba(255, 80, 130, 0)");
+    jelly.addColorStop(0.7, "rgba(255, 80, 130, 0.05)");
+    jelly.addColorStop(1, "rgba(255, 60, 120, 0.17)");
     ctx.beginPath();
-    ctx.strokeStyle = zona;
-    ctx.lineWidth = Math.max(2, r * 0.052);
-    ctx.arc(cx, cy, r * 1.11, 0, Math.PI * 2);
-    ctx.stroke();
-
-    const gel = ctx.createRadialGradient(cx, cy, r * 0.76, cx, cy, r * 1.23);
-    gel.addColorStop(0, "rgba(255, 90, 140, 0)");
-    gel.addColorStop(0.72, "rgba(255, 90, 140, 0.07)");
-    gel.addColorStop(1, "rgba(255, 70, 130, 0.2)");
-    ctx.beginPath();
-    ctx.fillStyle = gel;
+    ctx.fillStyle = jelly;
     ctx.arc(cx, cy, r * 1.22, 0, Math.PI * 2);
     ctx.fill();
 
+    const zona = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    zona.addColorStop(0, "rgba(255, 248, 240, 0.98)");
+    zona.addColorStop(0.42, "rgba(255, 123, 146, 0.66)");
+    zona.addColorStop(1, "rgba(111, 12, 46, 0.9)");
+    ctx.beginPath();
+    ctx.strokeStyle = zona;
+    ctx.lineWidth = Math.max(3, r * 0.062);
+    ctx.arc(cx, cy, r * 1.1, 0, Math.PI * 2);
+    ctx.stroke();
+
     const body = ctx.createRadialGradient(
-      cx - r * 0.36,
-      cy - r * 0.42,
-      r * 0.06,
+      cx - r * 0.38,
+      cy - r * 0.44,
+      r * 0.04,
       cx,
       cy,
-      r * 1.08,
+      r * 1.1,
     );
-    body.addColorStop(0, "#fff6ea");
-    body.addColorStop(0.18, "#ffb4a4");
-    body.addColorStop(0.44, "#f35a6d");
-    body.addColorStop(0.7, "#c51f45");
-    body.addColorStop(1, "#630d2e");
+    body.addColorStop(0, "#fff5e7");
+    body.addColorStop(0.16, "#ffb09c");
+    body.addColorStop(0.4, "#ff5d70");
+    body.addColorStop(0.64, "#d6204b");
+    body.addColorStop(0.84, "#8f1238");
+    body.addColorStop(1, "#48051f");
     ctx.beginPath();
     ctx.fillStyle = body;
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
 
-    const depth = ctx.createRadialGradient(cx, cy, r * 0.58, cx, cy, r);
-    depth.addColorStop(0, "rgba(42, 0, 22, 0)");
-    depth.addColorStop(1, "rgba(42, 0, 22, 0.7)");
+    [0.82, 0.64, 0.46].forEach(function (scale, index) {
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255, 216, 206, " + (0.055 + index * 0.018) + ")";
+      ctx.lineWidth = Math.max(1, r * 0.012);
+      ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    const depth = ctx.createRadialGradient(cx, cy, r * 0.52, cx, cy, r * 1.01);
+    depth.addColorStop(0, "rgba(48, 0, 25, 0)");
+    depth.addColorStop(0.76, "rgba(48, 0, 25, 0.12)");
+    depth.addColorStop(1, "rgba(34, 0, 18, 0.72)");
     ctx.beginPath();
     ctx.fillStyle = depth;
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
 
     const shine = ctx.createRadialGradient(
-      cx - r * 0.38,
-      cy - r * 0.44,
+      cx - r * 0.4,
+      cy - r * 0.46,
       0,
-      cx - r * 0.38,
-      cy - r * 0.44,
-      r * 0.46,
+      cx - r * 0.4,
+      cy - r * 0.46,
+      r * 0.52,
     );
-    shine.addColorStop(0, "rgba(255,255,255,0.52)");
-    shine.addColorStop(1, "rgba(255,255,255,0)");
+    shine.addColorStop(0, "rgba(255, 255, 255, 0.62)");
+    shine.addColorStop(0.45, "rgba(255, 245, 235, 0.16)");
+    shine.addColorStop(1, "rgba(255, 245, 235, 0)");
     ctx.beginPath();
     ctx.fillStyle = shine;
-    ctx.ellipse(cx - r * 0.3, cy - r * 0.36, r * 0.36, r * 0.2, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(cx - r * 0.3, cy - r * 0.38, r * 0.4, r * 0.22, -0.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255, 245, 235, 0.55)";
-    ctx.lineWidth = Math.max(2, r * 0.035);
-    ctx.arc(cx, cy, r * 0.985, -Math.PI * 0.78, -Math.PI * 0.08);
+    ctx.strokeStyle = "rgba(255, 250, 244, 0.72)";
+    ctx.lineWidth = Math.max(2, r * 0.028);
+    ctx.arc(cx, cy, r * 0.985, -Math.PI * 0.78, -Math.PI * 0.06);
     ctx.stroke();
+
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.56);
+    core.addColorStop(0, "rgba(255, 232, 214, 0.17)");
+    core.addColorStop(0.42, "rgba(255, 160, 148, 0.09)");
+    core.addColorStop(1, "rgba(255, 160, 148, 0)");
+    ctx.beginPath();
+    ctx.fillStyle = core;
+    ctx.arc(cx, cy, r * 0.56, 0, Math.PI * 2);
+    ctx.fill();
 
     if (anim.data.pregnant) {
       [
@@ -894,32 +948,16 @@ function startFertilityArt(data) {
           0,
           point[0],
           point[1],
-          r * 0.2,
+          r * 0.22,
         );
-        pronucleus.addColorStop(0, "rgba(255, 232, 218, 0.92)");
-        pronucleus.addColorStop(0.55, "rgba(255, 196, 182, 0.36)");
-        pronucleus.addColorStop(1, "rgba(255, 196, 182, 0)");
+        pronucleus.addColorStop(0, "rgba(255, 244, 228, 0.95)");
+        pronucleus.addColorStop(0.45, "rgba(255, 200, 182, 0.32)");
+        pronucleus.addColorStop(1, "rgba(255, 200, 182, 0)");
         ctx.beginPath();
         ctx.fillStyle = pronucleus;
-        ctx.arc(point[0], point[1], r * 0.2, 0, Math.PI * 2);
+        ctx.arc(point[0], point[1], r * 0.22, 0, Math.PI * 2);
         ctx.fill();
       });
-    } else {
-      const nucleus = ctx.createRadialGradient(
-        cx - r * 0.04,
-        cy - r * 0.05,
-        0,
-        cx,
-        cy,
-        r * 0.58,
-      );
-      nucleus.addColorStop(0, "rgba(255, 228, 212, 0.16)");
-      nucleus.addColorStop(0.35, "rgba(190, 70, 95, 0.08)");
-      nucleus.addColorStop(1, "rgba(190, 70, 95, 0)");
-      ctx.beginPath();
-      ctx.fillStyle = nucleus;
-      ctx.arc(cx, cy, r * 0.58, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
