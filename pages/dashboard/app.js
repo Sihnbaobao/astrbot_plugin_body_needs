@@ -792,65 +792,99 @@ function startFertilityArt(data) {
     ctx.scale(s.size * depthScale, s.size * depthScale);
     ctx.globalAlpha = alpha;
 
-    const tailLength = 86;
-    const segments = 22;
-    for (let pass = 0; pass < 2; pass += 1) {
-      let px = 8;
-      let py = 0;
-      for (let index = 1; index <= segments; index += 1) {
-        const t = index / segments;
-        const nx = 8 + t * tailLength;
-        const ny =
-          Math.sin(t * 5.6 - anim.time * 3.1 + s.phase) * 7.4 * (1 - t * 0.36);
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(nx, ny);
-        ctx.lineWidth = (pass === 0 ? 5.6 : 1.9) * (1 - t * 0.45);
-        ctx.strokeStyle =
-          pass === 0
-            ? "rgba(225, 235, 255, 0.12)"
-            : "rgba(255, 255, 255, 0.92)";
-        ctx.lineCap = "round";
-        ctx.stroke();
-        px = nx;
-        py = ny;
-      }
+    const tailLength = 118;
+    const samples = 26;
+    const points = [];
+    for (let index = 0; index <= samples; index += 1) {
+      const t = index / samples;
+      points.push({
+        x: 8 + t * tailLength,
+        y:
+          Math.sin(t * 3.1 - anim.time * 2.9 + s.phase) *
+          10 *
+          (1 - t * 0.12),
+        t: t,
+      });
     }
 
-    if (s.z > 0.6) {
-      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 22);
-      aura.addColorStop(0, "rgba(225, 235, 255, " + (0.13 * s.z).toFixed(3) + ")");
-      aura.addColorStop(1, "rgba(225, 235, 255, 0)");
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.strokeStyle = "rgba(220, 235, 255, 0.18)";
+    ctx.lineWidth = 5.6;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
+      const px = point.x;
+      const py = point.y - width;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    for (let index = points.length - 1; index >= 0; index -= 1) {
+      const point = points[index];
+      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
+      ctx.lineTo(point.x, point.y + width);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#fffdfb";
+    ctx.fill();
+
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
+      const px = point.x;
+      const py = point.y - width * 0.22;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = 0.65;
+    ctx.stroke();
+
+    if (s.z > 0.58) {
+      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 24);
+      aura.addColorStop(0, "rgba(215, 230, 255, " + (0.16 * s.z).toFixed(3) + ")");
+      aura.addColorStop(1, "rgba(215, 230, 255, 0)");
       ctx.beginPath();
       ctx.fillStyle = aura;
-      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.arc(0, 0, 24, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const head = ctx.createRadialGradient(-3.6, -2.4, 0.4, 0, 0, 12);
+    const head = ctx.createRadialGradient(-3.4, -2.2, 0.4, 0, 0, 11);
     head.addColorStop(0, "#ffffff");
-    head.addColorStop(0.5, "#f8f5ff");
-    head.addColorStop(0.82, "#e5d8f1");
-    head.addColorStop(1, "#cbb8dd");
-    ctx.shadowColor = "rgba(220, 230, 255, 0.55)";
+    head.addColorStop(0.5, "#fbf8ff");
+    head.addColorStop(0.82, "#e8dcf3");
+    head.addColorStop(1, "#cdbce0");
+    ctx.shadowColor = "rgba(215, 230, 255, 0.55)";
     ctx.shadowBlur = 5 + s.z * 8;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 10.6, 6.2, 0, 0, Math.PI * 2);
+    ctx.moveTo(9, 0);
+    ctx.bezierCurveTo(8, -3.6, 3, -5.8, -2, -5.4);
+    ctx.bezierCurveTo(-7, -5, -9, -2.4, -9, 0);
+    ctx.bezierCurveTo(-9, 2.4, -7, 5, -2, 5.4);
+    ctx.bezierCurveTo(3, 5.8, 8, 3.6, 9, 0);
+    ctx.closePath();
     ctx.fillStyle = head;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
     ctx.lineWidth = 0.85;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.ellipse(-3, -2.1, 3.4, 1.5, -0.18, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+    ctx.ellipse(-2.6, -2.2, 3.2, 1.35, -0.18, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(196, 180, 224, 0.55)";
+    ctx.strokeStyle = "rgba(199, 183, 226, 0.5)";
     ctx.lineWidth = 0.8;
-    ctx.arc(0, 0, 9.4, Math.PI * 1.08, Math.PI * 1.58);
+    ctx.arc(0, 0, 8.7, Math.PI * 1.08, Math.PI * 1.58);
     ctx.stroke();
     ctx.restore();
   }
