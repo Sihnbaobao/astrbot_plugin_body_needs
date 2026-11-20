@@ -153,6 +153,42 @@ def test_group_full_shows_cycle_but_not_adult() -> None:
     assert "不必提经期" not in block
 
 
+def test_group_basic_hides_pregnancy_and_lactation_events() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.events = [
+        {
+            "at": (now - timedelta(minutes=30)).isoformat(),
+            "kind": "conception",
+            "text": "怀孕了",
+        },
+        {
+            "at": (now - timedelta(hours=2)).isoformat(),
+            "kind": "prenatal",
+            "text": "产检：第一次产检，听到了胎心，单胎",
+        },
+        {
+            "at": (now - timedelta(hours=4)).isoformat(),
+            "kind": "self_care",
+            "text": "喂了奶，胸口松下来",
+        },
+    ]
+    basic = build_prompt_block(state, now, make_profile(), Settings(), private=False)
+    assert "怀孕" not in basic
+    assert "产检" not in basic
+    assert "喂了奶" not in basic
+
+    full = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="full"), private=False
+    )
+    assert "怀孕" in full
+    assert "产检" in full
+    assert "喂了奶" not in full
+
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "喂了奶" in private
+
+
 def test_group_basic_wording_stays_restricted() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     block = build_prompt_block(

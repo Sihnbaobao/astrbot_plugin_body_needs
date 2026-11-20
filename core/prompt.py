@@ -287,6 +287,8 @@ def _recent_events(
             "morning_erection",
             "arousal",
             "self_release",
+            "engorged",
+            "lactation",
         ):
             continue
         if (
@@ -297,6 +299,10 @@ def _recent_events(
                 "period",
                 "period_end",
                 "phase",
+                "conception",
+                "prenatal",
+                "miscarriage",
+                "birth",
             )
         ):
             continue
@@ -309,6 +315,8 @@ def _recent_events(
             continue
         text = str(event.get("text") or "").strip()
         if not text:
+            continue
+        if not private and "喂了奶" in text:
             continue
         rows.append((stamp, f"{_event_clock(event.get('at'), now)} {text}"))
     rows.sort(key=lambda item: item[0], reverse=True)
