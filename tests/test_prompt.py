@@ -192,7 +192,7 @@ def test_group_basic_hides_pregnancy_and_lactation_events() -> None:
 def test_private_wetness_line_is_filtered() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
-    state.wetness = 72.0
+    state.wetness = 78.0
     state.libido = 80.0
     private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
     assert "湿" in private
