@@ -558,155 +558,383 @@ function renderEvents(events) {
   el("eventCount").textContent = notable.length + " 条";
 }
 
-function fertilitySvg(data) {
-  const cx = 280;
-  const cy = 230;
-  const corona = Array.from({ length: 24 }, function (_, index) {
-    const angle = (Math.PI * 2 * index) / 24;
-    const radius = 134 + (index % 4) * 5;
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    const size = 6 + (index % 5) * 1.7;
-    return (
-      '<g class="art-corona-cell" style="--delay:' +
-      ((index % 6) * 0.23).toFixed(2) +
-      's"><circle class="art-corona" cx="' +
-      x.toFixed(1) +
-      '" cy="' +
-      y.toFixed(1) +
-      '" r="' +
-      size.toFixed(1) +
-      '"/><circle class="art-corona-shine" cx="' +
-      (x - size * 0.3).toFixed(1) +
-      '" cy="' +
-      (y - size * 0.35).toFixed(1) +
-      '" r="' +
-      (size * 0.32).toFixed(1) +
-      '"/></g>'
-    );
-  }).join("");
-  const makeSperm = function (index, back) {
-    const angle = (Math.PI * 2 * index) / 14 + 0.12;
-    const radius = 200 + (index % 4) * 13 + (back ? -9 : 0);
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    const rotation = (angle * 180) / Math.PI;
-    const delay = (index * 0.31).toFixed(2);
-    const scale = (0.82 + (index % 3) * 0.12).toFixed(2);
-    return (
-      '<g transform="translate(' +
-      x.toFixed(1) +
-      ' ' +
-      y.toFixed(1) +
-      ') rotate(' +
-      rotation.toFixed(1) +
-      ') scale(' +
-      scale +
-      ')"><g class="art-sperm' +
-      (back ? ' art-sperm-back' : '') +
-      '" style="--delay:' +
-      delay +
-      's"><ellipse class="art-sperm-head" cx="0" cy="0" rx="9" ry="5.4"/><circle class="art-sperm-acrosome" cx="-6" cy="0" r="2.1"/><ellipse class="art-sperm-shine" cx="-2" cy="-1.7" rx="2.6" ry="1.3"/><path class="art-sperm-mid" d="M4 -1.2 L9 1"/><path class="art-sperm-tail" d="M7 0 C17 -8 26 8 37 0 C45 -5 52 4 60 0"/></g></g>'
-    );
+function stopFertilityArt() {
+  const anim = state.fertilityAnim;
+  if (!anim) return;
+  anim.pause();
+  if (anim.observer) anim.observer.disconnect();
+  state.fertilityAnim = null;
+}
+
+function startFertilityArt(data) {
+  stopFertilityArt();
+  const host = el("fertilityArt");
+  host.replaceChildren();
+  const canvas = document.createElement("canvas");
+  canvas.className = "fertility-canvas";
+  host.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const anim = {
+    canvas: canvas,
+    ctx: ctx,
+    data: data,
+    running: false,
+    raf: 0,
+    width: 0,
+    height: 0,
+    cx: 0,
+    cy: 0,
+    eggR: 100,
+    time: 0,
+    last: 0,
+    sperm: [],
+    particles: [],
+    observer: null,
+    reduce:
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    pause: function () {
+      this.running = false;
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    },
   };
-  const backSperm = [0, 2, 4, 6, 8, 10, 12].map(function (i) {
-    return makeSperm(i, true);
-  }).join("");
-  const frontSperm = [1, 3, 5, 7, 9, 11, 13].map(function (i) {
-    return makeSperm(i, false);
-  }).join("");
-  const particles = Array.from({ length: 26 }, function (_, index) {
-    const x = 24 + ((index * 97) % 512);
-    const y = 20 + ((index * 131) % 420);
-    const size = 0.8 + (index % 4) * 0.65;
-    return (
-      '<circle class="art-particle" cx="' +
-      x +
-      '" cy="' +
-      y +
-      '" r="' +
-      size.toFixed(1) +
-      '" style="--delay:' +
-      (index * 0.37).toFixed(1) +
-      's"/>'
+  state.fertilityAnim = anim;
+
+  function spawnSperm(initial) {
+    const maxR = Math.min(anim.width, anim.height) * 0.54;
+    const radius = initial
+      ? anim.eggR * 1.2 + Math.random() * Math.max(20, maxR - anim.eggR * 1.2)
+      : maxR + Math.random() * 24;
+    return {
+      angle: Math.random() * Math.PI * 2,
+      radius: radius,
+      speed: 3.4 + Math.random() * 7.2,
+      size: 0.72 + Math.random() * 0.62,
+      phase: Math.random() * Math.PI * 2,
+      depth: Math.random(),
+    };
+  }
+
+  function seed() {
+    anim.sperm = [];
+    for (let index = 0; index < 18; index += 1) {
+      anim.sperm.push(spawnSperm(true));
+    }
+    anim.particles = [];
+    for (let index = 0; index < 34; index += 1) {
+      anim.particles.push({
+        x: Math.random() * anim.width,
+        y: Math.random() * anim.height,
+        r: 0.7 + Math.random() * 2.2,
+        speed: 3 + Math.random() * 9,
+        drift: (Math.random() - 0.5) * 4,
+        alpha: 0.08 + Math.random() * 0.35,
+      });
+    }
+  }
+
+  function resize() {
+    const rect = host.getBoundingClientRect();
+    const width = Math.max(280, rect.width || 620);
+    const height = Math.max(260, rect.height || 430);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const sizeChanged = width !== anim.width || height !== anim.height;
+    anim.width = width;
+    anim.height = height;
+    anim.cx = width / 2;
+    anim.cy = height * 0.5;
+    anim.eggR = Math.min(width, height) * 0.205;
+    if (sizeChanged || !anim.sperm.length) seed();
+  }
+
+  function drawBackground() {
+    const grad = ctx.createRadialGradient(
+      anim.cx,
+      anim.cy * 0.86,
+      0,
+      anim.cx,
+      anim.cy,
+      Math.max(anim.width, anim.height) * 0.75,
     );
-  }).join("");
-  return `
-    <svg class="fertility-art-svg" viewBox="0 0 560 460" role="img" aria-label="卵子与精子示意">
-      <defs>
-        <radialGradient id="artBg" cx="50%" cy="42%" r="72%">
-          <stop offset="0%" stop-color="#431a2b"/>
-          <stop offset="52%" stop-color="#1d0c14"/>
-          <stop offset="100%" stop-color="#080408"/>
-        </radialGradient>
-        <radialGradient id="eggSphere" cx="34%" cy="27%" r="78%">
-          <stop offset="0%" stop-color="#fff0e4"/>
-          <stop offset="24%" stop-color="#ffc8bd"/>
-          <stop offset="58%" stop-color="#e4888d"/>
-          <stop offset="84%" stop-color="#b74f68"/>
-          <stop offset="100%" stop-color="#6f2741"/>
-        </radialGradient>
-        <radialGradient id="eggDepth" cx="50%" cy="48%" r="52%">
-          <stop offset="58%" stop-color="#3b0e20" stop-opacity="0"/>
-          <stop offset="100%" stop-color="#3b0e20" stop-opacity="0.62"/>
-        </radialGradient>
-        <radialGradient id="coronaFill" cx="34%" cy="28%" r="72%">
-          <stop offset="0%" stop-color="#ffd2d2"/>
-          <stop offset="55%" stop-color="#d98094"/>
-          <stop offset="100%" stop-color="#8e3f58"/>
-        </radialGradient>
-        <radialGradient id="eggHalo" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#ff9aa8" stop-opacity="0.55"/>
-          <stop offset="100%" stop-color="#ff9aa8" stop-opacity="0"/>
-        </radialGradient>
-        <radialGradient id="spermHead" cx="30%" cy="24%" r="75%">
-          <stop offset="0%" stop-color="#fff8f0"/>
-          <stop offset="55%" stop-color="#ffc7c2"/>
-          <stop offset="100%" stop-color="#d77b8e"/>
-        </radialGradient>
-        <radialGradient id="nucleusFill" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#ffd9c9"/>
-          <stop offset="70%" stop-color="#a94b62"/>
-          <stop offset="100%" stop-color="#6b2438"/>
-        </radialGradient>
-        <linearGradient id="zonaGradient" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#ffe5dd" stop-opacity="0.8"/>
-          <stop offset="55%" stop-color="#ffb6bd" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="#8d3651" stop-opacity="0.65"/>
-        </linearGradient>
-        <filter id="artGlow" x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur stdDeviation="10"/>
-        </filter>
-        <filter id="softBlur">
-          <feGaussianBlur stdDeviation="2.2"/>
-        </filter>
-      </defs>
-      <rect width="560" height="460" fill="url(#artBg)"/>
-      <circle class="art-ambient" cx="280" cy="225" r="185" fill="url(#eggHalo)"/>
-      ${particles}
-      <circle class="art-egg-halo" cx="280" cy="230" r="146" filter="url(#artGlow)"/>
-      <g class="art-sperm-layer art-sperm-back-layer">${backSperm}</g>
-      <g class="art-egg">
-        <ellipse class="art-egg-shadow" cx="280" cy="342" rx="128" ry="22"/>
-        <circle class="art-corona-ring" cx="280" cy="230" r="140"/>
-        ${corona}
-        <circle class="art-zona-outer" cx="280" cy="230" r="114"/>
-        <circle class="art-zona" cx="280" cy="230" r="108"/>
-        <circle class="art-egg-body" cx="280" cy="230" r="98" fill="url(#eggSphere)"/>
-        <circle class="art-egg-depth" cx="280" cy="230" r="98" fill="url(#eggDepth)"/>
-        <ellipse class="art-egg-highlight" cx="241" cy="188" rx="38" ry="22"/>
-        <path class="art-egg-rim" d="M 196 278 A 98 98 0 0 1 326 148"/>
-        <circle class="art-nucleus" cx="280" cy="230" r="21" fill="url(#nucleusFill)"/>
-        <circle class="art-nucleus-dot" cx="287" cy="223" r="7"/>
-      </g>
-      <g class="art-sperm-layer art-sperm-front-layer">${frontSperm}</g>
-      <g class="art-zygote">
-        <circle class="art-zygote-cell" cx="280" cy="230" r="100"/>
-        <circle class="art-zygote-ring" cx="280" cy="230" r="108"/>
-        <circle class="art-pronucleus" cx="260" cy="218" r="14"/>
-        <circle class="art-pronucleus" cx="300" cy="242" r="14"/>
-      </g>
-    </svg>`;
+    grad.addColorStop(0, "#431a2b");
+    grad.addColorStop(0.48, "#1d0c14");
+    grad.addColorStop(1, "#070307");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, anim.width, anim.height);
+
+    const vignette = ctx.createRadialGradient(
+      anim.cx,
+      anim.cy,
+      Math.min(anim.width, anim.height) * 0.18,
+      anim.cx,
+      anim.cy,
+      Math.max(anim.width, anim.height) * 0.68,
+    );
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.62)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, anim.width, anim.height);
+  }
+
+  function drawParticles(dt) {
+    anim.particles.forEach(function (p) {
+      p.y -= p.speed * dt;
+      p.x += p.drift * dt;
+      if (p.y < -8) {
+        p.y = anim.height + 8;
+        p.x = Math.random() * anim.width;
+      }
+      if (p.x < -8) p.x = anim.width + 8;
+      if (p.x > anim.width + 8) p.x = -8;
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255, 196, 208, " + p.alpha + ")";
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function drawSperm(s, dt) {
+    const maxR = Math.min(anim.width, anim.height) * 0.54;
+    s.radius -= s.speed * dt;
+    s.angle += 0.018 * dt;
+    if (s.radius < anim.eggR * 1.18) {
+      const next = spawnSperm(false);
+      s.angle = next.angle;
+      s.radius = next.radius;
+      s.speed = next.speed;
+      s.size = next.size;
+      s.phase = next.phase;
+      s.depth = next.depth;
+    }
+    if (s.radius > maxR + 60) s.radius = maxR + 60;
+    const x = anim.cx + Math.cos(s.angle) * s.radius;
+    const y = anim.cy + Math.sin(s.angle) * s.radius;
+    const fade = Math.min(1, Math.max(0, (s.radius - anim.eggR * 1.2) / 34));
+    const alpha = (s.depth < 0.45 ? 0.38 : 0.88) * fade;
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(s.angle);
+    ctx.scale(s.size, s.size);
+    ctx.globalAlpha = alpha;
+
+    const tailLength = 64;
+    const segments = 15;
+    let px = 7;
+    let py = 0;
+    for (let index = 1; index <= segments; index += 1) {
+      const t = index / segments;
+      const nx = 7 + t * tailLength;
+      const ny =
+        Math.sin(t * 6.1 - anim.time * 3.1 + s.phase) * 6.2 * (1 - t * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(nx, ny);
+      ctx.lineWidth = 2.35 * (1 - t * 0.62);
+      ctx.strokeStyle = "rgba(255, 170, 186, 0.82)";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      px = nx;
+      py = ny;
+    }
+
+    const head = ctx.createRadialGradient(-3.2, -2.1, 0.5, 0, 0, 10);
+    head.addColorStop(0, "#fffaf2");
+    head.addColorStop(0.55, "#ffd0c8");
+    head.addColorStop(1, "#c96d82");
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 9.2, 5.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = head;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 205, 205, 0.55)";
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255, 224, 208, 0.9)";
+    ctx.arc(-5.8, 0, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.ellipse(-2, -1.8, 2.6, 1.15, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawEgg() {
+    const t = anim.time;
+    const pulse = 1 + Math.sin(t * 1.25) * 0.014;
+    const r = anim.eggR * pulse;
+    const cx = anim.cx;
+    const cy = anim.cy;
+    const fertile = anim.data.fertile || anim.data.pregnant;
+
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.62, cx, cy, r * 1.85);
+    halo.addColorStop(0, fertile ? "rgba(255, 115, 145, 0.28)" : "rgba(255, 140, 155, 0.12)");
+    halo.addColorStop(0.55, fertile ? "rgba(255, 90, 125, 0.08)" : "rgba(255, 140, 155, 0.04)");
+    halo.addColorStop(1, "rgba(255, 90, 125, 0)");
+    ctx.beginPath();
+    ctx.fillStyle = halo;
+    ctx.arc(cx, cy, r * 1.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    for (let index = 0; index < 24; index += 1) {
+      const angle = (Math.PI * 2 * index) / 24 + t * 0.018;
+      const radius = r * 1.235 + Math.sin(t * 1.4 + index * 0.7) * r * 0.018;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
+      const size = r * (0.055 + (index % 5) * 0.008);
+      const cell = ctx.createRadialGradient(
+        x - size * 0.3,
+        y - size * 0.35,
+        size * 0.12,
+        x,
+        y,
+        size,
+      );
+      cell.addColorStop(0, "rgba(255, 218, 216, 0.9)");
+      cell.addColorStop(0.55, "rgba(214, 125, 145, 0.62)");
+      cell.addColorStop(1, "rgba(120, 45, 70, 0.28)");
+      ctx.beginPath();
+      ctx.fillStyle = cell;
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const zona = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    zona.addColorStop(0, "rgba(255, 232, 224, 0.86)");
+    zona.addColorStop(0.45, "rgba(255, 174, 184, 0.35)");
+    zona.addColorStop(1, "rgba(126, 46, 72, 0.72)");
+    ctx.beginPath();
+    ctx.strokeStyle = zona;
+    ctx.lineWidth = Math.max(2, r * 0.052);
+    ctx.arc(cx, cy, r * 1.11, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const body = ctx.createRadialGradient(
+      cx - r * 0.36,
+      cy - r * 0.42,
+      r * 0.06,
+      cx,
+      cy,
+      r * 1.08,
+    );
+    body.addColorStop(0, "#fff1e5");
+    body.addColorStop(0.22, "#ffc9bd");
+    body.addColorStop(0.56, "#e4888e");
+    body.addColorStop(0.82, "#b74f68");
+    body.addColorStop(1, "#6c2540");
+    ctx.beginPath();
+    ctx.fillStyle = body;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    const depth = ctx.createRadialGradient(cx, cy, r * 0.58, cx, cy, r);
+    depth.addColorStop(0, "rgba(45, 4, 20, 0)");
+    depth.addColorStop(1, "rgba(45, 4, 20, 0.58)");
+    ctx.beginPath();
+    ctx.fillStyle = depth;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shine = ctx.createRadialGradient(
+      cx - r * 0.38,
+      cy - r * 0.44,
+      0,
+      cx - r * 0.38,
+      cy - r * 0.44,
+      r * 0.46,
+    );
+    shine.addColorStop(0, "rgba(255,255,255,0.4)");
+    shine.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.beginPath();
+    ctx.fillStyle = shine;
+    ctx.ellipse(cx - r * 0.3, cy - r * 0.36, r * 0.36, r * 0.2, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (anim.data.pregnant) {
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255, 216, 204, 0.85)";
+      ctx.arc(cx - r * 0.18, cy - r * 0.1, r * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255, 226, 214, 0.8)";
+      ctx.arc(cx + r * 0.18, cy + r * 0.13, r * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      const nucleus = ctx.createRadialGradient(
+        cx - r * 0.05,
+        cy - r * 0.06,
+        1,
+        cx,
+        cy,
+        r * 0.22,
+      );
+      nucleus.addColorStop(0, "#ffd9c8");
+      nucleus.addColorStop(0.72, "#a94b62");
+      nucleus.addColorStop(1, "#6b2438");
+      ctx.beginPath();
+      ctx.fillStyle = nucleus;
+      ctx.globalAlpha = 0.75;
+      ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.fillStyle = "#ffe4d6";
+      ctx.arc(cx + r * 0.035, cy - r * 0.04, r * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function draw(dt) {
+    drawBackground();
+    drawParticles(dt);
+    const back = anim.sperm.filter(function (s) { return s.depth < 0.45; });
+    const front = anim.sperm.filter(function (s) { return s.depth >= 0.45; });
+    back.forEach(function (s) { drawSperm(s, dt); });
+    drawEgg();
+    front.forEach(function (s) { drawSperm(s, dt); });
+  }
+
+  function frame(now) {
+    if (!anim.running) return;
+    const dt = Math.min(0.05, (now - (anim.last || now)) / 1000);
+    anim.last = now;
+    anim.time += dt;
+    draw(dt);
+    anim.raf = requestAnimationFrame(frame);
+  }
+
+  anim.resume = function () {
+    if (anim.running) return;
+    if (anim.reduce) {
+      resize();
+      draw(0.016);
+      return;
+    }
+    anim.running = true;
+    anim.last = 0;
+    resize();
+    anim.raf = requestAnimationFrame(frame);
+  };
+
+  if (window.ResizeObserver) {
+    anim.observer = new ResizeObserver(function () {
+      if (anim.running) resize();
+    });
+    anim.observer.observe(host);
+  }
+  resize();
+  if (!el("panel-fertility").hidden) anim.resume();
 }
 
 function renderFertility(persona) {
@@ -717,6 +945,7 @@ function renderFertility(persona) {
   const data = persona.intimacy;
   if (!data) {
     tab.hidden = true;
+    stopFertilityArt();
     art.replaceChildren();
     info.replaceChildren();
     hint.textContent = "—";
@@ -752,7 +981,7 @@ function renderFertility(persona) {
   art.className =
     "fertility-art" +
     (data.pregnant ? " is-pregnant" : data.fertile ? " is-fertile" : "");
-  art.innerHTML = fertilitySvg(data);
+  startFertilityArt(data);
 
   info.replaceChildren();
   const statusBox = make("div", "fertility-status");
@@ -830,6 +1059,7 @@ function render(data) {
     el("cycleCard").hidden = true;
     el("maleCard").hidden = true;
     el("fertilityTab").hidden = true;
+    stopFertilityArt();
     updateSettingsHint();
     return;
   }
@@ -1028,6 +1258,10 @@ function setTab(name) {
   el("panel-live").hidden = name !== "live";
   el("panel-fertility").hidden = name !== "fertility";
   el("panel-settings").hidden = name !== "settings";
+  if (state.fertilityAnim) {
+    if (name === "fertility") state.fertilityAnim.resume();
+    else state.fertilityAnim.pause();
+  }
   if (name === "settings") {
     loadConfig();
   }
