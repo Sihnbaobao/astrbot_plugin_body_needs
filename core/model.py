@@ -87,6 +87,10 @@ GUT_BASE = 0.30
 GUT_PASSAGE = 0.35
 GUT_URGE_START = 25.0
 GUT_URGE_GAIN = 1.5
+HAIR_GROWTH_PER_DAY = 0.72
+NAIL_GROWTH_PER_DAY = 2.8
+HAIR_TRIM_AT = 82.0
+NAIL_TRIM_AT = 76.0
 # A persona only looks after herself once nobody has interacted for a while.
 # A long absence still has to leave the cycle in the right place, so the
 # simulation window is a year; beyond 60 days it takes coarser steps.
@@ -242,6 +246,8 @@ class BodyState:
     oral: float = 20.0
     gut: float = 8.0
     bowel: float = 0.0
+    hair_growth: float = 26.0
+    nail_growth: float = 22.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -274,6 +280,8 @@ class BodyState:
     last_brush_at: float = 0.0
     last_toilet_at: float = 0.0
     last_bowel_at: float = 0.0
+    last_haircut_at: float = 0.0
+    last_nails_at: float = 0.0
     last_nap_at: float = 0.0
     last_release_at: float = 0.0
     last_self_at: float = 0.0
@@ -313,6 +321,8 @@ class BodyState:
             "skin": self.skin,
             "gut": self.gut,
             "bowel": self.bowel,
+            "hair_growth": self.hair_growth,
+            "nail_growth": self.nail_growth,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -345,6 +355,8 @@ class BodyState:
             "last_brush_at": self.last_brush_at,
             "last_toilet_at": self.last_toilet_at,
             "last_bowel_at": self.last_bowel_at,
+            "last_haircut_at": self.last_haircut_at,
+            "last_nails_at": self.last_nails_at,
             "last_nap_at": self.last_nap_at,
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
@@ -387,6 +399,8 @@ class BodyState:
             "oral",
             "gut",
             "bowel",
+            "hair_growth",
+            "nail_growth",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
@@ -394,6 +408,8 @@ class BodyState:
             "last_brush_at",
             "last_toilet_at",
             "last_bowel_at",
+            "last_haircut_at",
+            "last_nails_at",
             "last_nap_at",
             "last_release_at",
             "last_self_at",
@@ -437,6 +453,8 @@ class BodyState:
         ):
             setattr(state, key, _clamp(getattr(state, key)))
         state.bowel = _clamp(state.bowel)
+        state.hair_growth = _clamp(state.hair_growth)
+        state.nail_growth = _clamp(state.nail_growth)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -585,6 +603,8 @@ ACTION_LABELS = {
     "shower": "洗了澡",
     "brush": "刷了牙",
     "toilet": "去了厕所",
+    "haircut": "剪了头发",
+    "nails": "剪了指甲",
     "nap": "小睡了一会儿",
     "supplies": "补了卫生用品",
     "intimacy": "做完爱",
@@ -1224,6 +1244,8 @@ CARE_LABELS = {
     "snack": "零食",
     "drink": "喝水",
     "toilet": "厕所",
+    "haircut": "剪头发",
+    "nails": "剪指甲",
     "shower": "洗澡",
     "brush": "刷牙",
 }
@@ -1537,6 +1559,29 @@ def _routine(
             "去了趟厕所",
             key=f"self-toilet:{moment.date().isoformat()}",
         )
+    if 9 <= hour <= 22:
+        if state.hair_growth >= HAIR_TRIM_AT:
+            state.hair_growth = 10.0
+            state.last_haircut_at = moment.timestamp()
+            _add_care(state, moment, "haircut")
+            _add_event(
+                state,
+                moment,
+                "self_care",
+                "剪了头发",
+                key=f"self-hair:{moment.date().isoformat()}",
+            )
+        if state.nail_growth >= NAIL_TRIM_AT:
+            state.nail_growth = 4.0
+            state.last_nails_at = moment.timestamp()
+            _add_care(state, moment, "nails")
+            _add_event(
+                state,
+                moment,
+                "self_care",
+                "剪了指甲",
+                key=f"self-nails:{moment.date().isoformat()}",
+            )
 
 
 def _maybe_release(
@@ -1960,6 +2005,13 @@ def advance(
             state.gut + (GUT_BASE - GUT_PASSAGE * const.gut_transit) * step_hours
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+        day_fraction = step_seconds / 86400.0
+        state.hair_growth = _clamp(
+            state.hair_growth + HAIR_GROWTH_PER_DAY * day_fraction
+        )
+        state.nail_growth = _clamp(
+            state.nail_growth + NAIL_GROWTH_PER_DAY * day_fraction
+        )
 
         if state.lactating:
             state.milk = _clamp(state.milk + MILK_RATE * step_hours)
@@ -2175,6 +2227,14 @@ def apply_action(
         state.oral = 2.0
         state.last_brush_at = now_ts
         _add_care(state, now, "brush")
+    elif action == "haircut":
+        state.hair_growth = 8.0
+        state.last_haircut_at = now_ts
+        _add_care(state, now, "haircut")
+    elif action == "nails":
+        state.nail_growth = 4.0
+        state.last_nails_at = now_ts
+        _add_care(state, now, "nails")
     elif action == "toilet":
         if state.bowel >= 20.0:
             state.gut = max(0.0, state.gut - 85.0)

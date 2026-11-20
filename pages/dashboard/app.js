@@ -202,6 +202,8 @@ const CARE_ROWS = [
   ["meal", "吃饭"],
   ["drink", "喝水"],
   ["toilet", "厕所"],
+  ["haircut", "剪发"],
+  ["nails", "指甲"],
   ["shower", "洗澡"],
   ["brush", "刷牙"],
 ];

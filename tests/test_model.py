@@ -574,6 +574,32 @@ def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
     assert state.urine == 2.0
 
 
+def test_grooming_actions_trim_hair_and_nails() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.hair_growth = 80.0
+    state.nail_growth = 74.0
+    profile = make_profile()
+    settings = Settings()
+    apply_action(state, "haircut", now, profile, settings)
+    apply_action(state, "nails", now, profile, settings)
+    assert state.hair_growth == 8.0
+    assert state.nail_growth == 4.0
+    kinds = {item["kind"] for item in state.care}
+    assert {"haircut", "nails"} <= kinds
+
+
+def test_autonomous_grooming_happens_when_due() -> None:
+    now = datetime(2026, 11, 19, 14, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(days=1))
+    state.hair_growth = 90.0
+    state.nail_growth = 82.0
+    advance(state, now, make_profile(), Settings())
+    texts = [event["text"] for event in state.events]
+    assert any("剪了头发" in text for text in texts)
+    assert any("剪了指甲" in text for text in texts)
+
+
 def test_idle_persona_looks_after_herself() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=30))
