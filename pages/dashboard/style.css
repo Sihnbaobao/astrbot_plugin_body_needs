@@ -2370,3 +2370,358 @@ footer {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* dedicated conception page */
+.fertility-page {
+  padding: 26px;
+}
+
+.fertility-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  gap: 26px;
+  align-items: stretch;
+}
+
+.fertility-art {
+  position: relative;
+  min-height: 430px;
+  overflow: hidden;
+  border: 1px solid #3a2230;
+  border-radius: 16px;
+  background: #090509;
+  box-shadow: inset 0 0 80px rgba(255, 110, 140, 0.06);
+}
+
+.fertility-art-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 430px;
+}
+
+.fertility-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.fertility-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.fertility-status-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 4px rgba(139, 148, 158, 0.12);
+}
+
+.fertility-art.is-fertile + .fertility-info .fertility-status-dot,
+.fertility-art.is-pregnant + .fertility-info .fertility-status-dot {
+  background: var(--accent-2);
+  box-shadow: 0 0 0 4px rgba(63, 185, 80, 0.14);
+}
+
+.fertility-status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fertility-status-title {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.fertility-status-desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fertility-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--line);
+}
+
+.fertility-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--panel);
+}
+
+.fertility-metric-label {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fertility-metric-value {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fertility-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fertility-step {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.fertility-step i {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.fertility-step.active {
+  color: var(--text);
+}
+
+.fertility-step.active i {
+  background: var(--accent-2);
+}
+
+.fertility-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* the illustration itself */
+.art-ambient {
+  opacity: 0.75;
+}
+
+.art-particle {
+  fill: #ffc5cf;
+  opacity: 0.32;
+  animation: particleTwinkle 4.8s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+.art-egg-halo {
+  fill: #ff8fa3;
+  opacity: 0.16;
+}
+
+.is-fertile .art-egg-halo,
+.is-pregnant .art-egg-halo {
+  animation: eggPulse 4s ease-in-out infinite;
+}
+
+.art-corona-ring {
+  fill: none;
+  stroke: rgba(255, 190, 200, 0.28);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.art-corona {
+  fill: #d98b9a;
+  opacity: 0.42;
+  stroke: rgba(255, 220, 220, 0.35);
+  stroke-width: 1;
+}
+
+.art-zona {
+  fill: none;
+  stroke: rgba(255, 220, 220, 0.4);
+  stroke-width: 2;
+}
+
+.art-egg-body {
+  stroke: rgba(255, 190, 190, 0.32);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 26px 38px rgba(120, 20, 48, 0.35));
+}
+
+.art-egg-highlight {
+  fill: rgba(255, 255, 255, 0.28);
+  filter: blur(5px);
+}
+
+.art-nucleus {
+  fill: #7a2d45;
+  opacity: 0.35;
+}
+
+.art-nucleus-dot {
+  fill: #ffd7c8;
+  opacity: 0.75;
+}
+
+.art-sperm-head {
+  fill: #ffe4d8;
+  stroke: #ff9bab;
+  stroke-width: 1;
+}
+
+.art-sperm-tail {
+  fill: none;
+  stroke: #ff9bab;
+  stroke-width: 2;
+  opacity: 0.62;
+}
+
+.art-sperm {
+  opacity: 0.35;
+}
+
+.is-fertile .art-sperm {
+  animation: spermFloat 5.2s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+.art-zygote {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.art-zygote-cell {
+  fill: url(#eggSphere);
+  stroke: #ffb6c2;
+  stroke-width: 2;
+}
+
+.art-pronucleus {
+  fill: #ffd0c1;
+  opacity: 0.88;
+}
+
+.is-pregnant .art-egg-body,
+.is-pregnant .art-egg-highlight,
+.is-pregnant .art-nucleus,
+.is-pregnant .art-nucleus-dot {
+  opacity: 0.16;
+}
+
+.is-pregnant .art-sperm-layer {
+  opacity: 0.1;
+}
+
+.is-pregnant .art-zygote {
+  opacity: 1;
+  animation: zygotePulse 2.8s ease-in-out infinite;
+  transform-origin: 280px 230px;
+}
+
+@keyframes eggPulse {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+@keyframes spermFloat {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translate(0, 0);
+  }
+  50% {
+    opacity: 0.95;
+    transform: translate(7px, -5px);
+  }
+}
+
+@keyframes particleTwinkle {
+  0%,
+  100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes zygotePulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .fertility-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .fertility-art {
+    min-height: 330px;
+  }
+
+  .fertility-art-svg {
+    min-height: 330px;
+  }
+}
+
+@media (max-width: 560px) {
+  .fertility-page {
+    padding: 18px;
+  }
+
+  .fertility-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .fertility-art {
+    min-height: 260px;
+  }
+
+  .fertility-art-svg {
+    min-height: 260px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art-particle,
+  .art-egg-halo,
+  .art-sperm,
+  .art-zygote {
+    animation: none !important;
+  }
+}

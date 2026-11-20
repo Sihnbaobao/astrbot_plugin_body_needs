@@ -558,111 +558,159 @@ function renderEvents(events) {
   el("eventCount").textContent = notable.length + " 条";
 }
 
+function fertilitySvg(data) {
+  const cx = 280;
+  const cy = 230;
+  const corona = Array.from({ length: 18 }, function (_, index) {
+    const angle = (Math.PI * 2 * index) / 18;
+    const radius = 128 + (index % 3) * 6;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    const size = 7 + (index % 4) * 2;
+    return (
+      '<circle class="art-corona" cx="' +
+      x.toFixed(1) +
+      '" cy="' +
+      y.toFixed(1) +
+      '" r="' +
+      size +
+      '"/>'
+    );
+  }).join("");
+  const sperms = Array.from({ length: 12 }, function (_, index) {
+    const angle = (Math.PI * 2 * index) / 12 + 0.16;
+    const radius = 190 + (index % 3) * 14;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    const rotation = (angle * 180) / Math.PI + 180;
+    const delay = (index * 0.27).toFixed(2);
+    return (
+      '<g transform="translate(' +
+      x.toFixed(1) +
+      ' ' +
+      y.toFixed(1) +
+      ') rotate(' +
+      rotation.toFixed(1) +
+      ')"><g class="art-sperm" style="--delay:' +
+      delay +
+      's"><ellipse class="art-sperm-head" cx="0" cy="0" rx="8" ry="5"/><path class="art-sperm-tail" d="M8 0 C18 -8 28 8 40 0 C48 -5 54 4 60 0"/></g></g>'
+    );
+  }).join("");
+  const particles = Array.from({ length: 18 }, function (_, index) {
+    const x = 30 + ((index * 97) % 500);
+    const y = 24 + ((index * 131) % 410);
+    const size = 1 + (index % 3) * 0.7;
+    return (
+      '<circle class="art-particle" cx="' +
+      x +
+      '" cy="' +
+      y +
+      '" r="' +
+      size.toFixed(1) +
+      '" style="--delay:' +
+      (index * 0.4).toFixed(1) +
+      's"/>'
+    );
+  }).join("");
+  return `
+    <svg class="fertility-art-svg" viewBox="0 0 560 460" role="img" aria-label="卵子与精子示意">
+      <defs>
+        <radialGradient id="artBg" cx="50%" cy="42%" r="72%">
+          <stop offset="0%" stop-color="#3a1625"/>
+          <stop offset="52%" stop-color="#1d0c14"/>
+          <stop offset="100%" stop-color="#090509"/>
+        </radialGradient>
+        <radialGradient id="eggSphere" cx="36%" cy="28%" r="74%">
+          <stop offset="0%" stop-color="#ffe7d8"/>
+          <stop offset="34%" stop-color="#f3aaa4"/>
+          <stop offset="74%" stop-color="#c45c70"/>
+          <stop offset="100%" stop-color="#7c2c45"/>
+        </radialGradient>
+        <radialGradient id="eggHalo" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ff9aa8" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#ff9aa8" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="artGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="9"/>
+        </filter>
+      </defs>
+      <rect width="560" height="460" fill="url(#artBg)"/>
+      <circle class="art-ambient" cx="280" cy="225" r="185" fill="url(#eggHalo)"/>
+      ${particles}
+      <circle class="art-egg-halo" cx="280" cy="230" r="142" filter="url(#artGlow)"/>
+      <g class="art-egg">
+        <circle class="art-corona-ring" cx="280" cy="230" r="132"/>
+        ${corona}
+        <circle class="art-zona" cx="280" cy="230" r="112"/>
+        <circle class="art-egg-body" cx="280" cy="230" r="99" fill="url(#eggSphere)"/>
+        <ellipse class="art-egg-highlight" cx="245" cy="192" rx="34" ry="21"/>
+        <circle class="art-nucleus" cx="280" cy="230" r="20"/>
+        <circle class="art-nucleus-dot" cx="286" cy="224" r="7"/>
+      </g>
+      <g class="art-sperm-layer">${sperms}</g>
+      <g class="art-zygote">
+        <circle class="art-zygote-cell" cx="280" cy="230" r="101"/>
+        <circle class="art-pronucleus" cx="262" cy="220" r="13"/>
+        <circle class="art-pronucleus" cx="298" cy="242" r="13"/>
+      </g>
+    </svg>`;
+}
+
 function renderFertility(persona) {
-  const host = el("fertilityCard");
+  const tab = el("fertilityTab");
+  const art = el("fertilityArt");
+  const info = el("fertilityInfo");
+  const hint = el("fertilityHint");
   const data = persona.intimacy;
-  if (!data || el("cycleCard").hidden) {
-    host.hidden = true;
-    host.replaceChildren();
+  if (!data) {
+    tab.hidden = true;
+    art.replaceChildren();
+    info.replaceChildren();
+    hint.textContent = "—";
+    if (!el("panel-fertility").hidden) setTab("live");
     return;
   }
-  host.hidden = false;
-  host.replaceChildren();
-
+  tab.hidden = false;
   const waiting =
     data.fertile &&
     data.inseminations > 0 &&
     data.last_insemination &&
     data.last_insemination !== "很久以前";
-  const status = data.pregnant
-    ? "已受精"
-    : waiting
-      ? "等待受精"
-      : data.fertile
-        ? "易孕中"
-        : data.count > 0
-          ? "未受精"
-          : "未尝试";
-  const head = make("div", "fertility-head");
-  head.appendChild(make("span", "fertility-title", "受精"));
-  head.appendChild(
-    make("span", "hint", data.pregnant ? "怀孕中" : data.fertile ? "易孕窗口" : "非易孕期"),
-  );
-  host.appendChild(head);
+  let status = "未尝试";
+  let desc = "还没有亲密记录；先进入易孕窗口，再决定要不要靠近。";
+  if (data.pregnant) {
+    status = "已受精";
+    desc = "受精卵已经着床，身体进入孕期。";
+  } else if (waiting) {
+    status = "等待受精";
+    desc = "精子已经进入，仍在判定窗口内。";
+  } else if (data.fertile) {
+    status = "易孕中";
+    desc = "当前处于排卵前后，受孕概率最高。";
+  } else if (data.count > 0) {
+    status = "未受精";
+    desc = "有亲密记录，但当前不在易孕窗口。";
+  }
+  hint.textContent = data.pregnant
+    ? "怀孕中"
+    : data.fertile
+      ? "易孕窗口"
+      : "非易孕期";
+  art.className =
+    "fertility-art" +
+    (data.pregnant ? " is-pregnant" : data.fertile ? " is-fertile" : "");
+  art.innerHTML = fertilitySvg(data);
 
-  const stage = make(
-    "div",
-    "fertility-stage" +
-      (data.pregnant ? " is-pregnant" : data.fertile ? " is-fertile" : ""),
-  );
-  const visual = make("div", "fertility-visual");
-  visual.innerHTML = `
-    <svg class="fertility-svg" viewBox="0 0 240 100" role="img" aria-label="受精示意">
-      <defs>
-        <radialGradient id="eggFill" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#f6dfb2"/>
-          <stop offset="100%" stop-color="#c99633"/>
-        </radialGradient>
-        <filter id="eggGlow" x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur stdDeviation="4"/>
-        </filter>
-      </defs>
-      <circle class="egg-halo" cx="70" cy="50" r="33"/>
-      <circle class="egg-corona" cx="70" cy="50" r="27"/>
-      <circle class="egg-zona" cx="70" cy="50" r="20"/>
-      <circle class="egg-core" cx="70" cy="50" r="13"/>
-      <circle class="egg-nucleus" cx="66" cy="46" r="4"/>
-      <g class="sperm-group">
-        <g class="sperm" transform="translate(190 24)"><g class="sperm-body" style="--delay:0s">
-          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
-          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
-        </g></g>
-        <g class="sperm" transform="translate(190 42)"><g class="sperm-body" style="--delay:0.7s">
-          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
-          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
-        </g></g>
-        <g class="sperm" transform="translate(190 58)"><g class="sperm-body" style="--delay:1.4s">
-          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
-          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
-        </g></g>
-        <g class="sperm" transform="translate(190 76)"><g class="sperm-body" style="--delay:2.1s">
-          <ellipse class="sperm-head" cx="0" cy="0" rx="5" ry="3.4"/>
-          <path class="sperm-tail" d="M5 0 C12 -5 16 5 23 0"/>
-        </g></g>
-      </g>
-      <g class="zygote-group">
-        <circle class="zygote" cx="70" cy="50" r="15"/>
-        <circle class="pronucleus" cx="65" cy="47" r="3.2"/>
-        <circle class="pronucleus" cx="75" cy="52" r="3.2"/>
-      </g>
-    </svg>`;
-  stage.appendChild(visual);
-  const caption = make("div", "fertility-caption");
-  caption.appendChild(
-    make("strong", "fertility-result" + (data.pregnant ? " on" : ""), status),
-  );
-  caption.appendChild(
-    make(
-      "span",
-      "hint",
-      data.pregnant
-        ? "受精卵已着床"
-        : waiting
-          ? "精子已进入，等待判定"
-          : data.fertile
-            ? "易孕窗口内"
-            : data.count > 0
-              ? "不在易孕窗口"
-              : "还没有亲密记录",
-    ),
-  );
-  stage.appendChild(caption);
-  host.appendChild(stage);
+  info.replaceChildren();
+  const statusBox = make("div", "fertility-status");
+  statusBox.appendChild(make("span", "fertility-status-dot"));
+  const copy = make("div", "fertility-status-copy");
+  copy.appendChild(make("strong", "fertility-status-title", status));
+  copy.appendChild(make("span", "fertility-status-desc", desc));
+  statusBox.appendChild(copy);
+  info.appendChild(statusBox);
 
-  const stats = make("div", "fertility-stats");
-  stats.appendChild(make("span", "", "亲密 " + data.count + " 次"));
-  stats.appendChild(make("span", "", "射精 " + data.inseminations + " 次"));
-  stats.appendChild(make("span", "", "自慰 " + data.self_releases + " 次"));
+  const grid = make("div", "fertility-metrics");
   const wetnessLabel =
     data.wetness >= 75
       ? "内裤湿了一小片"
@@ -671,21 +719,39 @@ function renderFertility(persona) {
         : data.wetness >= 20
           ? "有点湿"
           : "干爽";
-  stats.appendChild(
-    make("span", "", "湿润 " + data.wetness + " · " + wetnessLabel),
-  );
-  host.appendChild(stats);
-
-  const meta = make("div", "fertility-meta");
-  meta.appendChild(make("span", "", "上次 " + (data.last_at || "—")));
-  meta.appendChild(make("span", "", "易孕 " + (data.fertile ? "是" : "否")));
-  meta.appendChild(make("span", "", "单次 " + data.chance + "%"));
-  meta.appendChild(make("span", "", "性欲基线 " + data.baseline));
   const contraception = { none: "无避孕", condom: "避孕套", pill: "避孕药" };
-  meta.appendChild(
-    make("span", "", contraception[data.contraception] || data.contraception || "—"),
+  [
+    ["亲密", data.count + " 次"],
+    ["射精", data.inseminations + " 次"],
+    ["自慰", (data.self_releases || 0) + " 次"],
+    ["湿润", data.wetness + " · " + wetnessLabel],
+    ["单次概率", data.chance + "%"],
+    ["易孕", data.fertile ? "是" : "否"],
+    ["避孕", contraception[data.contraception] || data.contraception || "—"],
+    ["性欲基线", data.baseline || "默认"],
+    ["上次亲密", data.last_at || "—"],
+    ["上次射精", data.last_insemination || "—"],
+  ].forEach(function (pair) {
+    const item = make("div", "fertility-metric");
+    item.appendChild(make("span", "fertility-metric-label", pair[0]));
+    item.appendChild(make("strong", "fertility-metric-value", pair[1]));
+    grid.appendChild(item);
+  });
+  info.appendChild(grid);
+
+  const stages = ["未尝试", "易孕窗口", "等待受精", "已受精"];
+  const activeStage = data.pregnant ? 3 : waiting ? 2 : data.fertile ? 1 : 0;
+  const steps = make("div", "fertility-steps");
+  stages.forEach(function (label, index) {
+    const step = make("div", "fertility-step" + (index === activeStage ? " active" : ""));
+    step.appendChild(make("i"));
+    step.appendChild(make("span", "", label));
+    steps.appendChild(step);
+  });
+  info.appendChild(steps);
+  info.appendChild(
+    make("p", "fertility-note", "页面只显示这个 persona 的记录；群聊不会出现这些数据。"),
   );
-  host.appendChild(meta);
 }
 
 function render(data) {
@@ -710,7 +776,7 @@ function render(data) {
     el("eventCount").textContent = "";
     el("cycleCard").hidden = true;
     el("maleCard").hidden = true;
-    el("fertilityCard").hidden = true;
+    el("fertilityTab").hidden = true;
     updateSettingsHint();
     return;
   }
@@ -902,10 +968,12 @@ async function saveSettings() {
 }
 
 function setTab(name) {
+  if (name === "fertility" && el("fertilityTab").hidden) name = "live";
   document.querySelectorAll("#tabs [data-tab]").forEach(function (tab) {
     tab.classList.toggle("active", tab.dataset.tab === name);
   });
   el("panel-live").hidden = name !== "live";
+  el("panel-fertility").hidden = name !== "fertility";
   el("panel-settings").hidden = name !== "settings";
   if (name === "settings") {
     loadConfig();
