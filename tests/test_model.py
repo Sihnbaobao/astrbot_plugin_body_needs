@@ -574,6 +574,17 @@ def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
     assert state.urine == 2.0
 
 
+def test_weather_sleep_and_iron_are_simulated() -> None:
+    now = datetime(2026, 11, 20, 9, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(days=1))
+    state.iron = 40.0
+    advance(state, now, make_profile(), Settings())
+    assert state.weather in {"clear", "cloudy", "rain", "snow"}
+    assert -20.0 <= state.ambient_temp <= 45.0
+    assert 0.0 <= state.sleep_quality <= 100.0
+    assert state.iron > 40.0
+
+
 def test_cold_raises_temperature_and_pain() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=2))

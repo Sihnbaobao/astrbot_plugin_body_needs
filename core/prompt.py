@@ -123,6 +123,61 @@ def hair_label(value: float) -> str:
     return "太长了"
 
 
+def weather_label(kind: str) -> str:
+    """Return a short Chinese label for a simulated weather kind."""
+    return {
+        "clear": "晴",
+        "cloudy": "阴",
+        "rain": "下雨",
+        "snow": "下雪",
+    }.get(kind, "晴")
+
+
+def clothing_label(ambient: float, warmth: float) -> str:
+    """Describe whether the current clothing fits the ambient temperature."""
+    if ambient < 10 and warmth < 55:
+        return "穿得有点少"
+    if ambient > 27 and warmth > 65:
+        return "穿得有点多"
+    return "穿得刚好"
+
+
+def sleep_quality_label(value: float) -> str:
+    """Describe last night's sleep quality."""
+    if value < 45:
+        return "没睡好"
+    if value < 65:
+        return "睡得一般"
+    return "睡得还行"
+
+
+def iron_label(value: float) -> str:
+    """Describe iron status in everyday language."""
+    if value < 30:
+        return "有点缺铁"
+    if value < 50:
+        return "偏低"
+    return "正常"
+
+
+def eye_label(value: float) -> str:
+    """Describe eye strain."""
+    if value < 30:
+        return "还好"
+    if value < 60:
+        return "有点干"
+    return "很干"
+
+
+def oil_label(value: float) -> str:
+    """Describe skin oiliness."""
+    if value < 30:
+        return "清爽"
+    if value < 60:
+        return "有点油"
+    return "很油"
+
+
 def illness_label(value: float) -> str:
     """Describe a mild cold by how much it is still affecting her."""
     if value >= 45:
@@ -621,6 +676,28 @@ def build_prompt_block(
             lines.append("心跳：有点快")
         if state.breath_rate >= 19:
             lines.append("呼吸：有点急")
+        if (
+            state.weather != "clear"
+            or state.ambient_temp < 10
+            or state.ambient_temp > 30
+        ):
+            lines.append(
+                f"天气：{weather_label(state.weather)}，{state.ambient_temp:.0f}℃；"
+                f"{clothing_label(state.ambient_temp, state.clothing_warmth)}"
+            )
+        if state.sleep_quality < 60 or state.dream:
+            sleep_line = f"睡眠：{sleep_quality_label(state.sleep_quality)}"
+            if state.dream:
+                sleep_line += f"，{state.dream}"
+            lines.append(sleep_line)
+        if state.iron < 45:
+            lines.append(f"铁：{iron_label(state.iron)}，容易头晕")
+        if state.craving:
+            lines.append(f"食欲：{state.craving}")
+        if state.eye_strain >= 55:
+            lines.append(f"眼睛：{eye_label(state.eye_strain)}")
+        if state.skin_oil >= 55:
+            lines.append(f"皮肤：{oil_label(state.skin_oil)}")
         if settings.enable_hygiene and (
             state.cleanliness < 70 or state.oral_health < 65
         ):
@@ -756,6 +833,28 @@ def build_status_text(
             lines.append("心跳：有点快")
         if state.breath_rate >= 19:
             lines.append("呼吸：有点急")
+        if (
+            state.weather != "clear"
+            or state.ambient_temp < 10
+            or state.ambient_temp > 30
+        ):
+            lines.append(
+                f"天气：{weather_label(state.weather)}，{state.ambient_temp:.0f}℃；"
+                f"{clothing_label(state.ambient_temp, state.clothing_warmth)}"
+            )
+        if state.sleep_quality < 60 or state.dream:
+            sleep_line = f"睡眠：{sleep_quality_label(state.sleep_quality)}"
+            if state.dream:
+                sleep_line += f"，{state.dream}"
+            lines.append(sleep_line)
+        if state.iron < 45:
+            lines.append(f"铁：{iron_label(state.iron)}，容易头晕")
+        if state.craving:
+            lines.append(f"食欲：{state.craving}")
+        if state.eye_strain >= 55:
+            lines.append(f"眼睛：{eye_label(state.eye_strain)}")
+        if state.skin_oil >= 55:
+            lines.append(f"皮肤：{oil_label(state.skin_oil)}")
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
         if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
@@ -933,6 +1032,57 @@ def build_web_state(
                 "tone": "hot"
                 if state.pain >= 65
                 else ("warn" if state.pain >= 40 else "ok"),
+            },
+            {
+                "key": "weather",
+                "label": "天气",
+                "value": round(state.ambient_temp, 1),
+                "unit": "℃",
+                "display": (
+                    f"{weather_label(state.weather)} {state.ambient_temp:.0f}℃ · "
+                    f"{clothing_label(state.ambient_temp, state.clothing_warmth)}"
+                ),
+                "bar": round((state.ambient_temp + 10.0) / 45.0 * 100, 1),
+                "level": weather_label(state.weather),
+                "tone": "warn"
+                if state.ambient_temp < 10 or state.ambient_temp > 30
+                else "ok",
+            },
+            {
+                "key": "sleep_quality",
+                "label": "睡眠",
+                "value": round(state.sleep_quality, 1),
+                "unit": "%",
+                "level": sleep_quality_label(state.sleep_quality),
+                "tone": "hot"
+                if state.sleep_quality < 45
+                else ("warn" if state.sleep_quality < 65 else "ok"),
+            },
+            {
+                "key": "iron",
+                "label": "铁",
+                "value": round(state.iron, 1),
+                "unit": "%",
+                "level": iron_label(state.iron),
+                "tone": "hot"
+                if state.iron < 30
+                else ("warn" if state.iron < 50 else "ok"),
+            },
+            {
+                "key": "eye_strain",
+                "label": "眼睛",
+                "value": round(state.eye_strain, 1),
+                "unit": "%",
+                "level": eye_label(state.eye_strain),
+                "tone": "warn" if state.eye_strain >= 55 else "ok",
+            },
+            {
+                "key": "skin_oil",
+                "label": "皮肤出油",
+                "value": round(state.skin_oil, 1),
+                "unit": "%",
+                "level": oil_label(state.skin_oil),
+                "tone": "warn" if state.skin_oil >= 55 else "ok",
             },
         ]
     )

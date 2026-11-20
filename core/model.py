@@ -287,6 +287,15 @@ class BodyState:
     illness: str = ""
     illness_severity: float = 0.0
     illness_started_at: float = 0.0
+    ambient_temp: float = 22.0
+    weather: str = "clear"
+    clothing_warmth: float = 55.0
+    sleep_quality: float = 78.0
+    dream: str = ""
+    iron: float = 72.0
+    craving: str = ""
+    eye_strain: float = 12.0
+    skin_oil: float = 15.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -375,6 +384,15 @@ class BodyState:
             "illness": self.illness,
             "illness_severity": self.illness_severity,
             "illness_started_at": self.illness_started_at,
+            "ambient_temp": self.ambient_temp,
+            "weather": self.weather,
+            "clothing_warmth": self.clothing_warmth,
+            "sleep_quality": self.sleep_quality,
+            "dream": self.dream,
+            "iron": self.iron,
+            "craving": self.craving,
+            "eye_strain": self.eye_strain,
+            "skin_oil": self.skin_oil,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -464,6 +482,12 @@ class BodyState:
             "pain",
             "illness_severity",
             "illness_started_at",
+            "ambient_temp",
+            "clothing_warmth",
+            "sleep_quality",
+            "iron",
+            "eye_strain",
+            "skin_oil",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
@@ -524,12 +548,21 @@ class BodyState:
         state.nail_span_mm = max(0.0, state.nail_span_mm)
         state.illness = str(data.get("illness") or "")
         state.pain_site = str(data.get("pain_site") or "")
+        state.weather = str(data.get("weather") or "clear")
+        state.dream = str(data.get("dream") or "")
+        state.craving = str(data.get("craving") or "")
         state.temperature = _clamp(state.temperature, 34.0, 42.0)
         state.sweat = _clamp(state.sweat)
         state.heart_rate = _clamp(state.heart_rate, 40.0, 180.0)
         state.breath_rate = _clamp(state.breath_rate, 8.0, 40.0)
         state.pain = _clamp(state.pain)
         state.illness_severity = _clamp(state.illness_severity)
+        state.ambient_temp = _clamp(state.ambient_temp, -20.0, 45.0)
+        state.clothing_warmth = _clamp(state.clothing_warmth)
+        state.sleep_quality = _clamp(state.sleep_quality)
+        state.iron = _clamp(state.iron)
+        state.eye_strain = _clamp(state.eye_strain)
+        state.skin_oil = _clamp(state.skin_oil)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -1514,6 +1547,7 @@ def _routine(
         state.gut = _clamp(state.gut + GUT_RESIDUE_MEAL * 0.8)
         state.hydration = _clamp(state.hydration + 2.0)
         state.oral = _clamp(state.oral + 1.5)
+        state.iron = _clamp(state.iron + 7.0)
         state.last_eat_at = moment.timestamp()
         state.last_meal_kind = "meal"
         _add_care(state, moment, "meal")
@@ -1634,6 +1668,44 @@ def _routine(
             "去了趟厕所",
             key=f"self-toilet:{moment.date().isoformat()}",
         )
+    if hour == 7:
+        day = moment.date().isoformat()
+        weather_key = f"weather:{day}"
+        if weather_key not in state.flags:
+            state.flags[weather_key] = moment.timestamp()
+            seasonal = 17.0 + 11.0 * math.sin((moment.month - 4) / 12.0 * 2.0 * math.pi)
+            ambient = seasonal + (_roll(profile.persona_id, day, "temp") - 0.5) * 8.0
+            state.ambient_temp = round(ambient, 1)
+            weather_roll = _roll(profile.persona_id, day, "weather")
+            if ambient < 2.0 and weather_roll < 0.25:
+                state.weather = "snow"
+            elif weather_roll < 0.24:
+                state.weather = "rain"
+            elif weather_roll < 0.55:
+                state.weather = "cloudy"
+            else:
+                state.weather = "clear"
+            state.clothing_warmth = _clamp(100.0 - (ambient - 5.0) * 3.0, 10.0, 100.0)
+            quality = (
+                86.0
+                - state.sleep_debt * 2.1
+                - state.illness_severity * 0.25
+                - abs(ambient - 22.0) * 0.6
+                + (_roll(profile.persona_id, day, "sleep-quality") - 0.5) * 10.0
+            )
+            state.sleep_quality = _clamp(quality)
+            if _roll(profile.persona_id, day, "dream") < 0.32:
+                dreams = (
+                    "梦见下雨的街道",
+                    "梦见自己在很高的地方",
+                    "梦见有人一直在叫她",
+                    "梦见找不到回去的路",
+                    "梦见一只很黏人的猫",
+                )
+                index = int(_roll(profile.persona_id, day, "dream-pick") * len(dreams))
+                state.dream = dreams[min(index, len(dreams) - 1)]
+            else:
+                state.dream = ""
     if hour == 8 and not state.illness:
         day = moment.date().isoformat()
         check_key = f"illness-check:{day}"
@@ -2078,6 +2150,18 @@ def advance(
             state.gut + (GUT_BASE - GUT_PASSAGE * const.gut_transit) * step_hours
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+        iron_rate = 2.0 if in_period_now else 0.2
+        state.iron = _clamp(state.iron - iron_rate * step_hours / 24.0)
+        if state.iron < 45.0:
+            state.craving = "想吃点补铁的"
+        elif in_period_now:
+            state.craving = "想吃甜的"
+        elif state.sleep_debt > 8.0:
+            state.craving = "想喝点热的"
+        elif state.hydration < 45.0:
+            state.craving = "想喝水"
+        else:
+            state.craving = ""
         if state.lactating:
             state.milk = _clamp(state.milk + MILK_RATE * step_hours)
             if state.milk >= 95.0:
@@ -2141,6 +2225,8 @@ def advance(
         sweat_target = _clamp(
             max(0.0, state.temperature - 36.75) * 40.0
             + max(0.0, 45.0 - state.hydration) * 0.5
+            + max(0.0, state.ambient_temp - 26.0) * 1.4
+            + max(0.0, state.clothing_warmth - 72.0) * 0.16
         )
         state.sweat += (sweat_target - state.sweat) * (
             1.0 - math.exp(-step_hours / 1.0)
@@ -2157,6 +2243,23 @@ def advance(
         )
         state.breath_rate += (breath_target - state.breath_rate) * (
             1.0 - math.exp(-step_hours / 0.6)
+        )
+        eye_target = (
+            8.0
+            + max(0.0, state.sleep_debt - 4.0) * 5.0
+            + max(0.0, arousal - 0.4) * 20.0
+        ) * (1.0 - sleep_fraction * 0.5)
+        state.eye_strain += (eye_target - state.eye_strain) * (
+            1.0 - math.exp(-step_hours / 2.0)
+        )
+        oil_target = _clamp(
+            8.0
+            + state.sweat * 0.45
+            + state.progesterone / 100.0 * 12.0
+            + max(0.0, state.skin - 50.0) * 0.15
+        )
+        state.skin_oil += (oil_target - state.skin_oil) * (
+            1.0 - math.exp(-step_hours / 2.0)
         )
 
         state.sleep_debt = _clamp(
@@ -2316,6 +2419,7 @@ def apply_action(
         state.glucose = _clamp(state.glucose + 28.0)
         state.hydration = _clamp(state.hydration + 2.0)
         state.oral = _clamp(state.oral + 4.0)
+        state.iron = _clamp(state.iron + 8.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_eat_at = now_ts
         state.last_meal_kind = "meal"
@@ -2327,6 +2431,7 @@ def apply_action(
         state.glucose = _clamp(state.glucose + 12.0)
         state.hydration = _clamp(state.hydration + 1.0)
         state.oral = _clamp(state.oral + 3.0)
+        state.iron = _clamp(state.iron + 2.0)
         state.last_eat_at = now_ts
         state.last_meal_kind = "snack"
         state.last_meal_size = 22.0
@@ -2341,6 +2446,7 @@ def apply_action(
     elif action == "shower":
         state.skin = 2.0
         state.sweat = 0.0
+        state.skin_oil = 0.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_shower_at = now_ts
         _add_care(state, now, "shower")
