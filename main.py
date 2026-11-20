@@ -107,6 +107,7 @@ ACTION_ALIASES = {
     "困了": "nap",
     "休息": "nap",
     "亲密": "intimacy",
+    "做爱": "intimacy",
     "舒缓": "intimacy",
     "自己解决": "release",
     "释放": "release",
@@ -816,7 +817,7 @@ class BodyNeedsPlugin(Star):
         if "intimacy" in actions:
             properties["ejaculated"] = {
                 "type": "boolean",
-                "description": "这次亲密是否射精；不确定就按 true",
+                "description": "这次做爱是否被内射；不确定就按 true",
             }
         tools = ToolSet()
         tools.add_tool(
@@ -841,7 +842,7 @@ class BodyNeedsPlugin(Star):
                         else ""
                     )
                     + (
-                        "、亲密、自己解决性欲"
+                        "、做爱、自慰"
                         if private
                         and profile.gender_resolved
                         and self.settings.enable_intimate
@@ -969,7 +970,7 @@ class BodyNeedsPlugin(Star):
                 action = name.lower()
             if action is None:
                 yield event.plain_result(
-                    "用法：/身体 调试 <喂|零食|喝水|洗澡|刷牙|上厕所|小睡|亲密|自己解决|产检|哺乳|补货>\n"
+                    "用法：/身体 调试 <喂|零食|喝水|洗澡|刷牙|上厕所|小睡|做爱|自己解决|产检|哺乳|补货>\n"
                     "这是维护用的调试口，不是她的日常；正常聊天里她做了什么由 body_action 记录。"
                 )
                 return

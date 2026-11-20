@@ -730,7 +730,7 @@ function renderFertility(persona) {
     data.last_insemination &&
     data.last_insemination !== "很久以前";
   let status = "未尝试";
-  let desc = "还没有亲密记录；先进入易孕窗口，再决定要不要靠近。";
+  let desc = "还没有做爱记录；先进入易孕窗口，再决定要不要靠近。";
   if (data.pregnant) {
     status = "已受精";
     desc = "受精卵已经着床，身体进入孕期。";
@@ -742,7 +742,7 @@ function renderFertility(persona) {
     desc = "当前处于排卵前后，受孕概率最高。";
   } else if (data.count > 0) {
     status = "未受精";
-    desc = "有亲密记录，但当前不在易孕窗口。";
+    desc = "有做爱记录，但当前不在易孕窗口。";
   }
   hint.textContent = data.pregnant
     ? "怀孕中"
@@ -774,16 +774,16 @@ function renderFertility(persona) {
           : "干爽";
   const contraception = { none: "无避孕", condom: "避孕套", pill: "避孕药" };
   [
-    ["亲密", data.count + " 次"],
-    ["射精", data.inseminations + " 次"],
+    ["做爱", data.count + " 次"],
+    ["内射", data.inseminations + " 次"],
     ["自慰", (data.self_releases || 0) + " 次"],
     ["湿润", data.wetness + " · " + wetnessLabel],
     ["单次概率", data.chance + "%"],
     ["易孕", data.fertile ? "是" : "否"],
     ["避孕", contraception[data.contraception] || data.contraception || "—"],
     ["性欲基线", data.baseline || "默认"],
-    ["上次亲密", data.last_at || "—"],
-    ["上次射精", data.last_insemination || "—"],
+    ["上次做爱", data.last_at || "—"],
+    ["上次内射", data.last_insemination || "—"],
   ].forEach(function (pair) {
     const item = make("div", "fertility-metric");
     item.appendChild(make("span", "fertility-metric-label", pair[0]));

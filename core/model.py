@@ -587,7 +587,7 @@ ACTION_LABELS = {
     "toilet": "去了厕所",
     "nap": "小睡了一会儿",
     "supplies": "补了卫生用品",
-    "intimacy": "亲密过后",
+    "intimacy": "做完爱",
     "release": "自己解决了一次",
     "prenatal": "去做了产检",
     "express": "喂了奶",
@@ -2201,7 +2201,7 @@ def apply_action(
             state,
             now,
             "intimacy",
-            "亲密了一次" + ("，射精了" if ejaculated else ""),
+            "做爱了一次" + ("，被内射了" if ejaculated else ""),
             key=f"intimacy:{int(now_ts)}",
         )
         can_conceive = (
