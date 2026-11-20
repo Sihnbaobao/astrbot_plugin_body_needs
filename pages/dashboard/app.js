@@ -787,7 +787,7 @@ function startFertilityArt(data, sceneKey) {
       Math.sin(anim.time * s.radialSpeed + s.radialPhase) * s.radialAmp;
     const x = anim.cx + Math.cos(s.angle) * s.radius;
     const y = anim.cy + Math.sin(s.angle) * s.radius;
-    const alpha = (0.45 + s.z * 0.55) * (anim.data.pregnant ? 0.12 : 1);
+    const alpha = (0.32 + s.z * 0.68) * (anim.data.pregnant ? 0.12 : 1);
     if (alpha <= 0.01) return;
     const depthScale = 0.62 + s.z * 0.95;
     ctx.save();
@@ -795,9 +795,13 @@ function startFertilityArt(data, sceneKey) {
     ctx.rotate(s.angle);
     ctx.scale(s.size * depthScale, s.size * depthScale);
     ctx.globalAlpha = alpha;
+    const distanceBlur = s.z < 0.34 ? (0.34 - s.z) * 4.2 : 0;
+    if (distanceBlur > 0.25) {
+      ctx.filter = "blur(" + distanceBlur.toFixed(2) + "px)";
+    }
 
-    const tailLength = 112;
-    const segments = 30;
+    const tailLength = 92;
+    const segments = 26;
     for (let pass = 0; pass < 2; pass += 1) {
       let px = 5;
       let py = 0;
@@ -870,6 +874,7 @@ function startFertilityArt(data, sceneKey) {
     ctx.lineWidth = 0.65;
     ctx.arc(0, 0, 6.2, Math.PI * 1.05, Math.PI * 1.55);
     ctx.stroke();
+    ctx.filter = "none";
     ctx.restore();
     ctx.restore();
   }
