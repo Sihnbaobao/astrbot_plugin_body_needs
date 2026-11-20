@@ -381,6 +381,7 @@ textarea:focus-visible {
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
+  align-items: start;
   gap: 16px;
 }
 
@@ -390,6 +391,7 @@ textarea:focus-visible {
 
 .cycle-card {
   grid-column: span 5;
+  align-self: start;
 }
 
 .care-card {
