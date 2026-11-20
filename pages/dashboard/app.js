@@ -800,9 +800,11 @@ function startFertilityArt(data) {
       for (let index = 1; index <= segments; index += 1) {
         const t = index / segments;
         const nx = 5 + t * tailLength;
+        const ramp = Math.min(1, t * 7);
         const ny =
-          Math.sin(t * 6.4 - anim.time * 3.2 + s.phase) * 9.2 * (1 - t * 0.16) +
-          Math.sin(t * 12.5 + s.phase * 1.6) * 2.1 * (1 - t);
+          (Math.sin(t * 6.4 - anim.time * 3.2 + s.phase) * 9.2 * (1 - t * 0.16) +
+            Math.sin(t * 12.5 + s.phase * 1.6) * 2.1 * (1 - t)) *
+          ramp;
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(nx, ny);
@@ -834,10 +836,20 @@ function startFertilityArt(data) {
     head.addColorStop(0.5, "#fbf8ff");
     head.addColorStop(0.82, "#eadff4");
     head.addColorStop(1, "#d2c2e3");
+    const headWobble = Math.sin(anim.time * 2.3 + s.phase * 1.3);
+    ctx.save();
+    ctx.translate(0, headWobble * 0.9);
+    ctx.rotate(headWobble * 0.09);
+    ctx.scale(1 + headWobble * 0.025, 1 - headWobble * 0.018);
     ctx.shadowColor = "rgba(215, 230, 255, 0.45)";
     ctx.shadowBlur = 4 + s.z * 5;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 7.2, 4.4, 0, 0, Math.PI * 2);
+    ctx.moveTo(7.4, 0);
+    ctx.bezierCurveTo(6.4, -3.6, 1.5, -4.7, -2.8, -4.2);
+    ctx.bezierCurveTo(-7.4, -3.7, -9.2, -1.2, -8.6, 0);
+    ctx.bezierCurveTo(-9.2, 1.2, -7.4, 3.7, -2.8, 4.2);
+    ctx.bezierCurveTo(1.5, 4.7, 6.4, 3.6, 7.4, 0);
+    ctx.closePath();
     ctx.fillStyle = head;
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -852,8 +864,9 @@ function startFertilityArt(data) {
     ctx.beginPath();
     ctx.strokeStyle = "rgba(198, 180, 224, 0.42)";
     ctx.lineWidth = 0.65;
-    ctx.arc(0, 0, 5.8, Math.PI * 1.05, Math.PI * 1.55);
+    ctx.arc(0, 0, 6.2, Math.PI * 1.05, Math.PI * 1.55);
     ctx.stroke();
+    ctx.restore();
     ctx.restore();
   }
 
