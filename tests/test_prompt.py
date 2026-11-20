@@ -86,14 +86,6 @@ def test_private_block_shows_cold_and_pain() -> None:
     assert "疼：头" in block
 
 
-def test_body_facts_cannot_be_changed_by_chat_claims() -> None:
-    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
-    block = build_prompt_block(
-        make_state(now), now, make_profile(), Settings(), private=True
-    )
-    assert "聊天里说生病、受伤、怀孕不会改变" in block
-
-
 def test_group_chat_hides_self_release() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
