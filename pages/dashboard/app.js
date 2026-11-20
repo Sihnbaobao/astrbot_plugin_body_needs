@@ -792,99 +792,67 @@ function startFertilityArt(data) {
     ctx.scale(s.size * depthScale, s.size * depthScale);
     ctx.globalAlpha = alpha;
 
-    const tailLength = 118;
-    const samples = 26;
-    const points = [];
-    for (let index = 0; index <= samples; index += 1) {
-      const t = index / samples;
-      points.push({
-        x: 8 + t * tailLength,
-        y:
-          Math.sin(t * 3.1 - anim.time * 2.9 + s.phase) *
-          10 *
-          (1 - t * 0.12),
-        t: t,
-      });
+    const tailLength = 112;
+    const segments = 30;
+    for (let pass = 0; pass < 2; pass += 1) {
+      let px = 5;
+      let py = 0;
+      for (let index = 1; index <= segments; index += 1) {
+        const t = index / segments;
+        const nx = 5 + t * tailLength;
+        const ny =
+          Math.sin(t * 6.4 - anim.time * 3.2 + s.phase) * 9.2 * (1 - t * 0.16) +
+          Math.sin(t * 12.5 + s.phase * 1.6) * 2.1 * (1 - t);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(nx, ny);
+        ctx.lineWidth = (pass === 0 ? 3.4 : 1.15) * (1 - t * 0.72);
+        ctx.strokeStyle =
+          pass === 0
+            ? "rgba(215, 230, 255, 0.13)"
+            : "rgba(255, 255, 255, 0.94)";
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+        px = nx;
+        py = ny;
+      }
     }
 
-    ctx.beginPath();
-    points.forEach(function (point, index) {
-      if (index === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
-    ctx.strokeStyle = "rgba(220, 235, 255, 0.18)";
-    ctx.lineWidth = 5.6;
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    ctx.beginPath();
-    points.forEach(function (point, index) {
-      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
-      const px = point.x;
-      const py = point.y - width;
-      if (index === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    for (let index = points.length - 1; index >= 0; index -= 1) {
-      const point = points[index];
-      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
-      ctx.lineTo(point.x, point.y + width);
-    }
-    ctx.closePath();
-    ctx.fillStyle = "#fffdfb";
-    ctx.fill();
-
-    ctx.beginPath();
-    points.forEach(function (point, index) {
-      const width = 2.5 * Math.pow(1 - point.t, 0.78) + 0.22;
-      const px = point.x;
-      const py = point.y - width * 0.22;
-      if (index === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.lineWidth = 0.65;
-    ctx.stroke();
-
-    if (s.z > 0.58) {
-      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 24);
-      aura.addColorStop(0, "rgba(215, 230, 255, " + (0.16 * s.z).toFixed(3) + ")");
+    if (s.z > 0.62) {
+      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 18);
+      aura.addColorStop(0, "rgba(215, 230, 255, " + (0.12 * s.z).toFixed(3) + ")");
       aura.addColorStop(1, "rgba(215, 230, 255, 0)");
       ctx.beginPath();
       ctx.fillStyle = aura;
-      ctx.arc(0, 0, 24, 0, Math.PI * 2);
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const head = ctx.createRadialGradient(-3.4, -2.2, 0.4, 0, 0, 11);
+    const head = ctx.createRadialGradient(-2.6, -1.7, 0.3, 0, 0, 8);
     head.addColorStop(0, "#ffffff");
     head.addColorStop(0.5, "#fbf8ff");
-    head.addColorStop(0.82, "#e8dcf3");
-    head.addColorStop(1, "#cdbce0");
-    ctx.shadowColor = "rgba(215, 230, 255, 0.55)";
-    ctx.shadowBlur = 5 + s.z * 8;
+    head.addColorStop(0.82, "#eadff4");
+    head.addColorStop(1, "#d2c2e3");
+    ctx.shadowColor = "rgba(215, 230, 255, 0.45)";
+    ctx.shadowBlur = 4 + s.z * 5;
     ctx.beginPath();
-    ctx.moveTo(9, 0);
-    ctx.bezierCurveTo(8, -3.6, 3, -5.8, -2, -5.4);
-    ctx.bezierCurveTo(-7, -5, -9, -2.4, -9, 0);
-    ctx.bezierCurveTo(-9, 2.4, -7, 5, -2, 5.4);
-    ctx.bezierCurveTo(3, 5.8, 8, 3.6, 9, 0);
-    ctx.closePath();
+    ctx.ellipse(0, 0, 7.2, 4.4, 0, 0, Math.PI * 2);
     ctx.fillStyle = head;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
-    ctx.lineWidth = 0.85;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 0.7;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
-    ctx.ellipse(-2.6, -2.2, 3.2, 1.35, -0.18, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+    ctx.ellipse(-2, -1.3, 2.15, 0.9, -0.16, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(199, 183, 226, 0.5)";
-    ctx.lineWidth = 0.8;
-    ctx.arc(0, 0, 8.7, Math.PI * 1.08, Math.PI * 1.58);
+    ctx.strokeStyle = "rgba(198, 180, 224, 0.42)";
+    ctx.lineWidth = 0.65;
+    ctx.arc(0, 0, 5.8, Math.PI * 1.05, Math.PI * 1.55);
     ctx.stroke();
     ctx.restore();
   }
