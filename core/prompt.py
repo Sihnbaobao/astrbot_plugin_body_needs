@@ -125,6 +125,24 @@ def hair_label(value: float) -> str:
     return "太长了"
 
 
+def illness_label(value: float) -> str:
+    """Describe a mild cold by how much it is still affecting her."""
+    if value >= 45:
+        return "感冒，低烧"
+    if value >= 20:
+        return "感冒还没好"
+    return "快好了"
+
+
+def pain_label(value: float) -> str:
+    """Describe pain intensity without turning it into a number in dialogue."""
+    if value >= 65:
+        return "疼得明显"
+    if value >= 40:
+        return "有点疼"
+    return ""
+
+
 def temperature_label(value: float) -> str:
     """Describe a body temperature in everyday language."""
     if value < 36.2:
@@ -586,20 +604,35 @@ def build_prompt_block(
         lines.append(
             f"渴：{hydration_label(state.hydration)}（{_ago(state.last_drink_at, now)}喝过水）"
         )
-        lines.append(f"小便：{bladder_label(state.bladder)}")
-        lines.append(f"排便：{bowel_label(state.bowel)}")
-        lines.append(
-            f"头发：{hair_length_cm(state, profile):.0f} cm，"
-            f"{hair_label(state.hair_growth)}；"
-            f"指甲：{nail_length_mm(state, profile):.1f} mm，"
-            f"{nail_label(state.nail_growth)}"
-        )
-        lines.append(
-            f"体温：{state.temperature:.1f}℃（{temperature_label(state.temperature)}）"
-        )
-        if state.sweat >= 15:
+        if state.bladder >= 35:
+            lines.append(f"小便：{bladder_label(state.bladder)}")
+        if state.bowel >= 35:
+            lines.append(f"排便：{bowel_label(state.bowel)}")
+        if state.hair_growth >= 55 or state.nail_growth >= 50:
+            lines.append(
+                f"头发：{hair_length_cm(state, profile):.0f} cm，"
+                f"{hair_label(state.hair_growth)}；"
+                f"指甲：{nail_length_mm(state, profile):.1f} mm，"
+                f"{nail_label(state.nail_growth)}"
+            )
+        if state.temperature < 36.3 or state.temperature >= 36.9:
+            lines.append(
+                f"体温：{state.temperature:.1f}℃"
+                f"（{temperature_label(state.temperature)}）"
+            )
+        if state.sweat >= 20:
             lines.append(f"皮肤：{sweat_label(state.sweat)}")
-        if settings.enable_hygiene:
+        if state.illness:
+            lines.append(f"感冒：{illness_label(state.illness_severity)}")
+        if state.pain >= 25:
+            lines.append(f"疼：{state.pain_site or '身上'}，{pain_label(state.pain)}")
+        if state.heart_rate >= 88:
+            lines.append("心跳：有点快")
+        if state.breath_rate >= 19:
+            lines.append("呼吸：有点急")
+        if settings.enable_hygiene and (
+            state.cleanliness < 70 or state.oral_health < 65
+        ):
             lines.append(
                 f"清洁：{clean_label(state.cleanliness)}；"
                 f"口腔：{oral_label(state.oral_health)}"
@@ -612,7 +645,11 @@ def build_prompt_block(
         if view is not None and view.phase == "menstrual" and view.cramps >= 2:
             lines.append("身体：肚子有点不舒服，不太想动。")
 
-    if show_private and settings.intensity != "subtle":
+    if (
+        show_private
+        and settings.intensity != "subtle"
+        and (state.stomach < 35 or state.glucose < 50 or state.sleep_debt > 6)
+    ):
         lines.append(_internal_line(state, now))
     if view is not None and (show_private or full_group):
         lines.append(_cycle_text(view))
@@ -657,11 +694,10 @@ def build_prompt_block(
         lines.append("身体的感觉比平时更明显，可能会影响你的语气、耐心和注意力。")
     rules = ""
     if settings.enable_tools:
-        actions = ["吃了", "喝了"]
-        if settings.enable_hygiene:
-            actions.extend(["洗了澡", "刷了牙"])
-        actions.extend(["去了厕所", "剪了头发", "剪了指甲"])
-        rules += f"真的{'、'.join(actions)}时，可以用 body_action 记录。"
+        rules += (
+            "真的做了吃饭、喝水、如厕、剪头发、剪指甲这些事时，"
+            "可以用 body_action 记录。"
+        )
     if not private:
         if full_group:
             rules += "群聊里可以提非性相关的身体状态，但不要提亲密细节。"
@@ -727,6 +763,14 @@ def build_status_text(
         )
         if state.sweat >= 15:
             lines.append(f"皮肤：{sweat_label(state.sweat)}")
+        if state.illness:
+            lines.append(f"感冒：{illness_label(state.illness_severity)}")
+        if state.pain >= 25:
+            lines.append(f"疼：{state.pain_site or '身上'}，{pain_label(state.pain)}")
+        if state.heart_rate >= 88:
+            lines.append("心跳：有点快")
+        if state.breath_rate >= 19:
+            lines.append("呼吸：有点急")
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
         if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
@@ -893,8 +937,55 @@ def build_web_state(
                 if state.sweat >= 60
                 else ("warn" if state.sweat >= 30 else "ok"),
             },
+            {
+                "key": "heart_rate",
+                "label": "心跳",
+                "value": round(state.heart_rate, 0),
+                "unit": "bpm",
+                "display": f"{round(state.heart_rate)} bpm",
+                "bar": round((state.heart_rate - 50.0) / 80.0 * 100, 1),
+                "level": "有点快" if state.heart_rate >= 88 else "平稳",
+                "tone": "hot"
+                if state.heart_rate >= 105
+                else ("warn" if state.heart_rate >= 88 else "ok"),
+            },
+            {
+                "key": "breath_rate",
+                "label": "呼吸",
+                "value": round(state.breath_rate, 0),
+                "unit": "/min",
+                "display": f"{round(state.breath_rate)} /min",
+                "bar": round((state.breath_rate - 8.0) / 20.0 * 100, 1),
+                "level": "有点急" if state.breath_rate >= 19 else "平稳",
+                "tone": "hot"
+                if state.breath_rate >= 24
+                else ("warn" if state.breath_rate >= 19 else "ok"),
+            },
+            {
+                "key": "pain",
+                "label": "疼痛",
+                "value": round(state.pain, 1),
+                "unit": "%",
+                "level": pain_label(state.pain) or "没有",
+                "tone": "hot"
+                if state.pain >= 65
+                else ("warn" if state.pain >= 40 else "ok"),
+            },
         ]
     )
+    if state.illness:
+        details.append(
+            {
+                "key": "illness",
+                "label": "身体",
+                "value": round(state.illness_severity, 1),
+                "unit": "%",
+                "level": illness_label(state.illness_severity),
+                "tone": "hot"
+                if state.illness_severity >= 45
+                else ("warn" if state.illness_severity >= 20 else "ok"),
+            }
+        )
 
     cycle = None
     if view is not None and settings.enable_cycle:

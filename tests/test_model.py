@@ -576,6 +576,21 @@ def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
     assert state.urine == 2.0
 
 
+def test_cold_raises_temperature_and_pain() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=2))
+    state.illness = "cold"
+    state.illness_severity = 55.0
+    state.illness_started_at = now.timestamp() - 86400
+    state.temperature = 36.5
+    before = state.temperature
+    advance(state, now, make_profile(), Settings())
+    assert state.temperature > before
+    assert state.pain > 0
+    assert state.heart_rate >= 62
+    assert state.breath_rate >= 14
+
+
 def test_temperature_and_sweat_are_alive() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=6))

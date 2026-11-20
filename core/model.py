@@ -280,6 +280,13 @@ class BodyState:
     nail_span_mm: float = 0.0
     temperature: float = 36.6
     sweat: float = 0.0
+    heart_rate: float = 72.0
+    breath_rate: float = 15.0
+    pain: float = 0.0
+    pain_site: str = ""
+    illness: str = ""
+    illness_severity: float = 0.0
+    illness_started_at: float = 0.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -361,6 +368,13 @@ class BodyState:
             "nail_span_mm": self.nail_span_mm,
             "temperature": self.temperature,
             "sweat": self.sweat,
+            "heart_rate": self.heart_rate,
+            "breath_rate": self.breath_rate,
+            "pain": self.pain,
+            "pain_site": self.pain_site,
+            "illness": self.illness,
+            "illness_severity": self.illness_severity,
+            "illness_started_at": self.illness_started_at,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -445,6 +459,11 @@ class BodyState:
             "nail_span_mm",
             "temperature",
             "sweat",
+            "heart_rate",
+            "breath_rate",
+            "pain",
+            "illness_severity",
+            "illness_started_at",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
@@ -503,8 +522,14 @@ class BodyState:
         state.hair_span_cm = max(0.0, state.hair_span_cm)
         state.nail_base_mm = max(0.0, state.nail_base_mm)
         state.nail_span_mm = max(0.0, state.nail_span_mm)
+        state.illness = str(data.get("illness") or "")
+        state.pain_site = str(data.get("pain_site") or "")
         state.temperature = _clamp(state.temperature, 34.0, 42.0)
         state.sweat = _clamp(state.sweat)
+        state.heart_rate = _clamp(state.heart_rate, 40.0, 180.0)
+        state.breath_rate = _clamp(state.breath_rate, 8.0, 40.0)
+        state.pain = _clamp(state.pain)
+        state.illness_severity = _clamp(state.illness_severity)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -1632,6 +1657,27 @@ def _routine(
                 "剪了指甲",
                 key=f"self-nails:{moment.date().isoformat()}",
             )
+    if hour == 8 and not state.illness:
+        day = moment.date().isoformat()
+        check_key = f"illness-check:{day}"
+        if check_key not in state.flags:
+            state.flags[check_key] = moment.timestamp()
+            strain = (
+                max(0.0, 35.0 - state.energy) * 1.2
+                + max(0.0, state.sleep_debt - 6.0) * 6.0
+                + max(0.0, 45.0 - state.hydration) * 0.5
+            )
+            if strain >= 45.0 and _roll(profile.persona_id, day, "illness") < 0.02:
+                state.illness = "cold"
+                state.illness_severity = 55.0
+                state.illness_started_at = moment.timestamp()
+                _add_event(
+                    state,
+                    moment,
+                    "illness",
+                    "有点感冒，头沉沉的",
+                    key=f"self-illness:{day}",
+                )
 
 
 def _maybe_release(
@@ -2089,7 +2135,37 @@ def advance(
         oral_rate = ORAL_AWAKE * awake_fraction + ORAL_SLEEP * sleep_fraction
         state.oral = _clamp(state.oral + oral_rate * step_hours)
 
-        temp_target = 36.3 + alert / 100.0 * 0.45 + state.progesterone / 100.0 * 0.15
+        if state.illness:
+            days = (
+                max(
+                    0.0,
+                    (chunk_end.timestamp() - state.illness_started_at) / 86400.0,
+                )
+                if state.illness_started_at
+                else 0.0
+            )
+            if days >= 3.0:
+                state.illness = ""
+                state.illness_severity = 0.0
+            else:
+                state.illness_severity = _clamp(55.0 - days * 15.0)
+        cramp_pain = float(view.cramps) * 8.0 if view is not None else 0.0
+        illness_pain = state.illness_severity * 0.35
+        pain_target = _clamp(max(cramp_pain, illness_pain))
+        state.pain += (pain_target - state.pain) * (1.0 - math.exp(-step_hours / 0.8))
+        if cramp_pain >= illness_pain and cramp_pain > 0:
+            state.pain_site = "小腹"
+        elif illness_pain > 0:
+            state.pain_site = "头"
+        else:
+            state.pain_site = ""
+
+        temp_target = (
+            36.3
+            + alert / 100.0 * 0.45
+            + state.progesterone / 100.0 * 0.15
+            + state.illness_severity / 100.0 * 0.9
+        )
         state.temperature += (temp_target - state.temperature) * (
             1.0 - math.exp(-step_hours / 1.5)
         )
@@ -2099,6 +2175,19 @@ def advance(
         )
         state.sweat += (sweat_target - state.sweat) * (
             1.0 - math.exp(-step_hours / 1.0)
+        )
+        arousal = _clamp(_number((mood or {}).get("arousal"), 0.0))
+        heart_target = (
+            62.0 + arousal * 18.0 + state.illness_severity * 0.18 + state.pain * 0.12
+        )
+        state.heart_rate += (heart_target - state.heart_rate) * (
+            1.0 - math.exp(-step_hours / 0.6)
+        )
+        breath_target = (
+            14.0 + arousal * 4.0 + state.illness_severity * 0.05 + state.pain * 0.025
+        )
+        state.breath_rate += (breath_target - state.breath_rate) * (
+            1.0 - math.exp(-step_hours / 0.6)
         )
 
         state.sleep_debt = _clamp(

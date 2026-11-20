@@ -85,6 +85,18 @@ def test_private_block_includes_hair_and_nails() -> None:
     assert " cm" in block and " mm" in block
 
 
+def test_private_block_shows_cold_and_pain() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.illness = "cold"
+    state.illness_severity = 55.0
+    state.pain = 35.0
+    state.pain_site = "头"
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "感冒：" in block
+    assert "疼：头" in block
+
+
 def test_group_chat_hides_self_release() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)

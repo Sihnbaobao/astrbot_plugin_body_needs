@@ -46,6 +46,7 @@ from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_body_needs"
 BODY_MARKER = "【身体状态｜"
+KB_APPEARANCE_TTL = 7 * 86400
 _LIBIDO_SYSTEM = (
     "你是一个角色分析器，只输出 JSON。阅读人格设定，判断这个虚构角色的生理欲望基线"
     "（独处时的自我释放倾向）。0 = 极低，50 = 普通成年人，100 = 很高。"
@@ -634,7 +635,7 @@ class BodyNeedsPlugin(Star):
         key = profile.persona_id
         cached = self._kb_traits.get(key)
         now = self._now().timestamp()
-        if cached and now - cached[0] < 21600:
+        if cached and now - cached[0] < KB_APPEARANCE_TTL:
             return cached[1]
         if not umo:
             return cached[1] if cached else {}
