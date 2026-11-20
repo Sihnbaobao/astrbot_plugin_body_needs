@@ -615,10 +615,9 @@ function startFertilityArt(data) {
         ? anim.eggR * 1.3 + Math.random() * Math.max(16, outer - anim.eggR * 1.3)
         : outer + 12 + Math.random() * 28,
       speed: 4.2 + Math.random() * 5.6,
-      size: 0.82 + Math.random() * 0.7,
+      size: 0.86 + Math.random() * 0.6,
       phase: Math.random() * Math.PI * 2,
-      depthPhase: Math.random() * Math.PI * 2,
-      depthSpeed: 0.16 + Math.random() * 0.22,
+      z: Math.random(),
     };
   }
 
@@ -626,8 +625,10 @@ function startFertilityArt(data) {
     anim.sperm = [];
     for (let index = 0; index < 14; index += 1) {
       const sperm = spawnSperm(true);
-      sperm.depthPhase = (index / 14) * Math.PI * 2;
-      sperm.depthSpeed = 0.18 + Math.random() * 0.16;
+      sperm.z = Math.min(
+        1,
+        Math.max(0.04, 0.08 + (index / 13) * 0.84 + (Math.random() - 0.5) * 0.06),
+      );
       anim.sperm.push(sperm);
     }
     anim.particles = [];
@@ -765,13 +766,9 @@ function startFertilityArt(data) {
     });
   }
 
-  function spermZ(s) {
-    return 0.5 + 0.5 * Math.sin(anim.time * s.depthSpeed + s.depthPhase);
-  }
-
-  function drawSperm(s, dt, z) {
+  function drawSperm(s, dt) {
     s.radius -= s.speed * dt;
-    s.angle += (0.018 + (z - 0.5) * 0.012) * dt;
+    s.angle += (0.016 + (s.z - 0.5) * 0.008) * dt;
     if (s.radius < anim.eggR * 1.18) {
       const next = spawnSperm(false);
       s.angle = next.angle;
@@ -779,47 +776,40 @@ function startFertilityArt(data) {
       s.speed = next.speed;
       s.size = next.size;
       s.phase = next.phase;
-      s.depthPhase = next.depthPhase;
-      s.depthSpeed = next.depthSpeed;
+      s.z = next.z;
     }
     if (s.radius > maxRadius() + 60) s.radius = maxRadius() + 60;
     const x = anim.cx + Math.cos(s.angle) * s.radius;
     const y = anim.cy + Math.sin(s.angle) * s.radius;
     const fade = Math.min(1, Math.max(0, (s.radius - anim.eggR * 1.2) / 30));
     const alpha =
-      (0.14 + z * 0.86) * fade * (anim.data.pregnant ? 0.12 : 1);
+      (0.45 + s.z * 0.55) * fade * (anim.data.pregnant ? 0.12 : 1);
     if (alpha <= 0.01) return;
-    const depthScale = 0.52 + z * 1.08;
-    const blur = z < 0.28 ? (0.28 - z) * 5.2 : 0;
+    const depthScale = 0.62 + s.z * 0.95;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(s.angle);
     ctx.scale(s.size * depthScale, s.size * depthScale);
     ctx.globalAlpha = alpha;
-    if (blur > 0.2) ctx.filter = "blur(" + blur.toFixed(1) + "px)";
 
-    const tailLength = 82;
-    const segments = 20;
-    for (let pass = 0; pass < 3; pass += 1) {
+    const tailLength = 86;
+    const segments = 22;
+    for (let pass = 0; pass < 2; pass += 1) {
       let px = 8;
       let py = 0;
       for (let index = 1; index <= segments; index += 1) {
         const t = index / segments;
         const nx = 8 + t * tailLength;
         const ny =
-          Math.sin(t * 7.2 - anim.time * 3.4 + s.phase) * 7.1 * (1 - t * 0.32) +
-          Math.sin(t * 13.4 + s.phase * 1.7) * 1.7 * (1 - t);
+          Math.sin(t * 5.6 - anim.time * 3.1 + s.phase) * 7.4 * (1 - t * 0.36);
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(nx, ny);
-        ctx.lineWidth =
-          (pass === 0 ? 7.4 : pass === 1 ? 4.2 : 2.2) * (1 - t * 0.55);
+        ctx.lineWidth = (pass === 0 ? 5.6 : 1.9) * (1 - t * 0.45);
         ctx.strokeStyle =
           pass === 0
-            ? "rgba(255, 214, 204, 0.1)"
-            : pass === 1
-              ? "rgba(255, 240, 230, 0.22)"
-              : "rgba(255, 252, 247, 0.94)";
+            ? "rgba(225, 235, 255, 0.12)"
+            : "rgba(255, 255, 255, 0.92)";
         ctx.lineCap = "round";
         ctx.stroke();
         px = nx;
@@ -827,52 +817,41 @@ function startFertilityArt(data) {
       }
     }
 
-    if (z > 0.55) {
-      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 20);
-      aura.addColorStop(0, "rgba(255, 238, 224, " + (0.18 * z).toFixed(3) + ")");
-      aura.addColorStop(1, "rgba(255, 238, 224, 0)");
+    if (s.z > 0.6) {
+      const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 22);
+      aura.addColorStop(0, "rgba(225, 235, 255, " + (0.13 * s.z).toFixed(3) + ")");
+      aura.addColorStop(1, "rgba(225, 235, 255, 0)");
       ctx.beginPath();
       ctx.fillStyle = aura;
-      ctx.arc(0, 0, 20, 0, Math.PI * 2);
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const head = ctx.createRadialGradient(-3.8, -2.4, 0.4, 0, 0, 12);
+    const head = ctx.createRadialGradient(-3.6, -2.4, 0.4, 0, 0, 12);
     head.addColorStop(0, "#ffffff");
-    head.addColorStop(0.46, "#fff1e2");
-    head.addColorStop(0.82, "#f3c9b4");
-    head.addColorStop(1, "#d9967f");
-    ctx.shadowColor = "rgba(255, 240, 226, " + (0.32 + z * 0.4).toFixed(2) + ")";
-    ctx.shadowBlur = 6 + z * 10;
+    head.addColorStop(0.5, "#f8f5ff");
+    head.addColorStop(0.82, "#e5d8f1");
+    head.addColorStop(1, "#cbb8dd");
+    ctx.shadowColor = "rgba(220, 230, 255, 0.55)";
+    ctx.shadowBlur = 5 + s.z * 8;
     ctx.beginPath();
-    ctx.moveTo(11, 0);
-    ctx.bezierCurveTo(7.2, -5.4, 0.5, -7.4, -6.2, -4.4);
-    ctx.bezierCurveTo(-10.8, -2.2, -10.8, 2.2, -6.2, 4.4);
-    ctx.bezierCurveTo(0.5, 7.4, 7.2, 5.4, 11, 0);
-    ctx.closePath();
+    ctx.ellipse(0, 0, 10.6, 6.2, 0, 0, Math.PI * 2);
     ctx.fillStyle = head;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255, 252, 246, 0.85)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
     ctx.lineWidth = 0.85;
     ctx.stroke();
 
-    const acrosome = ctx.createRadialGradient(-7.2, -0.8, 0, -7.2, -0.8, 4.4);
-    acrosome.addColorStop(0, "rgba(255, 255, 255, 0.98)");
-    acrosome.addColorStop(1, "rgba(255, 236, 220, 0.12)");
     ctx.beginPath();
-    ctx.fillStyle = acrosome;
-    ctx.arc(-7.2, -0.8, 4.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.ellipse(-3, -2.1, 3.4, 1.5, -0.18, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.ellipse(-2.4, -2.4, 3.1, 1.4, -0.22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 226, 210, 0.55)";
-    ctx.ellipse(7.6, 0, 1.6, 3.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.filter = "none";
+    ctx.strokeStyle = "rgba(196, 180, 224, 0.55)";
+    ctx.lineWidth = 0.8;
+    ctx.arc(0, 0, 9.4, Math.PI * 1.08, Math.PI * 1.58);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1006,14 +985,11 @@ function startFertilityArt(data) {
   function draw(dt) {
     drawBackground();
     drawParticles(dt);
-    const ordered = anim.sperm
-      .map(function (s) { return { sperm: s, z: spermZ(s) }; })
-      .sort(function (a, b) { return a.z - b.z; });
-    const back = ordered.filter(function (item) { return item.z < 0.48; });
-    const front = ordered.filter(function (item) { return item.z >= 0.48; });
-    back.forEach(function (item) { drawSperm(item.sperm, dt, item.z); });
     drawEgg();
-    front.forEach(function (item) { drawSperm(item.sperm, dt, item.z); });
+    anim.sperm
+      .slice()
+      .sort(function (a, b) { return a.z - b.z; })
+      .forEach(function (s) { drawSperm(s, dt); });
   }
 
   function frame(now) {
