@@ -907,39 +907,42 @@ function startFertilityArt(data) {
     ctx.stroke();
 
     if (anim.data.pregnant) {
-      ctx.globalAlpha = 0.95;
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(255, 216, 204, 0.85)";
-      ctx.arc(cx - r * 0.18, cy - r * 0.1, r * 0.15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(255, 226, 214, 0.8)";
-      ctx.arc(cx + r * 0.18, cy + r * 0.13, r * 0.15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      [
+        [cx - r * 0.18, cy - r * 0.1],
+        [cx + r * 0.18, cy + r * 0.13],
+      ].forEach(function (point) {
+        const pronucleus = ctx.createRadialGradient(
+          point[0],
+          point[1],
+          0,
+          point[0],
+          point[1],
+          r * 0.2,
+        );
+        pronucleus.addColorStop(0, "rgba(255, 232, 218, 0.92)");
+        pronucleus.addColorStop(0.55, "rgba(255, 196, 182, 0.36)");
+        pronucleus.addColorStop(1, "rgba(255, 196, 182, 0)");
+        ctx.beginPath();
+        ctx.fillStyle = pronucleus;
+        ctx.arc(point[0], point[1], r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
     } else {
       const nucleus = ctx.createRadialGradient(
-        cx - r * 0.05,
-        cy - r * 0.06,
-        1,
+        cx - r * 0.04,
+        cy - r * 0.05,
+        0,
         cx,
         cy,
-        r * 0.22,
+        r * 0.58,
       );
-      nucleus.addColorStop(0, "#ffe4d2");
-      nucleus.addColorStop(0.72, "#a51e43");
-      nucleus.addColorStop(1, "#5f0e2c");
+      nucleus.addColorStop(0, "rgba(255, 228, 212, 0.16)");
+      nucleus.addColorStop(0.35, "rgba(190, 70, 95, 0.08)");
+      nucleus.addColorStop(1, "rgba(190, 70, 95, 0)");
       ctx.beginPath();
       ctx.fillStyle = nucleus;
-      ctx.globalAlpha = 0.75;
-      ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r * 0.58, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 0.7;
-      ctx.beginPath();
-      ctx.fillStyle = "#ffe4d6";
-      ctx.arc(cx + r * 0.035, cy - r * 0.04, r * 0.055, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
     }
   }
 
