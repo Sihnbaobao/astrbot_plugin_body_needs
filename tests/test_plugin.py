@@ -111,6 +111,21 @@ def make_plugin(monkeypatch, tmp_path, prompt: str):
     return plugin, context
 
 
+def test_kb_appearance_traits_parse() -> None:
+    traits = plugin_module._parse_appearance_traits(
+        "外貌：银白长发扎成低双马尾；指甲修剪整齐。"
+    )
+    assert traits["hair_base_cm"] == 50.0
+    assert traits["hair_span_cm"] == 6.0
+    assert traits["nail_base_mm"] == 1.4
+
+
+def test_kb_appearance_explicit_numbers_win() -> None:
+    traits = plugin_module._parse_appearance_traits("头发长 42cm，指甲 3mm。")
+    assert traits["hair_base_cm"] == 42.0
+    assert traits["nail_base_mm"] == 3.0
+
+
 @pytest.mark.asyncio
 async def test_inject_body_and_tools(monkeypatch, tmp_path) -> None:
     plugin, context = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")

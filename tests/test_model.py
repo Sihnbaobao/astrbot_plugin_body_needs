@@ -576,6 +576,19 @@ def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
     assert state.urine == 2.0
 
 
+def test_temperature_and_sweat_are_alive() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = make_state(now - timedelta(hours=6))
+    state.temperature = 36.6
+    state.sweat = 20.0
+    advance(state, now, make_profile(), Settings())
+    assert 35.8 <= state.temperature <= 37.5
+    assert 0.0 <= state.sweat <= 100.0
+    state.sweat = 45.0
+    apply_action(state, "shower", now, make_profile(), Settings())
+    assert state.sweat == 0.0
+
+
 def test_grooming_actions_trim_hair_and_nails() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)

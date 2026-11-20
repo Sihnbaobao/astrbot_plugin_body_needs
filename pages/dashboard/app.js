@@ -366,9 +366,11 @@ function renderDetails(details) {
     const bar = make("div", "inner-bar");
     const fill = make("i", item.tone || "ok");
     const percent =
-      item.key === "sleep_debt"
-        ? Math.min(100, Math.max(0, (value / 24) * 100))
-        : Math.min(100, Math.max(0, value));
+      item.bar !== undefined
+        ? Math.min(100, Math.max(0, Number(item.bar) || 0))
+        : item.key === "sleep_debt"
+          ? Math.min(100, Math.max(0, (value / 24) * 100))
+          : Math.min(100, Math.max(0, value));
     fill.style.width = percent + "%";
     bar.appendChild(fill);
     row.appendChild(bar);

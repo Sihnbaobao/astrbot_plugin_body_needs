@@ -193,13 +193,17 @@ def constitution(persona_id: str) -> Constitution:
 def hair_length_cm(state: BodyState, profile: Profile) -> float:
     """Return the actual hair length for this persona in centimetres."""
     const = constitution(profile.persona_id)
-    return const.hair_target_cm + (state.hair_growth / 100.0) * const.hair_span_cm
+    base = state.hair_base_cm or const.hair_target_cm
+    span = state.hair_span_cm or const.hair_span_cm
+    return base + (state.hair_growth / 100.0) * span
 
 
 def nail_length_mm(state: BodyState, profile: Profile) -> float:
     """Return the actual nail length for this persona in millimetres."""
     const = constitution(profile.persona_id)
-    return const.nail_target_mm + (state.nail_growth / 100.0) * const.nail_span_mm
+    base = state.nail_base_mm or const.nail_target_mm
+    span = state.nail_span_mm or const.nail_span_mm
+    return base + (state.nail_growth / 100.0) * span
 
 
 def _parse_ts(value: Any) -> float:
@@ -270,6 +274,12 @@ class BodyState:
     bowel: float = 0.0
     hair_growth: float = 26.0
     nail_growth: float = 22.0
+    hair_base_cm: float = 0.0
+    hair_span_cm: float = 0.0
+    nail_base_mm: float = 0.0
+    nail_span_mm: float = 0.0
+    temperature: float = 36.6
+    sweat: float = 0.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -345,6 +355,12 @@ class BodyState:
             "bowel": self.bowel,
             "hair_growth": self.hair_growth,
             "nail_growth": self.nail_growth,
+            "hair_base_cm": self.hair_base_cm,
+            "hair_span_cm": self.hair_span_cm,
+            "nail_base_mm": self.nail_base_mm,
+            "nail_span_mm": self.nail_span_mm,
+            "temperature": self.temperature,
+            "sweat": self.sweat,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -423,6 +439,12 @@ class BodyState:
             "bowel",
             "hair_growth",
             "nail_growth",
+            "hair_base_cm",
+            "hair_span_cm",
+            "nail_base_mm",
+            "nail_span_mm",
+            "temperature",
+            "sweat",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
@@ -477,6 +499,12 @@ class BodyState:
         state.bowel = _clamp(state.bowel)
         state.hair_growth = _clamp(state.hair_growth)
         state.nail_growth = _clamp(state.nail_growth)
+        state.hair_base_cm = max(0.0, state.hair_base_cm)
+        state.hair_span_cm = max(0.0, state.hair_span_cm)
+        state.nail_base_mm = max(0.0, state.nail_base_mm)
+        state.nail_span_mm = max(0.0, state.nail_span_mm)
+        state.temperature = _clamp(state.temperature, 34.0, 42.0)
+        state.sweat = _clamp(state.sweat)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -2028,8 +2056,10 @@ def advance(
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
         day_fraction = step_seconds / 86400.0
-        hair_rate = const.hair_growth_cm_day / max(0.5, const.hair_span_cm) * 100.0
-        nail_rate = const.nail_growth_mm_day / max(0.5, const.nail_span_mm) * 100.0
+        hair_span = state.hair_span_cm or const.hair_span_cm
+        nail_span = state.nail_span_mm or const.nail_span_mm
+        hair_rate = const.hair_growth_cm_day / max(0.5, hair_span) * 100.0
+        nail_rate = const.nail_growth_mm_day / max(0.5, nail_span) * 100.0
         state.hair_growth = _clamp(state.hair_growth + hair_rate * day_fraction)
         state.nail_growth = _clamp(state.nail_growth + nail_rate * day_fraction)
 
@@ -2058,6 +2088,18 @@ def advance(
 
         oral_rate = ORAL_AWAKE * awake_fraction + ORAL_SLEEP * sleep_fraction
         state.oral = _clamp(state.oral + oral_rate * step_hours)
+
+        temp_target = 36.3 + alert / 100.0 * 0.45 + state.progesterone / 100.0 * 0.15
+        state.temperature += (temp_target - state.temperature) * (
+            1.0 - math.exp(-step_hours / 1.5)
+        )
+        sweat_target = _clamp(
+            max(0.0, state.temperature - 36.75) * 40.0
+            + max(0.0, 45.0 - state.hydration) * 0.5
+        )
+        state.sweat += (sweat_target - state.sweat) * (
+            1.0 - math.exp(-step_hours / 1.0)
+        )
 
         state.sleep_debt = _clamp(
             state.sleep_debt
@@ -2240,6 +2282,7 @@ def apply_action(
         _add_care(state, now, "drink")
     elif action == "shower":
         state.skin = 2.0
+        state.sweat = 0.0
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_shower_at = now_ts
         _add_care(state, now, "shower")

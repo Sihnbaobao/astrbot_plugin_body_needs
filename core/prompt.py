@@ -125,6 +125,28 @@ def hair_label(value: float) -> str:
     return "太长了"
 
 
+def temperature_label(value: float) -> str:
+    """Describe a body temperature in everyday language."""
+    if value < 36.2:
+        return "偏低"
+    if value < 36.9:
+        return "正常"
+    if value < 37.3:
+        return "有点热"
+    return "发热"
+
+
+def sweat_label(value: float) -> str:
+    """Describe how damp the skin feels."""
+    if value < 12:
+        return "干爽"
+    if value < 30:
+        return "有点潮"
+    if value < 60:
+        return "出汗了"
+    return "汗湿"
+
+
 def nail_label(value: float) -> str:
     """Describe how much the nails have grown since the last trim."""
     if value < 50:
@@ -572,6 +594,11 @@ def build_prompt_block(
             f"指甲：{nail_length_mm(state, profile):.1f} mm，"
             f"{nail_label(state.nail_growth)}"
         )
+        lines.append(
+            f"体温：{state.temperature:.1f}℃（{temperature_label(state.temperature)}）"
+        )
+        if state.sweat >= 15:
+            lines.append(f"皮肤：{sweat_label(state.sweat)}")
         if settings.enable_hygiene:
             lines.append(
                 f"清洁：{clean_label(state.cleanliness)}；"
@@ -695,6 +722,11 @@ def build_status_text(
             f"指甲：{nail_length_mm(state, profile):.1f} mm，"
             f"{nail_label(state.nail_growth)}"
         )
+        lines.append(
+            f"体温：{state.temperature:.1f}℃（{temperature_label(state.temperature)}）"
+        )
+        if state.sweat >= 15:
+            lines.append(f"皮肤：{sweat_label(state.sweat)}")
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
         if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
@@ -838,6 +870,28 @@ def build_web_state(
                 "tone": "hot"
                 if state.nail_growth >= 88
                 else ("warn" if state.nail_growth >= 70 else "ok"),
+            },
+            {
+                "key": "temperature",
+                "label": "体温",
+                "value": round(state.temperature, 1),
+                "unit": "℃",
+                "display": f"{state.temperature:.1f} ℃",
+                "bar": round((state.temperature - 35.5) / 2.5 * 100, 1),
+                "level": temperature_label(state.temperature),
+                "tone": "hot"
+                if state.temperature >= 37.3
+                else ("warn" if state.temperature >= 36.9 else "ok"),
+            },
+            {
+                "key": "sweat",
+                "label": "出汗",
+                "value": round(state.sweat, 1),
+                "unit": "%",
+                "level": sweat_label(state.sweat),
+                "tone": "hot"
+                if state.sweat >= 60
+                else ("warn" if state.sweat >= 30 else "ok"),
             },
         ]
     )
