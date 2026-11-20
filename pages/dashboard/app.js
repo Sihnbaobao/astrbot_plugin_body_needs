@@ -357,9 +357,10 @@ function renderDetails(details) {
     head.appendChild(make("span", "", item.label));
     const value = Number(item.value) || 0;
     const display =
-      item.key === "sleep_debt"
+      item.display ||
+      (item.key === "sleep_debt"
         ? (Math.round(value * 10) / 10) + " 小时"
-        : Math.round(value) + "%";
+        : Math.round(value) + "%");
     head.appendChild(make("b", "", (item.level || "") + " · " + display));
     row.appendChild(head);
     const bar = make("div", "inner-bar");

@@ -80,8 +80,9 @@ def test_private_block_includes_hair_and_nails() -> None:
     state.hair_growth = 80.0
     state.nail_growth = 74.0
     block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
-    assert "头发：该剪了" in block
-    assert "指甲：该剪了" in block
+    assert "头发：" in block and "该剪了" in block
+    assert "指甲：" in block and "该剪了" in block
+    assert " cm" in block and " mm" in block
 
 
 def test_group_chat_hides_self_release() -> None:

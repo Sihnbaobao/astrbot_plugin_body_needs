@@ -19,6 +19,8 @@ from .model import (
     BodyState,
     CycleView,
     cycle_view,
+    hair_length_cm,
+    nail_length_mm,
 )
 from .profile import Profile, gender_label
 
@@ -565,8 +567,10 @@ def build_prompt_block(
         lines.append(f"小便：{bladder_label(state.bladder)}")
         lines.append(f"排便：{bowel_label(state.bowel)}")
         lines.append(
-            f"头发：{hair_label(state.hair_growth)}；"
-            f"指甲：{nail_label(state.nail_growth)}"
+            f"头发：{hair_length_cm(state, profile):.0f} cm，"
+            f"{hair_label(state.hair_growth)}；"
+            f"指甲：{nail_length_mm(state, profile):.1f} mm，"
+            f"{nail_label(state.nail_growth)}"
         )
         if settings.enable_hygiene:
             lines.append(
@@ -686,8 +690,10 @@ def build_status_text(
                 f" · 口腔：{meters['oral_health']['level']}（{round(meters['oral_health']['value'])}/100）"
             )
         lines.append(
-            f"头发：{hair_label(state.hair_growth)} · "
-            f"指甲：{nail_label(state.nail_growth)}"
+            f"头发：{hair_length_cm(state, profile):.0f} cm，"
+            f"{hair_label(state.hair_growth)} · "
+            f"指甲：{nail_length_mm(state, profile):.1f} mm，"
+            f"{nail_label(state.nail_growth)}"
         )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
@@ -816,6 +822,7 @@ def build_web_state(
                 "label": "头发",
                 "value": round(state.hair_growth, 1),
                 "unit": "%",
+                "display": f"{hair_length_cm(state, profile):.0f} cm",
                 "level": hair_label(state.hair_growth),
                 "tone": "hot"
                 if state.hair_growth >= 90
@@ -826,6 +833,7 @@ def build_web_state(
                 "label": "指甲",
                 "value": round(state.nail_growth, 1),
                 "unit": "%",
+                "display": f"{nail_length_mm(state, profile):.1f} mm",
                 "level": nail_label(state.nail_growth),
                 "tone": "hot"
                 if state.nail_growth >= 88

@@ -22,6 +22,8 @@ from core.model import (
     _menopause_age,
     _morning_age_factor,
     advance,
+    hair_length_cm,
+    nail_length_mm,
     apply_action,
     cycle_view,
     parse_sleep_window,
@@ -583,10 +585,26 @@ def test_grooming_actions_trim_hair_and_nails() -> None:
     settings = Settings()
     apply_action(state, "haircut", now, profile, settings)
     apply_action(state, "nails", now, profile, settings)
-    assert state.hair_growth == 8.0
-    assert state.nail_growth == 4.0
+    assert state.hair_growth == 0.0
+    assert state.nail_growth == 0.0
     kinds = {item["kind"] for item in state.care}
     assert {"haircut", "nails"} <= kinds
+
+
+def test_hair_and_nail_lengths_depend_on_persona() -> None:
+    state = make_state(datetime(2026, 11, 18, 12, 0, tzinfo=TZ))
+    state.hair_growth = 50.0
+    state.nail_growth = 50.0
+    first = Profile("length-a", "a", "female", 25, True, 28, 5)
+    second = Profile("length-b", "b", "female", 25, True, 28, 5)
+    first_hair = hair_length_cm(state, first)
+    second_hair = hair_length_cm(state, second)
+    first_nails = nail_length_mm(state, first)
+    second_nails = nail_length_mm(state, second)
+    assert first_hair != pytest.approx(second_hair)
+    assert first_nails != pytest.approx(second_nails)
+    assert 20.0 <= first_hair <= 60.0
+    assert 1.0 <= first_nails <= 5.0
 
 
 def test_autonomous_grooming_happens_when_due() -> None:

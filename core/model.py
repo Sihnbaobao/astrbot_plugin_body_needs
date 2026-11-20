@@ -87,8 +87,6 @@ GUT_BASE = 0.30
 GUT_PASSAGE = 0.35
 GUT_URGE_START = 25.0
 GUT_URGE_GAIN = 1.5
-HAIR_GROWTH_PER_DAY = 0.72
-NAIL_GROWTH_PER_DAY = 2.8
 HAIR_TRIM_AT = 82.0
 NAIL_TRIM_AT = 76.0
 # A persona only looks after herself once nobody has interacted for a while.
@@ -158,6 +156,12 @@ class Constitution:
     stomach_capacity: float
     gut_transit: float
     self_rate: float
+    hair_target_cm: float = 38.0
+    hair_span_cm: float = 5.0
+    hair_growth_cm_day: float = 0.04
+    nail_target_mm: float = 2.0
+    nail_span_mm: float = 2.4
+    nail_growth_mm_day: float = 0.11
 
 
 def constitution(persona_id: str) -> Constitution:
@@ -177,7 +181,25 @@ def constitution(persona_id: str) -> Constitution:
         # Log-uniform 0.3-4.8: most personas sit near once a day, a few at
         # either end; stable for the persona like sleep need.
         self_rate=0.3 * (16.0 ** _roll(persona_id, "body", "release")),
+        hair_target_cm=20.0 + 35.0 * _roll(persona_id, "body", "hair-target"),
+        hair_span_cm=4.0 + 4.0 * _roll(persona_id, "body", "hair-span"),
+        hair_growth_cm_day=0.035 + 0.02 * _roll(persona_id, "body", "hair-rate"),
+        nail_target_mm=1.4 + 1.8 * _roll(persona_id, "body", "nail-target"),
+        nail_span_mm=1.8 + 1.6 * _roll(persona_id, "body", "nail-span"),
+        nail_growth_mm_day=0.08 + 0.06 * _roll(persona_id, "body", "nail-rate"),
     )
+
+
+def hair_length_cm(state: BodyState, profile: Profile) -> float:
+    """Return the actual hair length for this persona in centimetres."""
+    const = constitution(profile.persona_id)
+    return const.hair_target_cm + (state.hair_growth / 100.0) * const.hair_span_cm
+
+
+def nail_length_mm(state: BodyState, profile: Profile) -> float:
+    """Return the actual nail length for this persona in millimetres."""
+    const = constitution(profile.persona_id)
+    return const.nail_target_mm + (state.nail_growth / 100.0) * const.nail_span_mm
 
 
 def _parse_ts(value: Any) -> float:
@@ -1561,7 +1583,7 @@ def _routine(
         )
     if 9 <= hour <= 22:
         if state.hair_growth >= HAIR_TRIM_AT:
-            state.hair_growth = 10.0
+            state.hair_growth = 0.0
             state.last_haircut_at = moment.timestamp()
             _add_care(state, moment, "haircut")
             _add_event(
@@ -1572,7 +1594,7 @@ def _routine(
                 key=f"self-hair:{moment.date().isoformat()}",
             )
         if state.nail_growth >= NAIL_TRIM_AT:
-            state.nail_growth = 4.0
+            state.nail_growth = 0.0
             state.last_nails_at = moment.timestamp()
             _add_care(state, moment, "nails")
             _add_event(
@@ -2006,12 +2028,10 @@ def advance(
         )
         state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
         day_fraction = step_seconds / 86400.0
-        state.hair_growth = _clamp(
-            state.hair_growth + HAIR_GROWTH_PER_DAY * day_fraction
-        )
-        state.nail_growth = _clamp(
-            state.nail_growth + NAIL_GROWTH_PER_DAY * day_fraction
-        )
+        hair_rate = const.hair_growth_cm_day / max(0.5, const.hair_span_cm) * 100.0
+        nail_rate = const.nail_growth_mm_day / max(0.5, const.nail_span_mm) * 100.0
+        state.hair_growth = _clamp(state.hair_growth + hair_rate * day_fraction)
+        state.nail_growth = _clamp(state.nail_growth + nail_rate * day_fraction)
 
         if state.lactating:
             state.milk = _clamp(state.milk + MILK_RATE * step_hours)
@@ -2228,11 +2248,11 @@ def apply_action(
         state.last_brush_at = now_ts
         _add_care(state, now, "brush")
     elif action == "haircut":
-        state.hair_growth = 8.0
+        state.hair_growth = 0.0
         state.last_haircut_at = now_ts
         _add_care(state, now, "haircut")
     elif action == "nails":
-        state.nail_growth = 4.0
+        state.nail_growth = 0.0
         state.last_nails_at = now_ts
         _add_care(state, now, "nails")
     elif action == "toilet":
