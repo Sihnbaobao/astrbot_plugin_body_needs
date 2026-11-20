@@ -755,7 +755,7 @@ class BodyNeedsPlugin(Star):
                         else ""
                     )
                     + (
-                        "、亲密、自己解决"
+                        "、亲密、自己解决性欲"
                         if private
                         and profile.gender_resolved
                         and self.settings.enable_intimate
