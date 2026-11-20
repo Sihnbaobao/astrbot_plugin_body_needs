@@ -391,12 +391,23 @@ function renderCycle(persona) {
   if (cycle.phase === "premenarche" || cycle.phase === "menopause" || cycle.phase === "pregnant") {
     el("cyclePhase").textContent = cycle.phase_label || "周期";
     host.appendChild(make("p", "cycle-note", cycle.note || ""));
-    const raceRow = cycle.race
-      ? [["种族", cycle.race + (cycle.physio_age ? "（约人类 " + cycle.physio_age + " 岁）" : "")]]
-      : [];
-    if (raceRow.length) {
+    const rows = [];
+    if (cycle.phase === "pregnant") {
+      const weeks = Number(cycle.weeks) || 0;
+      const fetuses = Number(cycle.fetuses) || 1;
+      rows.push(["孕周", "第 " + weeks + " 周"]);
+      rows.push(["胎数", fetuses >= 3 ? "三胎" : fetuses === 2 ? "双胎" : "单胎"]);
+      rows.push(["预产", "约 " + Math.max(0, 40 - weeks) + " 周后"]);
+    }
+    if (cycle.race) {
+      rows.push([
+        "种族",
+        cycle.race + (cycle.physio_age ? "（约人类 " + cycle.physio_age + " 岁）" : ""),
+      ]);
+    }
+    if (rows.length) {
       const facts = make("dl", "facts");
-      raceRow.forEach(function (pair) {
+      rows.forEach(function (pair) {
         const row = document.createElement("div");
         row.appendChild(make("dt", "", pair[0]));
         row.appendChild(make("dd", "", pair[1]));
@@ -434,6 +445,7 @@ function renderCycle(persona) {
   if (cycle.backache) symptomBits.push("腰酸");
   const rows = [
     ["下次", "约 " + cycle.days_to_next + " 天后"],
+    ["易孕", cycle.fertile ? "是" : "否"],
     ["经量", cycle.flow_label || "—"],
     ["小腹", crampText(cycle.cramps)],
     ["周期", cycle.cycle_length + " 天"],

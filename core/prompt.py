@@ -639,6 +639,8 @@ def build_status_text(
             )
         if view is not None and settings.enable_cycle:
             lines.append(_cycle_text(view))
+            if view.fertile:
+                lines.append("身体：这几天更容易受孕。")
         if settings.enable_intimate:
             male = _male_text(state, now, profile)
             if male:
