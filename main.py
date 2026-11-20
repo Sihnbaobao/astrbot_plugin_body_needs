@@ -245,6 +245,7 @@ class BodyNeedsPlugin(Star):
         self._libido_pending: set[str] = set()
         self._libido_cooldown: dict[str, tuple[str, float]] = {}
         self._kb_traits: dict[str, tuple[float, dict[str, float]]] = {}
+        self._tick_task: asyncio.Task[None] | None = None
 
     # ── 生命周期与配置 ──
 
@@ -375,10 +376,33 @@ class BodyNeedsPlugin(Star):
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._load_libido_scores()
         self._register_web_apis()
+        self._tick_task = asyncio.create_task(self._background_tick())
         logger.info("[body] 身体系统已就绪，数据目录：%s", self.data_dir)
 
     async def terminate(self) -> None:
-        """Stop hook: all state is already on disk."""
+        """Stop hook: stop the background tick and keep state on disk."""
+        if self._tick_task is not None:
+            self._tick_task.cancel()
+            try:
+                await self._tick_task
+            except asyncio.CancelledError:
+                pass
+            self._tick_task = None
+
+    async def _background_tick(self) -> None:
+        """Advance known personas while the bot is running, without messages."""
+        await asyncio.sleep(60)
+        while True:
+            await asyncio.sleep(600)
+            if not self.settings.enabled:
+                continue
+            for persona_id, (_, profile) in list(self._profiles.items()):
+                try:
+                    await self._load_advanced(
+                        persona_id, profile, self._now(), active=False
+                    )
+                except Exception as exc:
+                    logger.debug("[body] 后台推进失败：%s", exc)
 
     def _now(self) -> datetime:
         """Return the current time in the resolved zone."""
