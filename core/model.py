@@ -162,6 +162,8 @@ class Constitution:
     nail_target_mm: float = 2.0
     nail_span_mm: float = 2.4
     nail_growth_mm_day: float = 0.11
+    skin_oil_rate: float = 1.0
+    skin_clarity: float = 70.0
 
 
 def constitution(persona_id: str) -> Constitution:
@@ -187,6 +189,8 @@ def constitution(persona_id: str) -> Constitution:
         nail_target_mm=1.4 + 1.8 * _roll(persona_id, "body", "nail-target"),
         nail_span_mm=1.8 + 1.6 * _roll(persona_id, "body", "nail-span"),
         nail_growth_mm_day=0.08 + 0.06 * _roll(persona_id, "body", "nail-rate"),
+        skin_oil_rate=0.65 + 0.7 * _roll(persona_id, "body", "skin-oil"),
+        skin_clarity=55.0 + 35.0 * _roll(persona_id, "body", "skin-clarity"),
     )
 
 
@@ -296,6 +300,7 @@ class BodyState:
     craving: str = ""
     eye_strain: float = 12.0
     skin_oil: float = 15.0
+    skin_quality: float = 75.0
     sleep_debt: float = 2.0
     cycle_anchor: str = ""
     cycle_length: int = 28
@@ -393,6 +398,7 @@ class BodyState:
             "craving": self.craving,
             "eye_strain": self.eye_strain,
             "skin_oil": self.skin_oil,
+            "skin_quality": self.skin_quality,
             "sleep_debt": self.sleep_debt,
             "cycle_anchor": self.cycle_anchor,
             "cycle_length": self.cycle_length,
@@ -488,6 +494,7 @@ class BodyState:
             "iron",
             "eye_strain",
             "skin_oil",
+            "skin_quality",
             "sleep_debt",
             "last_eat_at",
             "last_drink_at",
@@ -563,6 +570,7 @@ class BodyState:
         state.iron = _clamp(state.iron)
         state.eye_strain = _clamp(state.eye_strain)
         state.skin_oil = _clamp(state.skin_oil)
+        state.skin_quality = _clamp(state.skin_quality)
         state.sleep_debt = _clamp(state.sleep_debt, 0.0, 24.0)
 
         if not has_internal:
@@ -2253,13 +2261,24 @@ def advance(
             1.0 - math.exp(-step_hours / 2.0)
         )
         oil_target = _clamp(
-            8.0
+            6.0
+            + const.skin_oil_rate * 14.0
             + state.sweat * 0.45
             + state.progesterone / 100.0 * 12.0
             + max(0.0, state.skin - 50.0) * 0.15
         )
         state.skin_oil += (oil_target - state.skin_oil) * (
             1.0 - math.exp(-step_hours / 2.0)
+        )
+        quality_target = _clamp(
+            const.skin_clarity
+            - state.skin_oil * 0.35
+            - max(0.0, state.skin - 40.0) * 0.3
+            - max(0.0, state.sleep_debt - 4.0) * 2.0
+            - state.illness_severity * 0.1
+        )
+        state.skin_quality += (quality_target - state.skin_quality) * (
+            1.0 - math.exp(-step_hours / 4.0)
         )
 
         state.sleep_debt = _clamp(

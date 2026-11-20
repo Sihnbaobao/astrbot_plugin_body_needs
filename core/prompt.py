@@ -18,6 +18,7 @@ from .model import (
     CONTRACEPTION_FACTOR,
     BodyState,
     CycleView,
+    constitution,
     cycle_view,
 )
 from .profile import Profile, gender_label
@@ -176,6 +177,26 @@ def oil_label(value: float) -> str:
     if value < 60:
         return "有点油"
     return "很油"
+
+
+def skin_quality_label(value: float) -> str:
+    """Describe the current skin condition."""
+    if value < 45:
+        return "气色不太好"
+    if value < 60:
+        return "有点粗糙"
+    if value < 75:
+        return "还行"
+    return "状态不错"
+
+
+def skin_type_label(rate: float) -> str:
+    """Describe the persona's stable skin type."""
+    if rate < 0.82:
+        return "偏干"
+    if rate > 1.18:
+        return "偏油"
+    return "中性"
 
 
 def illness_label(value: float) -> str:
@@ -696,8 +717,11 @@ def build_prompt_block(
             lines.append(f"食欲：{state.craving}")
         if state.eye_strain >= 55:
             lines.append(f"眼睛：{eye_label(state.eye_strain)}")
-        if state.skin_oil >= 55:
-            lines.append(f"皮肤：{oil_label(state.skin_oil)}")
+        if state.skin_oil >= 55 or state.skin_quality < 60:
+            lines.append(
+                f"皮肤：{skin_quality_label(state.skin_quality)}，"
+                f"{oil_label(state.skin_oil)}"
+            )
         if settings.enable_hygiene and (
             state.cleanliness < 70 or state.oral_health < 65
         ):
@@ -853,8 +877,11 @@ def build_status_text(
             lines.append(f"食欲：{state.craving}")
         if state.eye_strain >= 55:
             lines.append(f"眼睛：{eye_label(state.eye_strain)}")
-        if state.skin_oil >= 55:
-            lines.append(f"皮肤：{oil_label(state.skin_oil)}")
+        if state.skin_oil >= 55 or state.skin_quality < 60:
+            lines.append(
+                f"皮肤：{skin_quality_label(state.skin_quality)}，"
+                f"{oil_label(state.skin_oil)}"
+            )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
         if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
@@ -1077,12 +1104,33 @@ def build_web_state(
                 "tone": "warn" if state.eye_strain >= 55 else "ok",
             },
             {
+                "key": "skin_quality",
+                "label": "皮肤",
+                "value": round(state.skin_quality, 1),
+                "unit": "%",
+                "level": skin_quality_label(state.skin_quality),
+                "tone": "warn" if state.skin_quality < 60 else "ok",
+            },
+            {
                 "key": "skin_oil",
                 "label": "皮肤出油",
                 "value": round(state.skin_oil, 1),
                 "unit": "%",
                 "level": oil_label(state.skin_oil),
                 "tone": "warn" if state.skin_oil >= 55 else "ok",
+            },
+            {
+                "key": "skin_type",
+                "label": "肤质",
+                "value": round(
+                    constitution(profile.persona_id).skin_oil_rate * 50.0, 0
+                ),
+                "unit": "%",
+                "display": skin_type_label(
+                    constitution(profile.persona_id).skin_oil_rate
+                ),
+                "level": "个人底子",
+                "tone": "ok",
             },
         ]
     )

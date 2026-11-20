@@ -22,6 +22,7 @@ from core.model import (
     _menopause_age,
     _morning_age_factor,
     advance,
+    constitution,
     apply_action,
     cycle_view,
     parse_sleep_window,
@@ -572,6 +573,15 @@ def test_eating_fills_the_gut_and_toilet_relieves_it() -> None:
     assert state.gut == 0.0
     assert state.bowel == 0.0
     assert state.urine == 2.0
+
+
+def test_skin_baseline_varies_by_persona() -> None:
+    first = constitution("skin-a")
+    second = constitution("skin-b")
+    assert first.skin_oil_rate != pytest.approx(second.skin_oil_rate)
+    assert first.skin_clarity != pytest.approx(second.skin_clarity)
+    assert 0.65 <= first.skin_oil_rate <= 1.35
+    assert 55.0 <= first.skin_clarity <= 90.0
 
 
 def test_weather_sleep_and_iron_are_simulated() -> None:
