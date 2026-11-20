@@ -71,7 +71,7 @@ def test_bowel_pressure_appears_when_it_matters() -> None:
     state.gut = 70.0
     state.bowel = 68.0
     block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
-    assert "大便：" in block
+    assert "排便：" in block
 
 
 def test_private_block_includes_hair_and_nails() -> None:

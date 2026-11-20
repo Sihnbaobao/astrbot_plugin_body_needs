@@ -26,7 +26,7 @@ METER_NAMES = {
     "satiety": "饱食度",
     "hydration": "水分",
     "bladder": "膀胱",
-    "bowel": "大便",
+    "bowel": "排便",
     "cleanliness": "清洁",
     "oral_health": "口腔",
     "energy": "精力",
@@ -106,7 +106,7 @@ def bowel_label(value: float) -> str:
     if value < 40:
         return "有一点"
     if value < 60:
-        return "想大便"
+        return "想排便"
     if value < 80:
         return "有点憋"
     return "很急"
@@ -257,7 +257,7 @@ def display_meters(
     rows.append(
         ("bladder", "膀胱压力", "膀胱", float(state.bladder), bladder_label, False)
     )
-    rows.append(("bowel", "大便", "大便", float(state.bowel), bowel_label, False))
+    rows.append(("bowel", "排便", "排便", float(state.bowel), bowel_label, False))
     if profile.gender_resolved and settings.enable_intimate:
         rows.append(
             ("libido", "性欲", "性欲", float(state.libido), libido_label, False)
@@ -563,7 +563,7 @@ def build_prompt_block(
             f"渴：{hydration_label(state.hydration)}（{_ago(state.last_drink_at, now)}喝过水）"
         )
         lines.append(f"小便：{bladder_label(state.bladder)}")
-        lines.append(f"大便：{bowel_label(state.bowel)}")
+        lines.append(f"排便：{bowel_label(state.bowel)}")
         lines.append(
             f"头发：{hair_label(state.hair_growth)}；"
             f"指甲：{nail_label(state.nail_growth)}"
@@ -677,7 +677,7 @@ def build_status_text(
                 f"饱食度：{satiety['level']}（{round(satiety['value'])}/100，{_ago(state.last_eat_at, now)}吃过东西）",
                 f"水分：{hydration['level']}（{round(hydration['value'])}/100，{_ago(state.last_drink_at, now)}喝过水）",
                 f"小便：{meters['bladder']['level']}（{round(meters['bladder']['value'])}/100）",
-                f"大便：{meters['bowel']['level']}（{round(meters['bowel']['value'])}/100）",
+                f"排便：{meters['bowel']['level']}（{round(meters['bowel']['value'])}/100）",
             ]
         )
         if settings.enable_hygiene:
