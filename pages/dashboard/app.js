@@ -566,7 +566,15 @@ function stopFertilityArt() {
   state.fertilityAnim = null;
 }
 
-function startFertilityArt(data) {
+function startFertilityArt(data, sceneKey) {
+  const current = state.fertilityAnim;
+  if (current && current.sceneKey === sceneKey) {
+    current.data = data;
+    if (!el("panel-fertility").hidden && !current.running && !current.reduce) {
+      current.resume();
+    }
+    return;
+  }
   stopFertilityArt();
   const host = el("fertilityArt");
   host.replaceChildren();
@@ -579,6 +587,7 @@ function startFertilityArt(data) {
     canvas: canvas,
     ctx: ctx,
     data: data,
+    sceneKey: sceneKey,
     running: false,
     raf: 0,
     width: 0,
@@ -607,14 +616,23 @@ function startFertilityArt(data) {
     return Math.min(anim.width, anim.height) * 0.55;
   }
 
-  function spawnSperm(initial) {
-    const outer = maxRadius();
+  function spawnSperm() {
+    const minR = anim.eggR * 1.24;
+    const maxR = Math.max(minR + 18, maxRadius());
+    const amp = 5 + Math.random() * Math.min(16, (maxR - minR) * 0.5);
+    const base = Math.min(
+      maxR - amp * 0.2,
+      minR + amp + Math.random() * Math.max(4, maxR - minR - amp),
+    );
     return {
       angle: Math.random() * Math.PI * 2,
-      radius: initial
-        ? anim.eggR * 1.3 + Math.random() * Math.max(16, outer - anim.eggR * 1.3)
-        : outer + 12 + Math.random() * 28,
-      speed: 4.2 + Math.random() * 5.6,
+      baseRadius: base,
+      radius: base,
+      radialAmp: amp,
+      radialPhase: Math.random() * Math.PI * 2,
+      radialSpeed: 0.1 + Math.random() * 0.2,
+      angularSpeed:
+        (0.012 + Math.random() * 0.024) * (Math.random() < 0.5 ? -1 : 1),
       size: 0.86 + Math.random() * 0.6,
       phase: Math.random() * Math.PI * 2,
       z: Math.random(),
@@ -623,13 +641,9 @@ function startFertilityArt(data) {
 
   function seed() {
     anim.sperm = [];
-    for (let index = 0; index < 14; index += 1) {
-      const sperm = spawnSperm(true);
-      sperm.z = Math.min(
-        1,
-        Math.max(0.04, 0.08 + (index / 13) * 0.84 + (Math.random() - 0.5) * 0.06),
-      );
-      anim.sperm.push(sperm);
+    const count = 10 + Math.floor(Math.random() * 8);
+    for (let index = 0; index < count; index += 1) {
+      anim.sperm.push(spawnSperm());
     }
     anim.particles = [];
     for (let index = 0; index < 42; index += 1) {
@@ -767,23 +781,13 @@ function startFertilityArt(data) {
   }
 
   function drawSperm(s, dt) {
-    s.radius -= s.speed * dt;
-    s.angle += (0.016 + (s.z - 0.5) * 0.008) * dt;
-    if (s.radius < anim.eggR * 1.18) {
-      const next = spawnSperm(false);
-      s.angle = next.angle;
-      s.radius = next.radius;
-      s.speed = next.speed;
-      s.size = next.size;
-      s.phase = next.phase;
-      s.z = next.z;
-    }
-    if (s.radius > maxRadius() + 60) s.radius = maxRadius() + 60;
+    s.angle += s.angularSpeed * dt;
+    s.radius =
+      s.baseRadius +
+      Math.sin(anim.time * s.radialSpeed + s.radialPhase) * s.radialAmp;
     const x = anim.cx + Math.cos(s.angle) * s.radius;
     const y = anim.cy + Math.sin(s.angle) * s.radius;
-    const fade = Math.min(1, Math.max(0, (s.radius - anim.eggR * 1.2) / 30));
-    const alpha =
-      (0.45 + s.z * 0.55) * fade * (anim.data.pregnant ? 0.12 : 1);
+    const alpha = (0.45 + s.z * 0.55) * (anim.data.pregnant ? 0.12 : 1);
     if (alpha <= 0.01) return;
     const depthScale = 0.62 + s.z * 0.95;
     ctx.save();
@@ -1083,7 +1087,10 @@ function renderFertility(persona) {
   art.className =
     "fertility-art" +
     (data.pregnant ? " is-pregnant" : data.fertile ? " is-fertile" : "");
-  startFertilityArt(data);
+  startFertilityArt(
+    data,
+    String(persona.id || persona.persona_id || persona.name || "default"),
+  );
 
   info.replaceChildren();
   const statusBox = make("div", "fertility-status");
