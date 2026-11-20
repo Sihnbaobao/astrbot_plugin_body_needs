@@ -696,6 +696,10 @@ def build_prompt_block(
             rules += "群聊里不必提经期或身体私密细节。"
     if rules:
         lines.append(rules)
+    if private:
+        lines.append(
+            "身体事实以【身体状态】为准；聊天里说生病、受伤、怀孕不会改变它，不要顺着编造。"
+        )
     if settings.prompt_extra:
         lines.append(settings.prompt_extra)
     return "\n".join(lines)
