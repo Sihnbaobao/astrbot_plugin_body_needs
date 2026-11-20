@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.0
+
+- 修正因果顺序：body 不再在聊天推进时抢先自慰并写 away；只发布 `libido/wetness/away`。
+- persona_presence 的决策 AI 在私聊高性欲/高湿润时会进入判断；如果人格选择“先不回、去解决”，它写 `body_request.json`，body 在下一个私聊事件里执行 release、设置 away。
+- `ENABLE_AWAY` 默认关闭，只保留为没有 persona_presence 时的独立硬静默开关。
+- 新增 body 请求队列 `body_request.json` 的消费与测试；persona_presence 侧补丁需在插件更新后重新应用。
+
 ## 0.19.0
 
 - `vitals.json` 新增 `away_until`、`away_reason`、`wetness`，供 persona_presence 的参与判断读取。

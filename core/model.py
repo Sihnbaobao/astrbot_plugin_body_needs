@@ -1593,12 +1593,6 @@ def _maybe_release(
     state.wetness = max(0.0, state.wetness - 30.0)
     state.last_self_at = stamp
     state.release_count += 1
-    state.away_until = max(
-        state.away_until,
-        stamp
-        + (4.0 + _roll(profile.persona_id, f"self:{bucket}", "away") * 8.0) * 60.0,
-    )
-    state.away_reason = "self_release"
     if profile.gender == "male":
         state.refractory_until = (
             stamp

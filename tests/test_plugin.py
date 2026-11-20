@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from astrbot.api.provider import ProviderRequest
 from astrbot_plugin_body_needs import main as plugin_module
+from astrbot_plugin_body_needs.core.model import BodyState
 
 
 class FakeResult:
@@ -243,6 +246,22 @@ async def test_private_female_tool_exposes_ejaculated_flag(
     body_action = next(tool for tool in tools.tools if tool.name == "body_action")
     assert "intimacy" in body_action.parameters["properties"]["action"]["enum"]
     assert "ejaculated" in body_action.parameters["properties"]
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
+async def test_pending_persona_request_applies_release(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    state = BodyState(persona_id="test")
+    request = plugin.data_dir / "body_request.json"
+    request.write_text('{"action": "release"}', encoding="utf-8")
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    assert plugin._consume_body_request(state, profile, now) is True
+    assert state.release_count == 1
+    assert state.away_until > now.timestamp()
+    assert not request.exists()
     await plugin.terminate()
 
 

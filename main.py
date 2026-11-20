@@ -575,6 +575,30 @@ class BodyNeedsPlugin(Star):
         base = entry.get("base") if isinstance(entry, dict) else None
         return base if isinstance(base, dict) else None
 
+    def _consume_body_request(
+        self, state: BodyState, profile: Profile, now: datetime
+    ) -> bool:
+        """Apply one pending persona_presence request, if present."""
+        path = Path(self.data_dir) / "body_request.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            if path.exists():
+                path.unlink(missing_ok=True)
+            return False
+        persona = str(payload.get("persona") or "").strip()
+        if persona and persona not in (profile.persona_id, profile.name):
+            return False
+        if str(payload.get("action") or "") != "release":
+            path.unlink(missing_ok=True)
+            return False
+        try:
+            apply_action(state, "release", now, profile, self.settings)
+        except Exception as exc:
+            logger.warning("[body] 处理 persona 请求失败：%s", exc)
+        path.unlink(missing_ok=True)
+        return True
+
     async def _load_advanced(
         self, persona_id: str, profile: Profile, now: datetime, active: bool = True
     ) -> BodyState:
@@ -591,6 +615,7 @@ class BodyNeedsPlugin(Star):
             state = self.store.load(persona_id, now)
             mood = self._emotion_for(persona_id)
             advance(state, now, profile, self.settings, mood)
+            self._consume_body_request(state, profile, now)
             if active:
                 state.last_active_at = now.timestamp()
             self.store.save(state)
@@ -664,6 +689,22 @@ class BodyNeedsPlugin(Star):
             state.last_active_at = now.timestamp()
             self.store.save(state)
         return state
+
+    # ── 继承 persona_presence 的“去自慰”请求 ──
+
+    @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE, priority=-20)
+    async def consume_body_request_event(self, event: AstrMessageEvent) -> None:
+        """Apply a pending release request before the reply decision runs."""
+        self._refresh()
+        if not self.settings.enabled:
+            return
+        if not (Path(self.data_dir) / "body_request.json").exists():
+            return
+        try:
+            persona_id, profile, now = await self._identity(event)
+            await self._load_advanced(persona_id, profile, now)
+        except Exception as exc:
+            logger.warning("[body] 读取 persona 请求失败：%s", exc)
 
     # ── 忙碌时暂时不回消息 ──
 
