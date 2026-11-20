@@ -2725,3 +2725,163 @@ footer {
     animation: none !important;
   }
 }
+
+/* richer 3D-ish conception illustration */
+.art-egg-shadow {
+  fill: #2a0714;
+  opacity: 0.7;
+  filter: url(#softBlur);
+}
+
+.art-zona-outer {
+  fill: none;
+  stroke: url(#zonaGradient);
+  stroke-width: 6;
+  opacity: 0.8;
+}
+
+.art-egg-depth {
+  fill: url(#eggDepth);
+}
+
+.art-egg-rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.32);
+  stroke-width: 2;
+  stroke-linecap: round;
+  filter: url(#softBlur);
+}
+
+.art-corona-cell {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: coronaBreathe 5s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+.art-corona-shine {
+  fill: rgba(255, 255, 255, 0.3);
+}
+
+.art-sperm-head {
+  fill: url(#spermHead);
+  stroke: rgba(255, 190, 195, 0.65);
+  stroke-width: 0.8;
+}
+
+.art-sperm-acrosome {
+  fill: #ffe1d2;
+  opacity: 0.9;
+}
+
+.art-sperm-shine {
+  fill: #fff9f2;
+  opacity: 0.8;
+}
+
+.art-sperm-mid {
+  fill: none;
+  stroke: rgba(255, 180, 190, 0.8);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.art-sperm-tail {
+  fill: none;
+  stroke: #ffadbb;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  opacity: 0.78;
+  stroke-dasharray: 7 3;
+  animation: tailWiggle 1.15s linear infinite;
+}
+
+.art-sperm-back-layer {
+  opacity: 0.5;
+  filter: url(#softBlur);
+}
+
+.art-sperm-front-layer {
+  opacity: 1;
+}
+
+.is-fertile .art-sperm {
+  animation: spermSwim 5.8s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+.art-zygote-ring {
+  fill: none;
+  stroke: rgba(255, 220, 210, 0.5);
+  stroke-width: 2;
+  stroke-dasharray: 2 4;
+}
+
+.art-zygote-cell {
+  filter: drop-shadow(0 20px 30px rgba(120, 20, 48, 0.4));
+}
+
+.is-pregnant .art-egg-body,
+.is-pregnant .art-egg-depth,
+.is-pregnant .art-egg-highlight,
+.is-pregnant .art-egg-rim,
+.is-pregnant .art-nucleus,
+.is-pregnant .art-nucleus-dot {
+  opacity: 0.08;
+}
+
+.is-pregnant .art-sperm-layer {
+  opacity: 0.06;
+}
+
+.is-pregnant .art-zygote {
+  opacity: 1;
+  animation: zygotePulse 2.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes spermSwim {
+  0% {
+    opacity: 0.28;
+    transform: translateX(4px);
+  }
+  22% {
+    opacity: 0.92;
+  }
+  72% {
+    opacity: 0.92;
+    transform: translateX(-16px);
+  }
+  100% {
+    opacity: 0.08;
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes tailWiggle {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+@keyframes coronaBreathe {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.68;
+    transform: scale(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art-corona-cell,
+  .art-sperm,
+  .art-sperm-tail,
+  .art-zygote {
+    animation: none !important;
+  }
+}

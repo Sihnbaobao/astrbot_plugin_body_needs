@@ -561,29 +561,38 @@ function renderEvents(events) {
 function fertilitySvg(data) {
   const cx = 280;
   const cy = 230;
-  const corona = Array.from({ length: 18 }, function (_, index) {
-    const angle = (Math.PI * 2 * index) / 18;
-    const radius = 128 + (index % 3) * 6;
+  const corona = Array.from({ length: 24 }, function (_, index) {
+    const angle = (Math.PI * 2 * index) / 24;
+    const radius = 134 + (index % 4) * 5;
     const x = cx + Math.cos(angle) * radius;
     const y = cy + Math.sin(angle) * radius;
-    const size = 7 + (index % 4) * 2;
+    const size = 6 + (index % 5) * 1.7;
     return (
-      '<circle class="art-corona" cx="' +
+      '<g class="art-corona-cell" style="--delay:' +
+      ((index % 6) * 0.23).toFixed(2) +
+      's"><circle class="art-corona" cx="' +
       x.toFixed(1) +
       '" cy="' +
       y.toFixed(1) +
       '" r="' +
-      size +
-      '"/>'
+      size.toFixed(1) +
+      '"/><circle class="art-corona-shine" cx="' +
+      (x - size * 0.3).toFixed(1) +
+      '" cy="' +
+      (y - size * 0.35).toFixed(1) +
+      '" r="' +
+      (size * 0.32).toFixed(1) +
+      '"/></g>'
     );
   }).join("");
-  const sperms = Array.from({ length: 12 }, function (_, index) {
-    const angle = (Math.PI * 2 * index) / 12 + 0.16;
-    const radius = 190 + (index % 3) * 14;
+  const makeSperm = function (index, back) {
+    const angle = (Math.PI * 2 * index) / 14 + 0.12;
+    const radius = 200 + (index % 4) * 13 + (back ? -9 : 0);
     const x = cx + Math.cos(angle) * radius;
     const y = cy + Math.sin(angle) * radius;
-    const rotation = (angle * 180) / Math.PI + 180;
-    const delay = (index * 0.27).toFixed(2);
+    const rotation = (angle * 180) / Math.PI;
+    const delay = (index * 0.31).toFixed(2);
+    const scale = (0.82 + (index % 3) * 0.12).toFixed(2);
     return (
       '<g transform="translate(' +
       x.toFixed(1) +
@@ -591,15 +600,25 @@ function fertilitySvg(data) {
       y.toFixed(1) +
       ') rotate(' +
       rotation.toFixed(1) +
-      ')"><g class="art-sperm" style="--delay:' +
+      ') scale(' +
+      scale +
+      ')"><g class="art-sperm' +
+      (back ? ' art-sperm-back' : '') +
+      '" style="--delay:' +
       delay +
-      's"><ellipse class="art-sperm-head" cx="0" cy="0" rx="8" ry="5"/><path class="art-sperm-tail" d="M8 0 C18 -8 28 8 40 0 C48 -5 54 4 60 0"/></g></g>'
+      's"><ellipse class="art-sperm-head" cx="0" cy="0" rx="9" ry="5.4"/><circle class="art-sperm-acrosome" cx="-6" cy="0" r="2.1"/><ellipse class="art-sperm-shine" cx="-2" cy="-1.7" rx="2.6" ry="1.3"/><path class="art-sperm-mid" d="M4 -1.2 L9 1"/><path class="art-sperm-tail" d="M7 0 C17 -8 26 8 37 0 C45 -5 52 4 60 0"/></g></g>'
     );
+  };
+  const backSperm = [0, 2, 4, 6, 8, 10, 12].map(function (i) {
+    return makeSperm(i, true);
   }).join("");
-  const particles = Array.from({ length: 18 }, function (_, index) {
-    const x = 30 + ((index * 97) % 500);
-    const y = 24 + ((index * 131) % 410);
-    const size = 1 + (index % 3) * 0.7;
+  const frontSperm = [1, 3, 5, 7, 9, 11, 13].map(function (i) {
+    return makeSperm(i, false);
+  }).join("");
+  const particles = Array.from({ length: 26 }, function (_, index) {
+    const x = 24 + ((index * 97) % 512);
+    const y = 20 + ((index * 131) % 420);
+    const size = 0.8 + (index % 4) * 0.65;
     return (
       '<circle class="art-particle" cx="' +
       x +
@@ -608,7 +627,7 @@ function fertilitySvg(data) {
       '" r="' +
       size.toFixed(1) +
       '" style="--delay:' +
-      (index * 0.4).toFixed(1) +
+      (index * 0.37).toFixed(1) +
       's"/>'
     );
   }).join("");
@@ -616,42 +635,76 @@ function fertilitySvg(data) {
     <svg class="fertility-art-svg" viewBox="0 0 560 460" role="img" aria-label="卵子与精子示意">
       <defs>
         <radialGradient id="artBg" cx="50%" cy="42%" r="72%">
-          <stop offset="0%" stop-color="#3a1625"/>
+          <stop offset="0%" stop-color="#431a2b"/>
           <stop offset="52%" stop-color="#1d0c14"/>
-          <stop offset="100%" stop-color="#090509"/>
+          <stop offset="100%" stop-color="#080408"/>
         </radialGradient>
-        <radialGradient id="eggSphere" cx="36%" cy="28%" r="74%">
-          <stop offset="0%" stop-color="#ffe7d8"/>
-          <stop offset="34%" stop-color="#f3aaa4"/>
-          <stop offset="74%" stop-color="#c45c70"/>
-          <stop offset="100%" stop-color="#7c2c45"/>
+        <radialGradient id="eggSphere" cx="34%" cy="27%" r="78%">
+          <stop offset="0%" stop-color="#fff0e4"/>
+          <stop offset="24%" stop-color="#ffc8bd"/>
+          <stop offset="58%" stop-color="#e4888d"/>
+          <stop offset="84%" stop-color="#b74f68"/>
+          <stop offset="100%" stop-color="#6f2741"/>
+        </radialGradient>
+        <radialGradient id="eggDepth" cx="50%" cy="48%" r="52%">
+          <stop offset="58%" stop-color="#3b0e20" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#3b0e20" stop-opacity="0.62"/>
+        </radialGradient>
+        <radialGradient id="coronaFill" cx="34%" cy="28%" r="72%">
+          <stop offset="0%" stop-color="#ffd2d2"/>
+          <stop offset="55%" stop-color="#d98094"/>
+          <stop offset="100%" stop-color="#8e3f58"/>
         </radialGradient>
         <radialGradient id="eggHalo" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#ff9aa8" stop-opacity="0.5"/>
+          <stop offset="0%" stop-color="#ff9aa8" stop-opacity="0.55"/>
           <stop offset="100%" stop-color="#ff9aa8" stop-opacity="0"/>
         </radialGradient>
+        <radialGradient id="spermHead" cx="30%" cy="24%" r="75%">
+          <stop offset="0%" stop-color="#fff8f0"/>
+          <stop offset="55%" stop-color="#ffc7c2"/>
+          <stop offset="100%" stop-color="#d77b8e"/>
+        </radialGradient>
+        <radialGradient id="nucleusFill" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#ffd9c9"/>
+          <stop offset="70%" stop-color="#a94b62"/>
+          <stop offset="100%" stop-color="#6b2438"/>
+        </radialGradient>
+        <linearGradient id="zonaGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ffe5dd" stop-opacity="0.8"/>
+          <stop offset="55%" stop-color="#ffb6bd" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#8d3651" stop-opacity="0.65"/>
+        </linearGradient>
         <filter id="artGlow" x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur stdDeviation="9"/>
+          <feGaussianBlur stdDeviation="10"/>
+        </filter>
+        <filter id="softBlur">
+          <feGaussianBlur stdDeviation="2.2"/>
         </filter>
       </defs>
       <rect width="560" height="460" fill="url(#artBg)"/>
       <circle class="art-ambient" cx="280" cy="225" r="185" fill="url(#eggHalo)"/>
       ${particles}
-      <circle class="art-egg-halo" cx="280" cy="230" r="142" filter="url(#artGlow)"/>
+      <circle class="art-egg-halo" cx="280" cy="230" r="146" filter="url(#artGlow)"/>
+      <g class="art-sperm-layer art-sperm-back-layer">${backSperm}</g>
       <g class="art-egg">
-        <circle class="art-corona-ring" cx="280" cy="230" r="132"/>
+        <ellipse class="art-egg-shadow" cx="280" cy="342" rx="128" ry="22"/>
+        <circle class="art-corona-ring" cx="280" cy="230" r="140"/>
         ${corona}
-        <circle class="art-zona" cx="280" cy="230" r="112"/>
-        <circle class="art-egg-body" cx="280" cy="230" r="99" fill="url(#eggSphere)"/>
-        <ellipse class="art-egg-highlight" cx="245" cy="192" rx="34" ry="21"/>
-        <circle class="art-nucleus" cx="280" cy="230" r="20"/>
-        <circle class="art-nucleus-dot" cx="286" cy="224" r="7"/>
+        <circle class="art-zona-outer" cx="280" cy="230" r="114"/>
+        <circle class="art-zona" cx="280" cy="230" r="108"/>
+        <circle class="art-egg-body" cx="280" cy="230" r="98" fill="url(#eggSphere)"/>
+        <circle class="art-egg-depth" cx="280" cy="230" r="98" fill="url(#eggDepth)"/>
+        <ellipse class="art-egg-highlight" cx="241" cy="188" rx="38" ry="22"/>
+        <path class="art-egg-rim" d="M 196 278 A 98 98 0 0 1 326 148"/>
+        <circle class="art-nucleus" cx="280" cy="230" r="21" fill="url(#nucleusFill)"/>
+        <circle class="art-nucleus-dot" cx="287" cy="223" r="7"/>
       </g>
-      <g class="art-sperm-layer">${sperms}</g>
+      <g class="art-sperm-layer art-sperm-front-layer">${frontSperm}</g>
       <g class="art-zygote">
-        <circle class="art-zygote-cell" cx="280" cy="230" r="101"/>
-        <circle class="art-pronucleus" cx="262" cy="220" r="13"/>
-        <circle class="art-pronucleus" cx="298" cy="242" r="13"/>
+        <circle class="art-zygote-cell" cx="280" cy="230" r="100"/>
+        <circle class="art-zygote-ring" cx="280" cy="230" r="108"/>
+        <circle class="art-pronucleus" cx="260" cy="218" r="14"/>
+        <circle class="art-pronucleus" cx="300" cy="242" r="14"/>
       </g>
     </svg>`;
 }
