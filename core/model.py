@@ -282,6 +282,8 @@ class BodyState:
     last_intimacy_at: float = 0.0
     last_insemination_at: float = 0.0
     wetness: float = 0.0
+    away_until: float = 0.0
+    away_reason: str = ""
     refractory_until: float = 0.0
     last_meal_kind: str = ""
     last_meal_size: float = 0.0
@@ -351,6 +353,8 @@ class BodyState:
             "last_intimacy_at": self.last_intimacy_at,
             "last_insemination_at": self.last_insemination_at,
             "wetness": self.wetness,
+            "away_until": self.away_until,
+            "away_reason": self.away_reason,
             "refractory_until": self.refractory_until,
             "last_meal_kind": self.last_meal_kind,
             "last_meal_size": self.last_meal_size,
@@ -488,6 +492,8 @@ class BodyState:
         state.last_intimacy_at = _number(data.get("last_intimacy_at"), 0.0)
         state.last_insemination_at = _number(data.get("last_insemination_at"), 0.0)
         state.wetness = _clamp(_number(data.get("wetness"), 0.0))
+        state.away_until = _number(data.get("away_until"), 0.0)
+        state.away_reason = str(data.get("away_reason") or "")
         state.pad_hours = max(0.0, _number(data.get("pad_hours"), 0.0))
         state.last_pad_day = str(data.get("last_pad_day") or "")
         state.last_supply_at = _number(data.get("last_supply_at"), 0.0)
@@ -1587,6 +1593,12 @@ def _maybe_release(
     state.wetness = max(0.0, state.wetness - 30.0)
     state.last_self_at = stamp
     state.release_count += 1
+    state.away_until = max(
+        state.away_until,
+        stamp
+        + (4.0 + _roll(profile.persona_id, f"self:{bucket}", "away") * 8.0) * 60.0,
+    )
+    state.away_reason = "self_release"
     if profile.gender == "male":
         state.refractory_until = (
             stamp
@@ -2240,6 +2252,12 @@ def apply_action(
         state.wetness = max(0.0, state.wetness - 30.0)
         state.last_self_at = now_ts
         state.release_count += 1
+        state.away_until = max(
+            state.away_until,
+            now_ts
+            + (3.0 + _roll(profile.persona_id, str(now_ts), "away") * 5.0) * 60.0,
+        )
+        state.away_reason = "self_release"
         _add_event(
             state,
             now,

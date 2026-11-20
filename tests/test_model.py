@@ -153,6 +153,15 @@ def test_period_event_is_recorded_once() -> None:
     assert len(state.events) == count
 
 
+def test_release_sets_away_window() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    apply_action(state, "release", now, make_profile(), Settings())
+    assert state.release_count == 1
+    assert state.away_until > now.timestamp()
+    assert state.away_reason == "self_release"
+
+
 def test_intimacy_records_counts_and_wetness() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)

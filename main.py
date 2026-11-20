@@ -136,6 +136,7 @@ CONFIG_SPEC: dict[str, tuple[str, type]] = {
     "INTENSITY": ("intensity", str),
     "ENABLE_CYCLE": ("enable_cycle", bool),
     "ENABLE_INTIMATE": ("enable_intimate", bool),
+    "ENABLE_AWAY": ("enable_away", bool),
     "ENABLE_PREGNANCY": ("enable_pregnancy", bool),
     "CONTRACEPTION": ("contraception", str),
     "ENABLE_HYGIENE": ("enable_hygiene", bool),
@@ -663,6 +664,36 @@ class BodyNeedsPlugin(Star):
             state.last_active_at = now.timestamp()
             self.store.save(state)
         return state
+
+    # ── 忙碌时暂时不回消息 ──
+
+    @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE, priority=-10)
+    async def maybe_stay_away(self, event: AstrMessageEvent) -> None:
+        """Let a private self-release briefly suppress replies.
+
+        The body advances here first, so a self-release triggered by this very
+        message can take effect before the reply is generated. Commands are
+        left alone so status checks still work while she is away.
+        """
+        self._refresh()
+        if not self.settings.enabled or not self.settings.enable_away:
+            return
+        text = str(getattr(event, "message_str", "") or "").strip()
+        if text.startswith(("/", "／")):
+            return
+        try:
+            persona_id, profile, now = await self._identity(event)
+            state = await self._load_advanced(persona_id, profile, now)
+            if state.away_until > now.timestamp():
+                event.stop_event()
+                if self.settings.debug:
+                    logger.info(
+                        "[body] 暂时不回消息：%s，剩余 %.0f 秒",
+                        state.away_reason,
+                        state.away_until - now.timestamp(),
+                    )
+        except Exception as exc:
+            logger.warning("[body] 忙碌判定失败：%s", exc)
 
     # ── LLM 注入 ──
 

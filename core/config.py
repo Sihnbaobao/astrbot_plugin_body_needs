@@ -78,6 +78,7 @@ class Settings:
         enable_cycle: Track the menstrual cycle.
         enable_intimate: Track intimate physiology; needs a resolvable gender
             and a private chat, and never depends on age.
+        enable_away: Let a private self-release briefly suppress replies.
         enable_pregnancy: Let a fertile encounter possibly start a pregnancy.
         contraception: none, condom or pill; scales the conception chance.
         enable_hygiene: Track showering and tooth brushing.
@@ -103,6 +104,7 @@ class Settings:
     intensity: str = "natural"
     enable_cycle: bool = True
     enable_intimate: bool = True
+    enable_away: bool = True
     enable_pregnancy: bool = True
     contraception: str = "none"
     enable_hygiene: bool = True
@@ -162,6 +164,7 @@ class Settings:
             intensity=_choice(get("INTENSITY", "natural"), INTENSITIES, "natural"),
             enable_cycle=_as_bool(get("ENABLE_CYCLE", True), True),
             enable_intimate=_as_bool(get("ENABLE_INTIMATE", True), True),
+            enable_away=_as_bool(get("ENABLE_AWAY", True), True),
             enable_pregnancy=_as_bool(get("ENABLE_PREGNANCY", True), True),
             contraception=_choice(get("CONTRACEPTION", "none"), CONTRACEPTIONS, "none"),
             enable_hygiene=_as_bool(get("ENABLE_HYGIENE", True), True),

@@ -99,6 +99,12 @@
     "default": true,
     "hint": "男性人格的梦遗、晨勃，以及性欲值和亲密记录；需要能识别出性别且只在私聊生效，年龄不参与判断。插件页设置里也可以开关。"
   },
+  "ENABLE_AWAY": {
+    "description": "自慰后暂时不回消息",
+    "type": "bool",
+    "default": true,
+    "hint": "私聊里她自慰后的 4-12 分钟内不回复消息；这是行为静默，不是报错。关掉后照常回复。"
+  },
   "ENABLE_PREGNANCY": {
     "description": "启用怀孕",
     "type": "bool",
