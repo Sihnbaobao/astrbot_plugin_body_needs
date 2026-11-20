@@ -233,6 +233,20 @@ async def test_libido_score_is_cached(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_private_female_tool_exposes_ejaculated_flag(
+    monkeypatch, tmp_path
+) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    tools = plugin._body_tools(profile, True)
+    body_action = next(tool for tool in tools.tools if tool.name == "body_action")
+    assert "intimacy" in body_action.parameters["properties"]["action"]["enum"]
+    assert "ejaculated" in body_action.parameters["properties"]
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
 async def test_genderless_persona_gets_no_intimacy_tool(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "一个普通的助手。")
     await plugin.initialize()

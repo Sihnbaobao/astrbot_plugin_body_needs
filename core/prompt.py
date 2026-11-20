@@ -12,7 +12,14 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .config import Settings
-from .model import CARE_LABELS, BodyState, CycleView, cycle_view
+from .model import (
+    CARE_LABELS,
+    CONCEPTION_BASE,
+    CONTRACEPTION_FACTOR,
+    BodyState,
+    CycleView,
+    cycle_view,
+)
 from .profile import Profile, gender_label
 
 METER_NAMES = {
@@ -35,6 +42,17 @@ PHASE_LABELS = {
 }
 FLOW_LABELS = {1: "量少", 2: "量中等", 3: "量多"}
 DISCHARGE_LABELS = {0: "干爽", 1: "少量", 2: "偏多", 3: "蛋清样拉丝"}
+
+
+def wetness_label(value: float) -> str:
+    """Return a private arousal description for the wetness meter."""
+    if value >= 70:
+        return "下面湿得明显，注意力容易被拉走"
+    if value >= 40:
+        return "有点湿，身体比平时敏感"
+    if value >= 20:
+        return "身体有点发热"
+    return ""
 
 
 def satiety_label(value: float) -> str:
@@ -287,6 +305,7 @@ def _recent_events(
             "morning_erection",
             "arousal",
             "self_release",
+            "intimacy",
             "engorged",
             "lactation",
         ):
@@ -554,6 +573,8 @@ def build_prompt_block(
             lines.append(
                 f"性欲：{libido_label(state.libido)}（私密，只在合适的时候自然流露）"
             )
+        if profile.gender == "female" and state.wetness >= 20:
+            lines.append(f"身体：{wetness_label(state.wetness)}。")
 
     if show_private:
         load = (
@@ -803,6 +824,24 @@ def build_web_state(
             "bbt": view.bbt,
         }
 
+    intimacy = None
+    if settings.enable_intimate and profile.gender == "female":
+        chance = 0.0
+        if view is not None and view.fertile and not state.pregnant:
+            factor = CONTRACEPTION_FACTOR.get(settings.contraception, 1.0)
+            chance = CONCEPTION_BASE * factor
+        intimacy = {
+            "count": state.intimacy_count,
+            "inseminations": state.insemination_count,
+            "last_at": _ago(state.last_intimacy_at, now),
+            "last_insemination": _ago(state.last_insemination_at, now),
+            "wetness": round(state.wetness),
+            "fertile": bool(view is not None and view.fertile),
+            "chance": round(chance * 100.0, 1),
+            "pregnant": state.pregnant,
+            "contraception": settings.contraception,
+        }
+
     lactation = None
     if state.lactating or state.birth_at > 0:
         lactation = {
@@ -863,6 +902,7 @@ def build_web_state(
         "meters": meters,
         "details": details,
         "cycle": cycle,
+        "intimacy": intimacy,
         "lactation": lactation,
         "male": male,
         "events": events,

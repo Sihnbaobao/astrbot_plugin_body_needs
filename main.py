@@ -607,13 +607,16 @@ class BodyNeedsPlugin(Star):
         profile: Profile,
         now: datetime,
         action: str,
+        ejaculated: bool = True,
     ):
         """Load, advance, apply one action, and save the result."""
         async with self._lock:
             state = self.store.load(persona_id, now)
             mood = self._emotion_for(persona_id)
             advance(state, now, profile, self.settings, mood)
-            result = apply_action(state, action, now, profile, self.settings)
+            result = apply_action(
+                state, action, now, profile, self.settings, ejaculated=ejaculated
+            )
             state.last_active_at = now.timestamp()
             self.store.save(state)
             publish_affect(
@@ -732,6 +735,17 @@ class BodyNeedsPlugin(Star):
         if profile.gender == "female" and self.settings.enable_pregnancy:
             actions.append("prenatal")
             actions.append("express")
+        action_schema: dict[str, Any] = {
+            "type": "string",
+            "description": "做了什么",
+            "enum": actions,
+        }
+        properties: dict[str, Any] = {"action": action_schema}
+        if "intimacy" in actions:
+            properties["ejaculated"] = {
+                "type": "boolean",
+                "description": "这次亲密是否射精；不确定就按 true",
+            }
         tools = ToolSet()
         tools.add_tool(
             FunctionTool(
@@ -765,13 +779,7 @@ class BodyNeedsPlugin(Star):
                 ),
                 parameters={
                     "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "description": "做了什么",
-                            "enum": actions,
-                        }
-                    },
+                    "properties": properties,
                     "required": ["action"],
                 },
                 handler=self._tool_action,
@@ -797,7 +805,11 @@ class BodyNeedsPlugin(Star):
             return f"读取身体状态失败：{exc}"
 
     async def _tool_action(
-        self, event: AstrMessageEvent, action: str = "", **_: Any
+        self,
+        event: AstrMessageEvent,
+        action: str = "",
+        ejaculated: bool = True,
+        **_: Any,
     ) -> str:
         """Tool handler: apply one body action and report the new state."""
         try:
@@ -805,7 +817,11 @@ class BodyNeedsPlugin(Star):
                 return "这个动作只能在私聊里记录。"
             persona_id, profile, now = await self._identity(event)
             state, result = await self._mutate(
-                persona_id, profile, now, str(action or "").strip()
+                persona_id,
+                profile,
+                now,
+                str(action or "").strip(),
+                ejaculated=bool(ejaculated),
             )
             return (
                 f"{result.label}。{result.detail}。"

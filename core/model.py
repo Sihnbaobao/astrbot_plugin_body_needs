@@ -277,6 +277,11 @@ class BodyState:
     last_nap_at: float = 0.0
     last_release_at: float = 0.0
     last_self_at: float = 0.0
+    intimacy_count: int = 0
+    insemination_count: int = 0
+    last_intimacy_at: float = 0.0
+    last_insemination_at: float = 0.0
+    wetness: float = 0.0
     refractory_until: float = 0.0
     last_meal_kind: str = ""
     last_meal_size: float = 0.0
@@ -341,6 +346,11 @@ class BodyState:
             "last_nap_at": self.last_nap_at,
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
+            "intimacy_count": self.intimacy_count,
+            "insemination_count": self.insemination_count,
+            "last_intimacy_at": self.last_intimacy_at,
+            "last_insemination_at": self.last_insemination_at,
+            "wetness": self.wetness,
             "refractory_until": self.refractory_until,
             "last_meal_kind": self.last_meal_kind,
             "last_meal_size": self.last_meal_size,
@@ -471,6 +481,13 @@ class BodyState:
         state.milk = _clamp(_number(data.get("milk"), 0.0))
         state.last_express_at = _number(data.get("last_express_at"), 0.0)
         state.pads = max(0, int(_number(data.get("pads"), 12)))
+        state.intimacy_count = max(0, int(_number(data.get("intimacy_count"), 0)))
+        state.insemination_count = max(
+            0, int(_number(data.get("insemination_count"), 0))
+        )
+        state.last_intimacy_at = _number(data.get("last_intimacy_at"), 0.0)
+        state.last_insemination_at = _number(data.get("last_insemination_at"), 0.0)
+        state.wetness = _clamp(_number(data.get("wetness"), 0.0))
         state.pad_hours = max(0.0, _number(data.get("pad_hours"), 0.0))
         state.last_pad_day = str(data.get("last_pad_day") or "")
         state.last_supply_at = _number(data.get("last_supply_at"), 0.0)
@@ -1567,6 +1584,7 @@ def _maybe_release(
         return
 
     state.libido = _clamp(state.libido - 20.0)
+    state.wetness = max(0.0, state.wetness - 30.0)
     state.last_self_at = stamp
     state.release_count += 1
     if profile.gender == "male":
@@ -1996,6 +2014,18 @@ def advance(
         else:
             state.libido = 0.0
 
+        if profile.gender == "female" and settings.enable_intimate:
+            target = state.libido * 0.6
+            if view is not None:
+                if view.fertile:
+                    target += 12.0
+                if view.phase == "ovulation":
+                    target += 8.0
+            state.wetness += (target - state.wetness) * min(1.0, step_hours / 2.0)
+            state.wetness = _clamp(state.wetness)
+        else:
+            state.wetness = 0.0
+
         if in_period_now:
             flow_now = 3 if cycle_day <= 2 else (2 if cycle_day <= 4 else 1)
             state.pad_hours += step_hours * awake_fraction
@@ -2083,6 +2113,7 @@ def apply_action(
     now: datetime,
     profile: Profile,
     settings: Settings,
+    ejaculated: bool = True,
 ) -> ActionResult:
     """Apply one deliberate action and report what changed."""
     if action not in ACTION_LABELS:
@@ -2154,8 +2185,22 @@ def apply_action(
         state.last_supply_at = now_ts
     elif action == "intimacy":
         cycle = cycle_view(state, now, profile, settings)
+        state.intimacy_count += 1
+        state.last_intimacy_at = now_ts
+        state.wetness = max(0.0, state.wetness - 25.0)
+        if ejaculated:
+            state.insemination_count += 1
+            state.last_insemination_at = now_ts
+        _add_event(
+            state,
+            now,
+            "intimacy",
+            "亲密了一次" + ("，射精了" if ejaculated else ""),
+            key=f"intimacy:{int(now_ts)}",
+        )
         can_conceive = (
-            settings.enable_pregnancy
+            ejaculated
+            and settings.enable_pregnancy
             and profile.gender == "female"
             and not state.pregnant
             and cycle is not None
@@ -2192,6 +2237,7 @@ def apply_action(
             )
     elif action == "release":
         state.libido = 0.0
+        state.wetness = max(0.0, state.wetness - 30.0)
         state.last_self_at = now_ts
         if profile.gender == "male":
             state.refractory_until = (

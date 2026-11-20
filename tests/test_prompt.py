@@ -189,6 +189,17 @@ def test_group_basic_hides_pregnancy_and_lactation_events() -> None:
     assert "喂了奶" in private
 
 
+def test_private_wetness_line_is_filtered() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.wetness = 72.0
+    state.libido = 80.0
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "湿" in private
+    group = build_prompt_block(state, now, make_profile(), Settings(), private=False)
+    assert "湿" not in group
+
+
 def test_group_basic_wording_stays_restricted() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     block = build_prompt_block(
@@ -212,6 +223,9 @@ def test_status_card_and_web_payload() -> None:
     assert payload["cycle"]["phase"] == "menstrual"
     assert payload["cycle"]["estrogen"] > 0
     assert any(detail["key"] == "stomach" for detail in payload["details"])
+    assert payload["intimacy"]["count"] == 0
+    assert payload["intimacy"]["inseminations"] == 0
+    assert "wetness" in payload["intimacy"]
     meters = {meter["key"]: meter for meter in payload["meters"]}
     # Fullness and hydration point the other way from the internal need value.
     assert meters["satiety"]["value"] == pytest.approx(state.satiety, abs=0.1)

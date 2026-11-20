@@ -556,6 +556,68 @@ function renderEvents(events) {
   el("eventCount").textContent = notable.length + " 条";
 }
 
+function renderFertility(persona) {
+  const host = el("fertilityCard");
+  const data = persona.intimacy;
+  if (!data || el("cycleCard").hidden) {
+    host.hidden = true;
+    host.replaceChildren();
+    return;
+  }
+  host.hidden = false;
+  host.replaceChildren();
+
+  const waiting =
+    data.fertile &&
+    data.inseminations > 0 &&
+    data.last_insemination &&
+    data.last_insemination !== "很久以前";
+  const status = data.pregnant
+    ? "已受精"
+    : waiting
+      ? "等待受精"
+      : data.fertile
+        ? "易孕中"
+        : "未受精";
+  const head = make("div", "fertility-head");
+  head.appendChild(make("span", "fertility-title", "受精"));
+  head.appendChild(
+    make("span", "hint", data.pregnant ? "怀孕中" : data.fertile ? "易孕窗口" : "非易孕期"),
+  );
+  host.appendChild(head);
+
+  const stage = make("div", "fertility-stage" + (data.pregnant ? " is-pregnant" : ""));
+  const egg = make("span", "fertility-egg" + (data.pregnant ? " on" : ""));
+  egg.appendChild(make("i"));
+  stage.appendChild(egg);
+  const sperm = make("span", "fertility-sperm");
+  for (let index = 0; index < 4; index += 1) {
+    sperm.appendChild(make("i"));
+  }
+  stage.appendChild(sperm);
+  stage.appendChild(make("span", "fertility-arrow", "→"));
+  stage.appendChild(
+    make("span", "fertility-result" + (data.pregnant ? " on" : ""), status),
+  );
+  host.appendChild(stage);
+
+  const stats = make("div", "fertility-stats");
+  stats.appendChild(make("span", "", "亲密 " + data.count + " 次"));
+  stats.appendChild(make("span", "", "射精 " + data.inseminations + " 次"));
+  stats.appendChild(make("span", "", "湿润 " + data.wetness));
+  host.appendChild(stats);
+
+  const meta = make("div", "fertility-meta");
+  meta.appendChild(make("span", "", "上次 " + (data.last_at || "—")));
+  meta.appendChild(make("span", "", "易孕 " + (data.fertile ? "是" : "否")));
+  meta.appendChild(make("span", "", "单次 " + data.chance + "%"));
+  const contraception = { none: "无避孕", condom: "避孕套", pill: "避孕药" };
+  meta.appendChild(
+    make("span", "", contraception[data.contraception] || data.contraception || "—"),
+  );
+  host.appendChild(meta);
+}
+
 function render(data) {
   state.data = data;
   const personas = data.personas || [];
@@ -578,6 +640,7 @@ function render(data) {
     el("eventCount").textContent = "";
     el("cycleCard").hidden = true;
     el("maleCard").hidden = true;
+    el("fertilityCard").hidden = true;
     updateSettingsHint();
     return;
   }
@@ -588,6 +651,7 @@ function render(data) {
   renderDetails(persona.details);
   renderLast(persona.last);
   renderCycle(persona);
+  renderFertility(persona);
   renderMale(persona);
   renderEvents(persona.events);
   updateSettingsHint();

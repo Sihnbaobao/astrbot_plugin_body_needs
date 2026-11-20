@@ -2060,3 +2060,122 @@ footer {
     min-width: 560px;
   }
 }
+
+/* fertility / conception status */
+.fertility-card {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.fertility-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.fertility-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fertility-stage {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.fertility-egg {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel);
+}
+
+.fertility-egg i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.fertility-egg.on {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 4px rgba(63, 185, 80, 0.12);
+}
+
+.fertility-egg.on i {
+  background: var(--accent-2);
+  opacity: 1;
+}
+
+.fertility-sperm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fertility-sperm i {
+  position: relative;
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.fertility-sperm i::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  width: 7px;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0.6;
+  transform: translateY(-50%) rotate(-18deg);
+  transform-origin: left center;
+}
+
+.fertility-arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fertility-result {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.fertility-result.on {
+  color: var(--accent-2);
+}
+
+.fertility-stats,
+.fertility-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fertility-stats {
+  color: var(--text-soft);
+}

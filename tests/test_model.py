@@ -153,6 +153,23 @@ def test_period_event_is_recorded_once() -> None:
     assert len(state.events) == count
 
 
+def test_intimacy_records_counts_and_wetness() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.wetness = 60.0
+    profile = make_profile()
+    apply_action(state, "intimacy", now, profile, Settings(), ejaculated=True)
+    assert state.intimacy_count == 1
+    assert state.insemination_count == 1
+    assert state.last_intimacy_at == now.timestamp()
+    assert state.last_insemination_at == now.timestamp()
+    assert state.wetness < 60.0
+
+    apply_action(state, "intimacy", now, profile, Settings(), ejaculated=False)
+    assert state.intimacy_count == 2
+    assert state.insemination_count == 1
+
+
 def test_drinking_rinses_the_mouth() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
