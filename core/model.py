@@ -1687,7 +1687,7 @@ def _maybe_release(
         return
     if profile.gender not in ("female", "male"):
         return
-    if state.libido < 12.0 or not 8 <= moment.hour <= 23:
+    if state.libido < 12.0:
         return
     stamp = moment.timestamp()
     if profile.gender == "male" and state.refractory_until > stamp:
