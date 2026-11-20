@@ -602,6 +602,16 @@ def test_temperature_and_sweat_are_alive() -> None:
     assert state.sweat == 0.0
 
 
+def test_brushing_is_not_gated_by_high_oral_meter() -> None:
+    now = datetime(2026, 11, 20, 23, 30, tzinfo=TZ)
+    state = make_state(now - timedelta(days=2))
+    state.oral = 35.0
+    state.last_brush_at = 0.0
+    advance(state, now, make_profile(), Settings())
+    kinds = {item["kind"] for item in state.care}
+    assert "brush" in kinds
+
+
 def test_idle_persona_looks_after_herself() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=30))

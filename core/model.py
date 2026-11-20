@@ -1577,7 +1577,7 @@ def _routine(
         brush_minute = int(_roll(profile.persona_id, day, "brush-am-min") * 60)
         evening_brush = 21 + int(_roll(profile.persona_id, day, "brush-pm") * 3)
         evening_brush_minute = int(_roll(profile.persona_id, day, "brush-pm-min") * 60)
-        if state.oral >= 55.0 and (
+        if moment.timestamp() - state.last_brush_at > 4 * 3600 and (
             (
                 7 <= hour < 10
                 and (
