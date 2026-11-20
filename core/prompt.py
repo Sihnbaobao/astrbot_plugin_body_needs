@@ -46,12 +46,12 @@ DISCHARGE_LABELS = {0: "干爽", 1: "少量", 2: "偏多", 3: "蛋清样拉丝"}
 
 def wetness_label(value: float) -> str:
     """Return a private arousal description for the wetness meter."""
-    if value >= 70:
-        return "下面湿得明显，注意力容易被拉走"
-    if value >= 40:
-        return "有点湿，身体比平时敏感"
+    if value >= 75:
+        return "内裤湿了一小片，坐着有点黏"
+    if value >= 45:
+        return "内裤有点潮"
     if value >= 20:
-        return "身体有点发热"
+        return "下面有点湿，身体发热"
     return ""
 
 
@@ -575,6 +575,8 @@ def build_prompt_block(
             )
         if profile.gender == "female" and state.wetness >= 20:
             lines.append(f"身体：{wetness_label(state.wetness)}。")
+        if profile.gender == "female" and state.libido >= 75 and state.wetness >= 45:
+            lines.append("身体：突然有点想要，注意力容易被拉走。")
 
     if show_private:
         load = (

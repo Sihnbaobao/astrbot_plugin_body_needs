@@ -604,7 +604,17 @@ function renderFertility(persona) {
   const stats = make("div", "fertility-stats");
   stats.appendChild(make("span", "", "亲密 " + data.count + " 次"));
   stats.appendChild(make("span", "", "射精 " + data.inseminations + " 次"));
-  stats.appendChild(make("span", "", "湿润 " + data.wetness));
+  const wetnessLabel =
+    data.wetness >= 75
+      ? "内裤湿了一小片"
+      : data.wetness >= 45
+        ? "内裤有点潮"
+        : data.wetness >= 20
+          ? "有点湿"
+          : "干爽";
+  stats.appendChild(
+    make("span", "", "湿润 " + data.wetness + " · " + wetnessLabel),
+  );
   host.appendChild(stats);
 
   const meta = make("div", "fertility-meta");
