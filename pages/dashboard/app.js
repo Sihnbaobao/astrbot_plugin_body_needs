@@ -631,6 +631,7 @@ function startFertilityArt(data) {
         speed: 3 + Math.random() * 9,
         drift: (Math.random() - 0.5) * 4,
         alpha: 0.08 + Math.random() * 0.35,
+        warm: Math.random() > 0.45,
       });
     }
   }
@@ -650,7 +651,7 @@ function startFertilityArt(data) {
     anim.height = height;
     anim.cx = width / 2;
     anim.cy = height * 0.5;
-    anim.eggR = Math.min(width, height) * 0.205;
+    anim.eggR = Math.min(width, height) * 0.225;
     if (sizeChanged || !anim.sperm.length) seed();
   }
 
@@ -663,10 +664,37 @@ function startFertilityArt(data) {
       anim.cy,
       Math.max(anim.width, anim.height) * 0.75,
     );
-    grad.addColorStop(0, "#431a2b");
-    grad.addColorStop(0.48, "#1d0c14");
-    grad.addColorStop(1, "#070307");
+    grad.addColorStop(0, "#3b0d32");
+    grad.addColorStop(0.48, "#16081f");
+    grad.addColorStop(1, "#05030a");
     ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, anim.width, anim.height);
+
+    const bloom = ctx.createRadialGradient(
+      anim.cx - anim.width * 0.24,
+      anim.cy - anim.height * 0.26,
+      0,
+      anim.cx - anim.width * 0.24,
+      anim.cy - anim.height * 0.26,
+      Math.max(anim.width, anim.height) * 0.62,
+    );
+    bloom.addColorStop(0, "rgba(255, 48, 138, 0.18)");
+    bloom.addColorStop(0.55, "rgba(190, 30, 110, 0.06)");
+    bloom.addColorStop(1, "rgba(190, 30, 110, 0)");
+    ctx.fillStyle = bloom;
+    ctx.fillRect(0, 0, anim.width, anim.height);
+
+    const cool = ctx.createRadialGradient(
+      anim.cx + anim.width * 0.28,
+      anim.cy + anim.height * 0.24,
+      0,
+      anim.cx + anim.width * 0.28,
+      anim.cy + anim.height * 0.24,
+      Math.max(anim.width, anim.height) * 0.5,
+    );
+    cool.addColorStop(0, "rgba(68, 92, 255, 0.08)");
+    cool.addColorStop(1, "rgba(68, 92, 255, 0)");
+    ctx.fillStyle = cool;
     ctx.fillRect(0, 0, anim.width, anim.height);
 
     const vignette = ctx.createRadialGradient(
@@ -694,7 +722,9 @@ function startFertilityArt(data) {
       if (p.x < -8) p.x = anim.width + 8;
       if (p.x > anim.width + 8) p.x = -8;
       ctx.beginPath();
-      ctx.fillStyle = "rgba(255, 196, 208, " + p.alpha + ")";
+      ctx.fillStyle = p.warm
+        ? "rgba(255, 244, 232, " + p.alpha + ")"
+        : "rgba(255, 150, 188, " + p.alpha + ")";
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
     });
@@ -738,7 +768,7 @@ function startFertilityArt(data) {
       ctx.moveTo(px, py);
       ctx.lineTo(nx, ny);
       ctx.lineWidth = 2.35 * (1 - t * 0.62);
-      ctx.strokeStyle = "rgba(255, 170, 186, 0.82)";
+      ctx.strokeStyle = "rgba(255, 246, 238, 0.9)";
       ctx.lineCap = "round";
       ctx.stroke();
       px = nx;
@@ -746,22 +776,25 @@ function startFertilityArt(data) {
     }
 
     const head = ctx.createRadialGradient(-3.2, -2.1, 0.5, 0, 0, 10);
-    head.addColorStop(0, "#fffaf2");
-    head.addColorStop(0.55, "#ffd0c8");
-    head.addColorStop(1, "#c96d82");
+    head.addColorStop(0, "#fffdf8");
+    head.addColorStop(0.55, "#ffe9d8");
+    head.addColorStop(1, "#dca08a");
+    ctx.shadowColor = "rgba(255, 236, 222, 0.55)";
+    ctx.shadowBlur = 7;
     ctx.beginPath();
     ctx.ellipse(0, 0, 9.2, 5.5, 0, 0, Math.PI * 2);
     ctx.fillStyle = head;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 205, 205, 0.55)";
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(255, 248, 240, 0.75)";
     ctx.lineWidth = 0.8;
     ctx.stroke();
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 224, 208, 0.9)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.arc(-5.8, 0, 2.1, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
     ctx.ellipse(-2, -1.8, 2.6, 1.15, -0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
@@ -776,16 +809,16 @@ function startFertilityArt(data) {
     const fertile = anim.data.fertile || anim.data.pregnant;
 
     const halo = ctx.createRadialGradient(cx, cy, r * 0.62, cx, cy, r * 1.85);
-    halo.addColorStop(0, fertile ? "rgba(255, 115, 145, 0.28)" : "rgba(255, 140, 155, 0.12)");
-    halo.addColorStop(0.55, fertile ? "rgba(255, 90, 125, 0.08)" : "rgba(255, 140, 155, 0.04)");
-    halo.addColorStop(1, "rgba(255, 90, 125, 0)");
+    halo.addColorStop(0, fertile ? "rgba(255, 45, 130, 0.4)" : "rgba(255, 120, 155, 0.16)");
+    halo.addColorStop(0.55, fertile ? "rgba(255, 70, 145, 0.14)" : "rgba(255, 120, 155, 0.05)");
+    halo.addColorStop(1, "rgba(255, 70, 145, 0)");
     ctx.beginPath();
     ctx.fillStyle = halo;
     ctx.arc(cx, cy, r * 1.85, 0, Math.PI * 2);
     ctx.fill();
 
-    for (let index = 0; index < 24; index += 1) {
-      const angle = (Math.PI * 2 * index) / 24 + t * 0.018;
+    for (let index = 0; index < 28; index += 1) {
+      const angle = (Math.PI * 2 * index) / 28 + t * 0.018;
       const radius = r * 1.235 + Math.sin(t * 1.4 + index * 0.7) * r * 0.018;
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
@@ -798,9 +831,9 @@ function startFertilityArt(data) {
         y,
         size,
       );
-      cell.addColorStop(0, "rgba(255, 218, 216, 0.9)");
-      cell.addColorStop(0.55, "rgba(214, 125, 145, 0.62)");
-      cell.addColorStop(1, "rgba(120, 45, 70, 0.28)");
+      cell.addColorStop(0, "rgba(255, 240, 232, 0.98)");
+      cell.addColorStop(0.55, "rgba(255, 105, 128, 0.78)");
+      cell.addColorStop(1, "rgba(112, 20, 52, 0.35)");
       ctx.beginPath();
       ctx.fillStyle = cell;
       ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -808,14 +841,23 @@ function startFertilityArt(data) {
     }
 
     const zona = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    zona.addColorStop(0, "rgba(255, 232, 224, 0.86)");
-    zona.addColorStop(0.45, "rgba(255, 174, 184, 0.35)");
-    zona.addColorStop(1, "rgba(126, 46, 72, 0.72)");
+    zona.addColorStop(0, "rgba(255, 245, 236, 0.96)");
+    zona.addColorStop(0.45, "rgba(255, 118, 145, 0.58)");
+    zona.addColorStop(1, "rgba(122, 18, 50, 0.82)");
     ctx.beginPath();
     ctx.strokeStyle = zona;
     ctx.lineWidth = Math.max(2, r * 0.052);
     ctx.arc(cx, cy, r * 1.11, 0, Math.PI * 2);
     ctx.stroke();
+
+    const gel = ctx.createRadialGradient(cx, cy, r * 0.76, cx, cy, r * 1.23);
+    gel.addColorStop(0, "rgba(255, 90, 140, 0)");
+    gel.addColorStop(0.72, "rgba(255, 90, 140, 0.07)");
+    gel.addColorStop(1, "rgba(255, 70, 130, 0.2)");
+    ctx.beginPath();
+    ctx.fillStyle = gel;
+    ctx.arc(cx, cy, r * 1.22, 0, Math.PI * 2);
+    ctx.fill();
 
     const body = ctx.createRadialGradient(
       cx - r * 0.36,
@@ -825,19 +867,19 @@ function startFertilityArt(data) {
       cy,
       r * 1.08,
     );
-    body.addColorStop(0, "#fff1e5");
-    body.addColorStop(0.22, "#ffc9bd");
-    body.addColorStop(0.56, "#e4888e");
-    body.addColorStop(0.82, "#b74f68");
-    body.addColorStop(1, "#6c2540");
+    body.addColorStop(0, "#fff6ea");
+    body.addColorStop(0.18, "#ffb4a4");
+    body.addColorStop(0.44, "#f35a6d");
+    body.addColorStop(0.7, "#c51f45");
+    body.addColorStop(1, "#630d2e");
     ctx.beginPath();
     ctx.fillStyle = body;
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
 
     const depth = ctx.createRadialGradient(cx, cy, r * 0.58, cx, cy, r);
-    depth.addColorStop(0, "rgba(45, 4, 20, 0)");
-    depth.addColorStop(1, "rgba(45, 4, 20, 0.58)");
+    depth.addColorStop(0, "rgba(42, 0, 22, 0)");
+    depth.addColorStop(1, "rgba(42, 0, 22, 0.7)");
     ctx.beginPath();
     ctx.fillStyle = depth;
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -851,12 +893,18 @@ function startFertilityArt(data) {
       cy - r * 0.44,
       r * 0.46,
     );
-    shine.addColorStop(0, "rgba(255,255,255,0.4)");
+    shine.addColorStop(0, "rgba(255,255,255,0.52)");
     shine.addColorStop(1, "rgba(255,255,255,0)");
     ctx.beginPath();
     ctx.fillStyle = shine;
     ctx.ellipse(cx - r * 0.3, cy - r * 0.36, r * 0.36, r * 0.2, -0.5, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 245, 235, 0.55)";
+    ctx.lineWidth = Math.max(2, r * 0.035);
+    ctx.arc(cx, cy, r * 0.985, -Math.PI * 0.78, -Math.PI * 0.08);
+    ctx.stroke();
 
     if (anim.data.pregnant) {
       ctx.globalAlpha = 0.95;
@@ -878,9 +926,9 @@ function startFertilityArt(data) {
         cy,
         r * 0.22,
       );
-      nucleus.addColorStop(0, "#ffd9c8");
-      nucleus.addColorStop(0.72, "#a94b62");
-      nucleus.addColorStop(1, "#6b2438");
+      nucleus.addColorStop(0, "#ffe4d2");
+      nucleus.addColorStop(0.72, "#a51e43");
+      nucleus.addColorStop(1, "#5f0e2c");
       ctx.beginPath();
       ctx.fillStyle = nucleus;
       ctx.globalAlpha = 0.75;
