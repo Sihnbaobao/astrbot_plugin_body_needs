@@ -28,7 +28,7 @@ from typing import Any
 
 from . import hpo
 from .config import Settings
-from .profile import Profile, allows_adult_content
+from .profile import Profile
 
 # Digestion / metabolism
 STOMACH_DECAY_AWAKE = 0.32
@@ -2609,12 +2609,11 @@ def _advance_cycle_events(
 
 
 def _female_libido_age_factor(age: float | None) -> float:
-    """Return the adult age curve applied to a female persona's drive.
+    """Return the age curve applied to a female persona's drive.
 
-    The curve is intentionally adult-only: it describes the slow decline from
-    the early twenties onward, not adolescence. A persona below 18 never
-    reaches this function because the intimate module is gated in
-    allows_adult_content.
+    The curve describes the slow decline from the early twenties onward and a
+    mild lift below that. It only scales the rate; it never zeroes a persona
+    out, because age does not switch the intimate layer off.
 
     Args:
         age: Human-equivalent age, or None when the persona did not state one.
@@ -3429,10 +3428,7 @@ def _maybe_release(
         step_hours: Length of the current step in hours.
         sleep_fraction: Share of the step spent asleep.
     """
-    if not (
-        profile.gender_resolved
-        and settings.enable_intimate
-    ):
+    if not (profile.gender_resolved and settings.enable_intimate):
         return
     if state.location != "home":
         return
@@ -3526,10 +3522,7 @@ def _maybe_toilet_release(
         kind: "bowel" or "urine"; urination is the more frequent, less
             deliberate setting, so its chance is lower.
     """
-    if not (
-        profile.gender_resolved
-        and settings.enable_intimate
-    ):
+    if not (profile.gender_resolved and settings.enable_intimate):
         return
     if state.location != "home":
         return
@@ -3815,10 +3808,7 @@ def _recompute_primary(
         state.oral = 0.0
         state.cleanliness = 100.0
         state.oral_health = 100.0
-    if not (
-        profile.gender_resolved
-        and settings.enable_intimate
-    ):
+    if not (profile.gender_resolved and settings.enable_intimate):
         state.libido = 0.0
 
 
@@ -3869,7 +3859,6 @@ def advance(
     const = constitution(profile.persona_id)
     if profile.libido_habit is not None:
         const = replace(const, self_rate=profile.libido_habit)
-
 
     cursor = start
     remaining = float(elapsed)
@@ -4204,16 +4193,14 @@ def advance(
         state.breath_scent += (breath_target - state.breath_scent) * (
             1.0 - math.exp(-step_hours / 1.5)
         )
-            if profile.gender == "female":
-                intimate_target = _clamp(
-                    max(0.0, state.wetness - 25.0) * 0.22
-                    + (10.0 if in_period_now else 0.0)
-                    + (6.0 if view is not None and view.phase == "ovulation" else 0.0)
-                )
-            else:
-                intimate_target = _clamp(4.0 + state.libido * 0.08)
+        if profile.gender == "female":
+            intimate_target = _clamp(
+                max(0.0, state.wetness - 25.0) * 0.22
+                + (10.0 if in_period_now else 0.0)
+                + (6.0 if view is not None and view.phase == "ovulation" else 0.0)
+            )
         else:
-            intimate_target = 0.0
+            intimate_target = _clamp(4.0 + state.libido * 0.08)
         state.intimate_scent += (intimate_target - state.intimate_scent) * (
             1.0 - math.exp(-step_hours / 4.0)
         )
@@ -4324,10 +4311,7 @@ def advance(
             24.0,
         )
 
-        if (
-            profile.gender_resolved
-            and settings.enable_intimate
-        ):
+        if profile.gender_resolved and settings.enable_intimate:
             rate = _libido_rate(state, view, profile, mood)
             comfort = 1.0
             comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)

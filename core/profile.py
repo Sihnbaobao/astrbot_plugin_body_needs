@@ -4,9 +4,9 @@ AstrBot personas are free-form text. Most of them state gender and age in the
 first sentence, so a small heuristic is enough; the plugin config can always
 override the result.
 
-Age feeds the physiology curves, and it is the one boundary the intimate layer
-still uses: a persona stated as under 18 keeps every non-sexual system but gets
-no sexual layer. No other feature asks about age.
+Age is a physiology input only: it scales the puberty, menopause, libido and
+emission curves and never switches a feature off. Gender resolution decides
+whether the intimate layer exists at all; age does not.
 """
 
 from __future__ import annotations
@@ -71,7 +71,6 @@ _RACE_HINTS = (
 
 @dataclass(frozen=True)
 class Profile:
-
     persona_id: str
     name: str
     gender: str
@@ -97,14 +96,6 @@ class Profile:
         if self.age <= PHYSIO_SCALE_ABOVE or self.lifespan <= HUMAN_LIFESPAN:
             return float(self.age)
         return self.age * HUMAN_LIFESPAN / max(1, self.lifespan)
-
-
-ADULT_AGE = 18
-
-
-def allows_adult_content(profile: Profile) -> bool:
-    """返回是否允许运行亲密内容层。内容边界已移除，恒为 True。"""
-    return True
 
 
 def gender_label(gender: str) -> str:

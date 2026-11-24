@@ -114,7 +114,7 @@ def test_loaded_body_adds_irritation_hint() -> None:
     assert "耐心" in block
 
 
-def test_private_block_contains_cycle_and_adult_lines() -> None:
+def test_private_block_contains_cycle_and_intimate_lines() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     block = build_prompt_block(
         make_state(now), now, make_profile(), Settings(), private=True
@@ -125,7 +125,7 @@ def test_private_block_contains_cycle_and_adult_lines() -> None:
     assert "body_action" in block
 
 
-def test_profile_without_adult_flag_has_no_adult_state() -> None:
+def test_profile_without_resolved_gender_has_no_intimate_state() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
     state.libido = 0
@@ -152,7 +152,7 @@ def test_group_basic_hides_cycle() -> None:
     assert "胃：" in block
 
 
-def test_group_full_shows_cycle_but_not_adult() -> None:
+def test_group_full_shows_cycle_but_not_intimate() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     settings = Settings(group_detail="full")
     block = build_prompt_block(
@@ -353,7 +353,7 @@ def test_private_scent_lines_cover_scalp_breath_and_afterglow() -> None:
     assert "事后身上" in block
 
 
-def test_underage_profile_has_no_intimate_prompt_or_web_block() -> None:
+def test_age_never_hides_intimate_prompt_or_web_block() -> None:
     now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
     state = make_state(now)
     state.libido = 90.0
@@ -361,15 +361,12 @@ def test_underage_profile_has_no_intimate_prompt_or_web_block() -> None:
     state.intimate_scent = 70.0
     profile = make_profile(age=16)
     block = build_prompt_block(state, now, profile, Settings(), private=True)
-    assert "性欲" not in block
-    assert "自慰" not in block
-    assert "内裤" not in block
-    assert "事后身上" not in block
+    assert "性欲" in block
+    assert "事后身上" in block
     payload = build_web_state(state, now, profile, Settings())
-    assert payload["adult"] is False
-    assert payload["intimacy"] is None
-    assert payload["can_intimacy"] is False
-    assert all(row["key"] != "intimate" for row in payload["scents"])
+    assert payload["can_intimacy"] is True
+    assert payload["intimacy"] is not None
+    assert any(row["key"] == "intimate" for row in payload["scents"])
 
 
 def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:

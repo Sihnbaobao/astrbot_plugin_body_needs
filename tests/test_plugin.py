@@ -180,7 +180,9 @@ async def test_debug_command_remains_for_maintenance(monkeypatch, tmp_path) -> N
 
 
 @pytest.mark.asyncio
-async def test_page_config_toggles_adult_and_validates(monkeypatch, tmp_path) -> None:
+async def test_page_config_toggles_intimate_and_validates(
+    monkeypatch, tmp_path
+) -> None:
     plugin, context = make_plugin(monkeypatch, tmp_path, "一个25岁的女性，性格安静。")
     await plugin.initialize()
     ok, message, values = plugin._apply_config_updates(

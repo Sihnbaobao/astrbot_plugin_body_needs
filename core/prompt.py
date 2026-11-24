@@ -22,7 +22,7 @@ from .model import (
     cycle_view,
     sleep_view,
 )
-from .profile import Profile, allows_adult_content, gender_label
+from .profile import Profile, gender_label
 
 METER_NAMES = {
     "satiety": "饱食度",
@@ -901,11 +901,8 @@ def _supply_text(state: BodyState, view: CycleView | None) -> str:
 
 
 def _male_text(state: BodyState, now: datetime, profile: Profile) -> str:
-    """Build the private adult-male line."""
-    if not (
-        profile.gender_resolved
-        and profile.gender == "male"
-    ):
+    """Build the private male line."""
+    if not (profile.gender_resolved and profile.gender == "male"):
         return ""
     if state.last_release_at <= 0:
         days = 0
@@ -1017,7 +1014,7 @@ def _scent_rows(
     Args:
         state: Current body state.
         view: Current cycle view, or None.
-        profile: Resolved profile; intimate scent is adult-only.
+        profile: Resolved profile; the intimate line reads by gender.
 
     Returns:
         A list of row dictionaries.
@@ -1061,15 +1058,15 @@ def _scent_rows(
             "tone": "warn" if state.period_scent >= 30 else "ok",
         },
     ]
-        rows.append(
-            {
-                "key": "intimate",
-                "label": "亲密后",
-                "value": round(state.intimate_scent, 1),
-                "level": "还留着一点" if state.intimate_scent >= 30 else "淡了",
-                "tone": "warn" if state.intimate_scent >= 50 else "ok",
-            }
-        )
+    rows.append(
+        {
+            "key": "intimate",
+            "label": "亲密后",
+            "value": round(state.intimate_scent, 1),
+            "level": "还留着一点" if state.intimate_scent >= 30 else "淡了",
+            "tone": "warn" if state.intimate_scent >= 50 else "ok",
+        }
+    )
     if state.lactating:
         rows.append(
             {
@@ -1093,7 +1090,7 @@ def _scent_lines(
     Args:
         state: Current body state.
         view: Cycle view, or None.
-        profile: Resolved profile; the intimate line is adult-only.
+        profile: Resolved profile; the intimate line reads by gender.
 
     Returns:
         A list of Chinese sentences.
@@ -1114,6 +1111,7 @@ def _scent_lines(
         lines.append("脚：闷了一天，袜子上有点味道。")
     if state.period_scent >= 30.0:
         lines.append("经期：身上有一点血腥味。")
+    if state.intimate_scent >= 30.0:
         if profile.gender == "female":
             lines.append("身体：事后身上留着一点淡淡的腥甜味，混着汗味，洗一下会淡。")
         else:
@@ -1268,7 +1266,7 @@ def build_prompt_block(
             mood_line = _cycle_mood_text(view)
             if mood_line:
                 lines.append(mood_line)
-                lines.append(_mucus_text(view))
+            lines.append(_mucus_text(view))
             lines.append(_organ_text(state, view))
             warm = "，排卵后偏高" if view.progesterone > 25.0 else ""
             lines.append(f"基础体温：{view.bbt:.2f}℃{warm}")
@@ -1286,11 +1284,7 @@ def build_prompt_block(
             organ_line = _organ_text(state, view)
             if organ_line:
                 lines.append(organ_line)
-    if (
-        show_private
-        and settings.enable_intimate
-        and profile.gender_resolved
-    ):
+    if show_private and settings.enable_intimate and profile.gender_resolved:
         male = _male_text(state, now, profile)
         if male:
             lines.append(male)
@@ -1500,11 +1494,7 @@ def build_status_text(
             )
         lines.append(f"精力：{energy['level']}（{round(energy['value'])}/100）")
         lines.append(_internal_line(state, now))
-        if (
-            settings.enable_intimate
-            and profile.gender_resolved
-            and state.libido >= 20
-        ):
+        if settings.enable_intimate and profile.gender_resolved and state.libido >= 20:
             lines.append(
                 f"性欲：{libido_label(state.libido)}（{round(state.libido)}/100）"
             )
@@ -1518,7 +1508,7 @@ def build_status_text(
                 mood_line = _cycle_mood_text(view)
                 if mood_line:
                     lines.append(mood_line)
-                    lines.append(_mucus_text(view))
+                lines.append(_mucus_text(view))
                 lines.append(_organ_text(state, view))
             if view.fertile:
                 lines.append("身体：这几天更容易受孕。")
@@ -1529,9 +1519,10 @@ def build_status_text(
                 organ_line = _organ_text(state, view)
                 if organ_line:
                     lines.append(organ_line)
-            male = _male_text(state, now, profile)
-            if male:
-                lines.append(male)
+            if settings.enable_intimate:
+                male = _male_text(state, now, profile)
+                if male:
+                    lines.append(male)
     else:
         lines.extend(
             [
@@ -1865,10 +1856,7 @@ def build_web_state(
         }
 
     intimacy = None
-    if (
-        settings.enable_intimate
-        and profile.gender == "female"
-    ):
+    if settings.enable_intimate and profile.gender == "female":
         chance = 0.0
         if view is not None and view.fertile and not state.pregnant:
             factor = CONTRACEPTION_FACTOR.get(settings.contraception, 1.0)
@@ -2102,8 +2090,5 @@ def build_web_state(
         "events": events,
         "care": care,
         "last": last,
-        "can_intimacy": bool(
-            profile.gender_resolved
-            and settings.enable_intimate
-        ),
+        "can_intimacy": bool(profile.gender_resolved and settings.enable_intimate),
     }

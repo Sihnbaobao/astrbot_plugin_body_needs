@@ -43,12 +43,12 @@ const CONFIG_FIELDS = [
     ],
   },
   {
-    group: "成人模块",
+    group: "私密生理",
     fields: [
-      { key: "ENABLE_INTIMATE", label: "启用成人私密生理", type: "bool", adult: true, hint: "成年角色的性欲与亲密记录；需要能识别出性别，只在私聊生效。明确 <18 岁的人格不会生成性内容。" },
-      { key: "ENABLE_AWAY", label: "自慰后暂时不回消息", type: "bool", adult: true, hint: "私聊里自慰后的 4-12 分钟内不回复；关掉后照常回。" },
-      { key: "ENABLE_PREGNANCY", label: "启用怀孕", type: "bool", adult: true, hint: "易孕期亲密有概率受孕；受孕后停经并按孕周推进。判定不看年龄。" },
-      { key: "CONTRACEPTION", label: "避孕方式", type: "select", options: ["none", "condom", "pill"], optionLabels: { none: "不避孕", condom: "安全套", pill: "避孕药" }, adult: true, hint: "把受孕概率从约 18% 降到 1-2%。" },
+      { key: "ENABLE_INTIMATE", label: "启用私密生理", type: "bool", hint: "性欲与亲密记录；需要能识别出性别，只在私聊生效。判定不看年龄。" },
+      { key: "ENABLE_AWAY", label: "自慰后暂时不回消息", type: "bool", hint: "私聊里自慰后的 4-12 分钟内不回复；关掉后照常回。" },
+      { key: "ENABLE_PREGNANCY", label: "启用怀孕", type: "bool", hint: "易孕期亲密有概率受孕；受孕后停经并按孕周推进。判定不看年龄。" },
+      { key: "CONTRACEPTION", label: "避孕方式", type: "select", options: ["none", "condom", "pill"], optionLabels: { none: "不避孕", condom: "安全套", pill: "避孕药" }, hint: "把受孕概率从约 18% 降到 1-2%。" },
     ],
   },
   {
@@ -550,17 +550,15 @@ function renderCycle(persona) {
         " · " +
         (cycle.mucus_color_label || "—"),
     ]);
-    if (persona.adult !== false) {
-      rows.push([
-        "宫颈",
-        (cycle.cervix_position_label || "—") +
-          " · " +
-          (cycle.cervix_firmness_label || "—") +
-          " · " +
-          (cycle.cervix_open ? "微张" : "闭合"),
-      ]);
-      rows.push(["外阴", cycle.vulva_label || "—"]);
-    }
+    rows.push([
+      "宫颈",
+      (cycle.cervix_position_label || "—") +
+        " · " +
+        (cycle.cervix_firmness_label || "—") +
+        " · " +
+        (cycle.cervix_open ? "微张" : "闭合"),
+    ]);
+    rows.push(["外阴", cycle.vulva_label || "—"]);
     if (cycle.breast_fullness_label) {
       rows.push(["乳房", cycle.breast_fullness_label]);
     }
@@ -662,11 +660,6 @@ function renderCycle(persona) {
     ["潮热", cycle.hot_flash ? "刚才一阵" : "没有"],
     ["点滴出血", cycle.spotting ? "有一点" : "没有"],
   );
-  if (persona.adult === false) {
-    rows = rows.filter(function (pair) {
-      return pair[0] !== "宫颈" && pair[0] !== "外阴";
-    });
-  }
   rows.forEach(function (pair) {
     const row = document.createElement("div");
     row.appendChild(make("dt", "", pair[0]));

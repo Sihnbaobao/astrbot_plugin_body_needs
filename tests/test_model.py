@@ -27,7 +27,7 @@ from core.model import (
     parse_sleep_window,
     sleep_seconds_between,
 )
-from core.profile import Profile, allows_adult_content, detect_profile
+from core.profile import Profile, detect_profile
 
 TZ = ZoneInfo("Asia/Shanghai")
 
@@ -249,7 +249,7 @@ def test_digestion_after_meal() -> None:
     assert state.satiety < satiety_after
 
 
-def test_intimacy_is_adult_only_and_sets_refractory() -> None:
+def test_intimacy_requires_a_resolved_gender_and_sets_refractory() -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     state = make_state(now)
     settings = Settings()
@@ -272,8 +272,8 @@ def test_male_libido_rate_falls_with_age() -> None:
     ]
     assert rates == [80.0, 70.0, 50.0, 32.0]
     assert rates == sorted(rates, reverse=True)
-    # The intimate module is adult-only: an explicit under-18 age gets no drive.
-    assert _libido_rate(state, None, make_profile(gender="male", age=16)) == 0.0
+    # Age only scales the curve: a younger persona is not switched off.
+    assert _libido_rate(state, None, make_profile(gender="male", age=16)) > 0.0
 
 
 def test_menarche_varies_between_personas() -> None:
@@ -1031,19 +1031,17 @@ def test_release_leaves_an_afterglow_scent_that_washes_off() -> None:
     assert state.intimate_scent == 0.0
 
 
-def test_intimate_module_is_adult_only() -> None:
+def test_age_does_not_gate_the_intimate_module() -> None:
     now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
     settings = Settings()
-    minor = make_profile(age=16)
+    young = make_profile(age=16)
     state = make_state(now)
     state.libido = 100.0
-    assert allows_adult_content(minor) is False
-    assert allows_adult_content(make_profile(age=18)) is True
-    assert _libido_rate(state, cycle_view(state, now, minor, settings), minor) == 0.0
-    with pytest.raises(ValueError):
-        apply_action(state, "release", now, minor, settings)
-    with pytest.raises(ValueError):
-        apply_action(state, "intimacy", now, minor, settings)
+    assert _libido_rate(state, cycle_view(state, now, young, settings), young) > 0.0
+    apply_action(state, "release", now, young, settings)
+    assert state.release_count >= 1
+    apply_action(state, "intimacy", now, young, settings)
+    assert state.intimacy_count == 1
 
 
 def test_puberty_advances_maturity_without_sexual_content() -> None:

@@ -8,7 +8,7 @@ itself.
 Design boundaries:
 - It never sends a message. Delivery stays with AstrBot and the persona plugin.
 - It only contributes a prompt block and two tools.
-- Adult-only state still requires ENABLE_INTIMATE and a private chat.
+- Intimate state still requires ENABLE_INTIMATE and a private chat; age never gates it.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from .core.model import (
     parse_sleep_window,
     sleep_view,
 )
-from .core.profile import Profile, allows_adult_content, detect_profile
+from .core.profile import Profile, detect_profile
 from .core.prompt import build_prompt_block, build_status_text, build_web_state
 from .core.store import Store
 
@@ -560,11 +560,7 @@ class BodyNeedsPlugin(Star):
         entry = self._libido_scores.get(persona_id)
         if entry is not None and entry.get("hash") == digest:
             return float(entry["habit"])
-        if (
-            profile.gender_resolved
-            and self.settings.enable_intimate
-            and prompt.strip()
-        ):
+        if profile.gender_resolved and self.settings.enable_intimate and prompt.strip():
             self._schedule_libido_score(persona_id, prompt, digest)
         return None
 
@@ -1184,11 +1180,7 @@ class BodyNeedsPlugin(Star):
             actions.extend(["shower", "brush"])
         if profile.gender == "female" and self.settings.enable_cycle:
             actions.append("supplies")
-        if (
-            private
-            and profile.gender_resolved
-            and self.settings.enable_intimate
-        ):
+        if private and profile.gender_resolved and self.settings.enable_intimate:
             actions.append("intimacy")
         if profile.gender == "female" and self.settings.enable_pregnancy:
             actions.append("prenatal")

@@ -15,7 +15,7 @@
       "male",
       "none"
     ],
-    "hint": "auto 会从人格正文里的称谓和性别词判断；判断不准时直接指定 female / male。none 只有饥渴清洁，没有生理期和成人模块。"
+    "hint": "auto 会从人格正文里的称谓和性别词判断；判断不准时直接指定 female / male。none 只有饥渴清洁，没有生理期和私密模块。"
   },
   "AGE": {
     "description": "年龄（0 = 从人格读取）",
