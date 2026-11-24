@@ -18,6 +18,7 @@ from .model import (
     CONTRACEPTION_FACTOR,
     BodyState,
     CycleView,
+    _roll,
     constitution,
     cycle_view,
     sleep_view,
@@ -823,6 +824,9 @@ def _recent_events(
     rows: list[tuple[float, str]] = []
     for event in state.events:
         kind = str(event.get("kind") or "")
+        if kind == "body_noise":
+            # Sounds get their own short line instead of crowding this list.
+            continue
         if not private and kind in (
             "wet_dream",
             "morning_erection",
@@ -994,6 +998,67 @@ def _cycle_text(view: CycleView, include_mucus: bool = True) -> str:
     if view.puberty:
         text += "（青春期，周期还不太规律）"
     return text
+
+
+def _noise_lines(state: BodyState, now: datetime, limit: int = 2) -> list[str]:
+    """Return the recent involuntary body sounds, newest last.
+
+    Args:
+        state: Current body state.
+        now: Current local time.
+        limit: How many of the newest sounds to keep.
+
+    Returns:
+        Short phrases such as "肚子咕咕叫了两声".
+    """
+    cutoff = now.timestamp() - 45 * 60
+    rows: list[str] = []
+    for item in state.events[-12:]:
+        if str(item.get("kind")) != "body_noise":
+            continue
+        try:
+            stamp = datetime.fromisoformat(str(item.get("at"))).timestamp()
+        except (TypeError, ValueError):
+            continue
+        if stamp < cutoff:
+            continue
+        text = str(item.get("text") or "").strip()
+        if text:
+            rows.append(text)
+    return rows[-limit:]
+
+
+def _sleep_aftermath(state: BodyState, now: datetime, profile: Profile) -> list[str]:
+    """Return one or two lines about how the last sleep still feels.
+
+    Args:
+        state: Current body state.
+        now: Current local time.
+        profile: Resolved persona profile, used as the stable roll seed.
+
+    Returns:
+        Short lines, or an empty list outside the first 90 minutes after waking.
+    """
+    if not state.last_wake_at:
+        return []
+    since = now.timestamp() - state.last_wake_at
+    if since < 0 or since > 90 * 60:
+        return []
+    roll = _roll(profile.persona_id, now.date().isoformat(), "sleep-after")
+    lines: list[str] = []
+    if state.sleep_quality < 55.0:
+        if roll < 0.5:
+            lines.append("睡眠：脖子有点落枕，转头会酸。")
+        else:
+            lines.append("睡眠：脸侧有枕头的压痕，还没消。")
+    elif state.sleep_quality < 70.0:
+        if roll < 0.5:
+            lines.append("睡眠：嗓子还没开，声音有点哑。")
+        else:
+            lines.append("睡眠：眼皮还有点沉。")
+    if since <= 20 * 60:
+        lines.append("睡眠：刚醒，脑子还发木。")
+    return lines[:2]
 
 
 def _supply_text(state: BodyState, view: CycleView | None) -> str:
@@ -1683,6 +1748,15 @@ def build_prompt_block(
             elif state.libido >= 60:
                 lines.append("身体：经期也想要，只是更想慢慢来、被照顾。")
 
+    if show_private:
+        noises = _noise_lines(state, now)
+        if noises:
+            lines.append("小动静：" + "；".join(noises))
+        if state.hiccup_until > now.timestamp():
+            lines.append("打嗝：还没停，说话偶尔会断一下。")
+        if state.cramp_until > now.timestamp():
+            lines.append("腿：小腿还有点抽着，走路会留意。")
+
     sleep = sleep_view(state, now, profile, settings) if settings.enable_sleep else None
     if sleep is not None and sleep.asleep:
         lines.append(f"睡眠：{sleep.line}，已经睡着了，不该开口。")
@@ -1695,6 +1769,8 @@ def build_prompt_block(
             lines.append(f"睡眠：{sleep.line}，脑子还在慢慢清醒。")
         elif sleep.line:
             lines.append(f"睡眠：{sleep.line}")
+        for aftermath in _sleep_aftermath(state, now, profile):
+            lines.append(aftermath)
     if state.busy_kind and state.busy_until > now.timestamp():
         busy = datetime.fromtimestamp(state.busy_until, now.tzinfo)
         lines.append(f"手上的事：{state.busy_kind}，大概 {busy:%H:%M} 才告一段落。")

@@ -363,6 +363,53 @@ def test_private_block_includes_mucus_and_organs() -> None:
     assert "宫颈" not in group
 
 
+def test_body_noise_and_sleep_aftermath_lines() -> None:
+    now = datetime(2026, 11, 18, 8, 10, tzinfo=TZ)
+    state = make_state(now)
+    state.sleeping = False
+    state.last_wake_at = now.timestamp() - 10 * 60
+    state.sleep_quality = 40.0
+    state.events = [
+        {
+            "at": (now - timedelta(minutes=5)).isoformat(),
+            "kind": "body_noise",
+            "text": "肚子咕咕叫了两声",
+        },
+        {
+            "at": (now - timedelta(hours=2)).isoformat(),
+            "kind": "body_noise",
+            "text": "打了个哈欠",
+        },
+    ]
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "小动静：肚子咕咕叫了两声" in private
+    assert "打了个哈欠" not in private
+    assert "刚醒，脑子还发木" in private
+
+    group = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="full"), private=False
+    )
+    assert "小动静" not in group
+
+
+def test_hunger_produces_body_noise_events() -> None:
+    from core.model import _maybe_body_noises
+
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    state = make_state(now)
+    state.satiety = 20.0
+    state.stomach = 20.0
+    for step in range(400):
+        _maybe_body_noises(
+            state, now + timedelta(minutes=15 * step), profile, 0.25, 0.0
+        )
+    assert any(
+        event["kind"] == "body_noise" and "肚子" in event["text"]
+        for event in state.events
+    )
+
+
 def test_private_scent_lines_cover_scalp_breath_and_afterglow() -> None:
     now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
     state = make_state(now)

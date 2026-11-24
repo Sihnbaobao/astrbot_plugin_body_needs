@@ -443,6 +443,8 @@ class BodyState:
     sleep_phase: float = 0.0
     sleep_anchor_at: float = 0.0
     sleep_intent: float = 0.0
+    hiccup_until: float = 0.0
+    cramp_until: float = 0.0
     last_release_at: float = 0.0
     last_self_at: float = 0.0
     intimacy_count: int = 0
@@ -600,6 +602,8 @@ class BodyState:
             "sleep_phase": self.sleep_phase,
             "sleep_anchor_at": self.sleep_anchor_at,
             "sleep_intent": self.sleep_intent,
+            "hiccup_until": self.hiccup_until,
+            "cramp_until": self.cramp_until,
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
             "intimacy_count": self.intimacy_count,
@@ -875,6 +879,8 @@ class BodyState:
         )
         state.sleep_anchor_at = _number(data.get("sleep_anchor_at"))
         state.sleep_intent = _number(data.get("sleep_intent"))
+        state.hiccup_until = _number(data.get("hiccup_until"))
+        state.cramp_until = _number(data.get("cramp_until"))
         if not state.sleeping:
             state.sleep_since = 0.0
             state.sleep_wake_at = 0.0
@@ -3705,6 +3711,125 @@ def _maybe_toilet_release(
     )
 
 
+def _maybe_body_noises(
+    state: BodyState,
+    moment: datetime,
+    profile: Profile,
+    step_hours: float,
+    sleep_fraction: float,
+) -> None:
+    """Roll one small involuntary body sound for this simulation step.
+
+    These are texture, not meters: at most one event per step, only when the
+    current state makes it plausible, and it fades out of the prompt quickly.
+
+    Args:
+        state: Body state being advanced.
+        moment: Midpoint of the current step.
+        profile: Resolved persona profile, used as the stable roll seed.
+        step_hours: Length of the current step in hours.
+        sleep_fraction: Share of the step spent asleep.
+    """
+    stamp = moment.timestamp()
+    hours = max(0.0, min(step_hours, 0.5))
+    if hours <= 0.0:
+        return
+    bucket = int(stamp // 900)
+    awake = sleep_fraction <= 0.5
+
+    def hit(per_hour: float, name: str) -> bool:
+        p = 1.0 - (1.0 - max(0.0, min(1.0, per_hour))) ** hours
+        return _roll(profile.persona_id, f"noise:{name}:{bucket}", "roll") < p
+
+    if not awake:
+        if state.hydration < 45.0 and state.leg_fatigue > 30.0 and hit(0.05, "cramp"):
+            state.cramp_until = max(state.cramp_until, stamp + 90.0)
+            _add_event(
+                state,
+                moment,
+                "body_noise",
+                "小腿抽了一下",
+                key=f"noise:cramp:{bucket}",
+            )
+        return
+
+    if (
+        state.hiccup_until <= stamp
+        and (
+            stamp - state.last_eat_at < 30 * 60 or stamp - state.last_drink_at < 20 * 60
+        )
+        and hit(0.06, "hiccup")
+    ):
+        state.hiccup_until = (
+            stamp + 120.0 + _roll(profile.persona_id, f"hiccup:{bucket}", "len") * 180.0
+        )
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "开始打嗝，停不下来",
+            key=f"noise:hiccup:{bucket}",
+        )
+        return
+    if state.satiety < 35.0 and state.stomach < 45.0 and hit(0.30, "growl"):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "肚子咕咕叫了两声",
+            key=f"noise:growl:{bucket}",
+        )
+        return
+    if (state.indigestion > 30.0 or state.diet_quality < 40.0) and hit(0.10, "burp"):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "打了个嗝",
+            key=f"noise:burp:{bucket}",
+        )
+        return
+    if (state.gut > 40.0 or state.indigestion > 35.0) and hit(0.12, "gas"):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "悄悄放了个屁",
+            key=f"noise:gas:{bucket}",
+        )
+        return
+    if (state.energy < 45.0 or state.sleep_debt > 8.0) and hit(0.20, "yawn"):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "打了个哈欠",
+            key=f"noise:yawn:{bucket}",
+        )
+        return
+    if (state.allergy > 25.0 or state.nasal > 30.0) and hit(0.10, "sneeze"):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "打了个喷嚏",
+            key=f"noise:sneeze:{bucket}",
+        )
+        return
+    if (
+        state.ambient_temp < 10.0
+        and state.clothing_warmth < 55.0
+        and hit(0.12, "shiver")
+    ):
+        _add_event(
+            state,
+            moment,
+            "body_noise",
+            "打了个冷战，起了鸡皮疙瘩",
+            key=f"noise:shiver:{bucket}",
+        )
+
+
 def _miscarriage_chance(week: int) -> float:
     """Return the weekly miscarriage hazard before twenty weeks.
 
@@ -4567,6 +4692,8 @@ def advance(
             )
         else:
             state.libido = 0.0
+
+        _maybe_body_noises(state, midpoint, profile, step_hours, sleep_fraction)
 
         if profile.gender == "female" and settings.enable_intimate:
             # Real bodies have some baseline discharge all the time; it follows
