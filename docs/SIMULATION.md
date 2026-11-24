@@ -157,9 +157,22 @@
     intimate_target = clamp(max(0, wetness-25)*0.22 + 10 if 经期
                             + 6 if 排卵)                 # 仅女性
     intimate_target = clamp(4 + 0.08*libido)             # 仅男性
+    underarm_target = clamp(4 + 0.55*sweat + 0.2*skin_oil
+                            + max(0, ambient-24)*1.1 + 6 if >30)
+    vulva_target    = clamp(3 + 0.22*wetness + 0.18*intimate
+                            + 10 if 经期 + 6 if 排卵)
+    anus_target     = clamp(3 + 0.35*anus_irritation + 0.2*max(0, bowel-55))
+    nipple_target   = clamp(2 + 0.12*sweat + 0.45*milk if 哺乳
+                            + 0.08*intimate)
     scalp   += (target - scalp)   * (1 - exp(-h/6))
     breath  += (target - breath)  * (1 - exp(-h/1.5))
     intimate+= (target - intimate)* (1 - exp(-h/4))
+    underarm+= (target - underarm)* (1 - exp(-h/4))
+    vulva   += (target - vulva)   * (1 - exp(-h/4))
+    anus    += (target - anus)    * (1 - exp(-h/5))
+    nipple  += (target - nipple)  * (1 - exp(-h/6))
+
+洗澡会把腋下 -70、小穴 -60、肛门 -65、乳头 -45；亲密/自慰也会把后两者抬高。脚的味道在弹窗里会区分趾缝和足底：趾缝更闷、足底更偏汗酸。
 
 `intimate_scent` 的数值只是浓度；提示词提不提这一行，看距上次释放的时间而不是数值：≤1 小时写“刚结束，还很重”，≤8 小时写“事后还留着一点”，≤36 小时写“很淡”；洗澡（或事后换过衣服）之后不再提。梦遗同样会留下这个值。
 
@@ -354,7 +367,7 @@ persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低�
 
 ### 口腔
 
-口腔在私聊里可以拆成五行（页面内部状态同样五行）：
+口腔在私聊里可以拆成六项（页面同样六项，舌头和舌苔分开）：
 
     plaque_target  = clamp(12 + oral*0.55)                  # 时间常数 12h
     gum_target     = clamp(4 + max(0, plaque-45)*0.35 + 6 if illness)   # 24h
@@ -364,6 +377,10 @@ persona_presence 的情绪资料片按 tension→恼/不安、负 valence→低�
                            + max(0, 45-diet_long)*0.2 + 18 if illness)    # 8h
     throat_target  = clamp(dry_mouth*0.3 + illness_severity*0.35
                            + caffeine*0.08)                              # 6h
+
+    # 舌头只看舌色和形状，不看覆盖物：
+    tongue_color   = 偏白 if 生病；偏红 if 体温>=37.3 或 咖啡因>=60；否则淡红
+    tongue_shape   = 有齿痕 if 睡眠债>=8 或 消化不适>=40；偏干 if 口干>=45；否则正常
 
 刷牙把牙菌斑直接清零、牙龈 -4、舌苔 -18；喝水让唾液 +8、咽部 -4；生病时牙龈、舌苔、咽部都会被抬高。只有出现明显变化时才写进提示词，平时不刷屏。
 

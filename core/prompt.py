@@ -203,6 +203,22 @@ def tongue_label(value: float) -> str:
     return "发黄厚腻"
 
 
+def tongue_body_label(state: BodyState) -> str:
+    """Describe the tongue itself (colour and shape), not the coating."""
+    if state.illness:
+        color = "偏白"
+    elif state.temperature >= 37.3 or state.caffeine >= 60:
+        color = "偏红"
+    else:
+        color = "淡红"
+    shape = "正常"
+    if state.sleep_debt >= 8.0 or state.indigestion >= 40.0:
+        shape = "有齿痕"
+    if state.dry_mouth >= 45.0:
+        shape = "偏干"
+    return f"{color} · {shape}"
+
+
 def throat_label(value: float) -> str:
     """Describe throat soreness or dryness."""
     if value < 15:
@@ -1237,7 +1253,7 @@ def _scent_detail(
         return (
             f"脚 {round(state.foot_scent)}：出汗 {round(state.sweat)}，"
             f"久坐 {round(state.sedentary)}，室温 {round(state.ambient_temp)}℃；"
-            f"洗澡会明显下降。"
+            f"脚趾缝里比足底更容易闷，脱鞋后味道更明显，洗澡会明显下降。"
         )
     if key == "period":
         if view is None:
@@ -1254,6 +1270,31 @@ def _scent_detail(
         return (
             f"事后味 {round(state.intimate_scent)}：距上次释放约 {round(hours)} 小时；"
             f"刚结束最明显，洗澡会压掉。"
+        )
+    if key == "underarm":
+        return (
+            f"腋下 {round(state.underarm_scent)}：出汗 {round(state.sweat)}，"
+            f"皮脂 {round(state.skin_oil)}，室温 {round(state.ambient_temp)}℃；"
+            f"刚运动或天热会更明显，洗澡会压掉。"
+        )
+    if key == "vulva":
+        return (
+            f"小穴 {round(state.vulva_scent)}：湿润 {round(state.wetness)}，"
+            f"事后残留 {round(state.intimate_scent)}，"
+            + ("经期还会多一点血腥味，" if view is not None and view.flow > 0 else "")
+            + "洗一下会淡。"
+        )
+    if key == "anus":
+        return (
+            f"肛门 {round(state.anus_scent)}：肛门刺激 {round(state.anus_irritation)}，"
+            f"肠道里还有 {round(state.gut)}；刚排过的时候最明显，洗澡会压掉。"
+        )
+    if key == "nipple":
+        return (
+            f"乳头 {round(state.nipple_scent)}："
+            + (f"乳汁 {round(state.milk)}，" if state.lactating else "")
+            + f"出汗 {round(state.sweat)}，事后残留 {round(state.intimate_scent)}；"
+            f"平时很淡，洗过基本就没了。"
         )
     if key == "milk":
         return (
@@ -1342,6 +1383,48 @@ def _scent_rows(
             "tone": "warn" if state.foot_scent >= 45 else "ok",
         },
         {
+            "key": "underarm",
+            "label": "腋下",
+            "value": round(state.underarm_scent, 1),
+            "level": scent_label(state.underarm_scent),
+            "tone": "hot"
+            if state.underarm_scent >= 70
+            else ("warn" if state.underarm_scent >= 50 else "ok"),
+        },
+        *(
+            [
+                {
+                    "key": "vulva",
+                    "label": "小穴",
+                    "value": round(state.vulva_scent, 1),
+                    "level": scent_label(state.vulva_scent),
+                    "tone": "hot"
+                    if state.vulva_scent >= 70
+                    else ("warn" if state.vulva_scent >= 50 else "ok"),
+                },
+            ]
+            if profile.gender == "female"
+            else []
+        ),
+        {
+            "key": "anus",
+            "label": "肛门",
+            "value": round(state.anus_scent, 1),
+            "level": scent_label(state.anus_scent),
+            "tone": "hot"
+            if state.anus_scent >= 70
+            else ("warn" if state.anus_scent >= 50 else "ok"),
+        },
+        {
+            "key": "nipple",
+            "label": "乳头",
+            "value": round(state.nipple_scent, 1),
+            "level": scent_label(state.nipple_scent),
+            "tone": "hot"
+            if state.nipple_scent >= 70
+            else ("warn" if state.nipple_scent >= 50 else "ok"),
+        },
+        {
             "key": "period",
             "label": "经期气味",
             "value": round(state.period_scent, 1),
@@ -1424,6 +1507,14 @@ def _scent_lines(
             washed = state.last_shower_at >= last_act and state.intimate_scent < 10.0
             if hours <= 36.0 and not washed:
                 lines.append(_intimate_line(profile, hours))
+    if state.underarm_scent >= 45.0:
+        lines.append("腋下：抬一下手就能闻到一点汗味。")
+    if profile.gender == "female" and state.vulva_scent >= 35.0:
+        lines.append("下面：有一点自己的味道，混着湿润感，洗一下会淡。")
+    if state.anus_scent >= 35.0:
+        lines.append("肛门：刚排过，还有点味道。")
+    if state.nipple_scent >= 40.0:
+        lines.append("胸前：乳头上有一点奶味和汗味。")
     if state.lactating and state.milk >= 40.0:
         lines.append("胸前：有一点奶味，衣服上也能闻到。")
     return lines
@@ -1968,6 +2059,15 @@ def _mouth_detail(state: BodyState, now: datetime, key: str) -> str:
             f"牙龈刺激 {round(state.gum_irritation)}：菌斑多、缺水或生病时会上升，"
             f"刷牙能缓解一点，但不会一次就消失。"
         )
+    if key == "tongue_body":
+        bits = [
+            f"舌色{('偏白' if state.illness else '偏红' if state.temperature >= 37.3 or state.caffeine >= 60 else '淡红')}"
+        ]
+        if state.sleep_debt >= 8.0 or state.indigestion >= 40.0:
+            bits.append("边缘有齿痕（累或消化不好）")
+        if state.dry_mouth >= 45.0:
+            bits.append("舌面偏干")
+        return "舌头：" + "，".join(bits) + "；和舌苔是两回事，舌苔看的是覆盖物。"
     if key == "tongue":
         return (
             f"舌苔 {round(state.tongue_coat)}：消化不适 {round(state.indigestion)}，"
@@ -1995,8 +2095,48 @@ def _anatomy_rows(
     view: CycleView,
     profile: Profile,
 ) -> list[dict[str, Any]]:
-    """Build the clickable anatomy rows for the body-status page."""
+    """Build the clickable anatomy rows for the body-status page.
+
+    Every part is its own row: labia majora and minora, clitoris, vestibule and
+    perineum are described separately, and the colour/size comes from the
+    persona constitution so two people do not read the same.
+    """
     arousal = _arousal_value(state, view)
+    const = constitution(profile.persona_id)
+
+    def tone_of(value: float, light: str, mid: str, dark: str) -> str:
+        if value < 0.35:
+            return light
+        if value < 0.7:
+            return mid
+        return dark
+
+    deep = 0.25 if (view.weeks >= 12 or state.lactating) else 0.0
+    labia_tone = min(1.0, const.labia_tone + deep)
+    nipple_tone = min(1.0, const.nipple_tone + deep)
+    labia_size = const.labia_size
+    if view.weeks >= 28 or state.lactating:
+        labia_size = min(1.0, labia_size + 0.15)
+
+    major_size = (
+        "小" if labia_size < 0.38 else ("适中" if labia_size < 0.72 else "饱满")
+    )
+    major_color = tone_of(labia_tone, "淡粉", "粉褐", "深褐")
+    minor_size = "薄" if labia_size < 0.4 else ("适中" if labia_size < 0.72 else "偏厚")
+    minor_color = tone_of(labia_tone, "淡粉", "粉红", "深褐")
+    clit_size = (
+        "小巧" if labia_size < 0.4 else ("适中" if labia_size < 0.72 else "偏大")
+    )
+    clit_color = tone_of(labia_tone, "淡粉", "粉红", "深粉")
+    vestibule_color = (
+        "泛红"
+        if view.flow > 0 or arousal >= 70.0
+        else ("淡粉" if arousal >= 35.0 else "浅粉")
+    )
+    perineum_color = (
+        "有点发红" if view.flow > 0 else ("浅粉" if arousal < 60.0 else "泛粉")
+    )
+
     hair = (
         "剃光"
         if view.pubic_hair == "shaved"
@@ -2010,25 +2150,72 @@ def _anatomy_rows(
         + AREOLA_TINT_LABELS.get(view.areola_tint, view.areola_tint)
         + (" · 蒙氏腺明显" if view.montgomery else "")
     )
+    nipple_size = (
+        "小"
+        if const.nipple_size < 0.4
+        else ("适中" if const.nipple_size < 0.75 else "大")
+    )
+    nipple_color = tone_of(nipple_tone, "淡粉", "粉红", "深褐")
+
     return [
         {
-            "key": "vulva",
-            "label": "外阴",
-            "text": "大阴唇"
-            + LABIA_MAJORA_LABELS.get(view.labia_majora, "")
-            + " · 小阴唇"
-            + LABIA_MINORA_LABELS.get(view.labia_minora, "")
-            + " · 阴蒂"
-            + CLITORIS_LABELS.get(view.clitoris, "")
-            + " · 前庭"
-            + VESTIBULE_LABELS.get(view.vestibule, "")
-            + " · 会阴"
-            + PERINEUM_LABELS.get(view.perineum, ""),
+            "key": "labia_majora",
+            "label": "大阴唇",
+            "text": major_size
+            + " · "
+            + major_color
+            + " · "
+            + LABIA_MAJORA_LABELS.get(view.labia_majora, ""),
             "detail": (
-                f"唤起度 {round(arousal)}（湿润 {round(state.wetness)}、"
-                f"性欲 {round(state.libido)}，加上周期加成）；"
-                f"大阴唇、小阴唇和阴蒂会随之充血、外露，前庭变湿，"
-                f"经期和孕期会更容易泛红。"
+                f"个体底子：{major_color}、{major_size}；唤起时会充血、微微分开（现在"
+                f"{LABIA_MAJORA_LABELS.get(view.labia_majora, '')}），孕期和哺乳期颜色会更深、更饱满。"
+                f"当前唤起度 {round(arousal)}。"
+            ),
+        },
+        {
+            "key": "labia_minora",
+            "label": "小阴唇",
+            "text": minor_size
+            + " · "
+            + minor_color
+            + " · "
+            + LABIA_MINORA_LABELS.get(view.labia_minora, ""),
+            "detail": (
+                f"小阴唇偏{minor_size}、{minor_color}；唤起时会从贴合变成微露甚至外翻，"
+                f"现在{LABIA_MINORA_LABELS.get(view.labia_minora, '')}。"
+                f"颜色深浅是个人差异，孕期会再深一点。"
+            ),
+        },
+        {
+            "key": "clitoris",
+            "label": "阴蒂",
+            "text": clit_size
+            + " · "
+            + clit_color
+            + " · "
+            + CLITORIS_LABELS.get(view.clitoris, ""),
+            "detail": (
+                f"大小和颜色像个人差异一样固定（{clit_size}、{clit_color}）；"
+                f"唤起时从藏着变成微露、再充血挺起，现在 "
+                f"{CLITORIS_LABELS.get(view.clitoris, '')}，唤起度 {round(arousal)}。"
+            ),
+        },
+        {
+            "key": "vestibule",
+            "label": "前庭",
+            "text": VESTIBULE_LABELS.get(view.vestibule, "") + " · " + vestibule_color,
+            "detail": (
+                f"前庭现在 {VESTIBULE_LABELS.get(view.vestibule, '')}、{vestibule_color}；"
+                f"湿润来自唤起、排卵和分泌物，经期会泛红。"
+            ),
+        },
+        {
+            "key": "perineum",
+            "label": "会阴",
+            "text": PERINEUM_LABELS.get(view.perineum, "") + " · " + perineum_color,
+            "detail": (
+                f"会阴现在 {PERINEUM_LABELS.get(view.perineum, '')}，颜色{perineum_color}；"
+                f"经期、久坐和孕期会更明显，产后需要时间恢复。"
             ),
         },
         {
@@ -2040,8 +2227,7 @@ def _anatomy_rows(
             + " · "
             + VAGINA_OPEN_LABELS.get(view.vagina_open, ""),
             "detail": (
-                f"张力、温度和开合跟着唤起度和孕产状态走："
-                f"现在唤起度 {round(arousal)}，"
+                f"张力、温度和开合跟着唤起度和孕产状态走：现在唤起度 {round(arousal)}，"
                 + (
                     "孕期/哺乳期会更软更松。"
                     if state.lactating or view.weeks >= 12
@@ -2055,8 +2241,7 @@ def _anatomy_rows(
             "text": hair,
             "detail": (
                 f"密度和样式是该人格固定的外观（当前 {hair}），"
-                f"不会因为换天或换状态改变；"
-                f"设置里的 PUBIC_HAIR 可以强制成无毛、稀疏或浓密。"
+                f"不会因为换天或换状态改变；设置里的 PUBIC_HAIR 可以强制成无毛、稀疏或浓密。"
             ),
         },
         {
@@ -2071,8 +2256,13 @@ def _anatomy_rows(
         {
             "key": "nipple",
             "label": "乳头",
-            "text": NIPPLE_LABELS.get(view.nipple, view.nipple),
+            "text": nipple_size
+            + " · "
+            + nipple_color
+            + " · "
+            + NIPPLE_LABELS.get(view.nipple, view.nipple),
             "detail": (
+                f"大小和颜色是个人差异（{nipple_size}、{nipple_color}）；"
                 f"唤起度 {round(arousal)}"
                 + ("，现在挺着。" if view.nipple == "erect" else "，现在软着。")
                 + "哺乳时也会更敏感。"
@@ -2416,6 +2606,13 @@ def build_web_state(
                 "tone": "hot"
                 if state.gum_irritation >= 55
                 else ("warn" if state.gum_irritation >= 30 else "ok"),
+            },
+            "tongue_body": {
+                "label": "舌头",
+                "value": 0.0,
+                "level": tongue_body_label(state),
+                "text": tongue_body_label(state),
+                "tone": "warn" if tongue_body_label(state) != "淡红 · 正常" else "ok",
             },
             "tongue": {
                 "label": "舌苔",

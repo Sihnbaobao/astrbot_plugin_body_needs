@@ -1984,3 +1984,37 @@ def test_pubic_hair_config_can_force_none() -> None:
     assert view is not None
     assert view.pubic_hair == "none"
     assert view.pubic_hair_style == "none"
+
+
+def test_shower_washes_the_new_scent_sources() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.underarm_scent = 70.0
+    state.vulva_scent = 60.0
+    state.anus_scent = 55.0
+    state.nipple_scent = 40.0
+    apply_action(state, "shower", now, profile, settings)
+    assert state.underarm_scent < 10.0
+    assert state.vulva_scent < 10.0
+    assert state.anus_scent < 10.0
+    assert state.nipple_scent < 10.0
+
+
+def test_new_scent_sources_rise_from_the_body() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.sweat = 80.0
+    state.ambient_temp = 33.0
+    state.anus_irritation = 60.0
+    state.wetness = 80.0
+    # Just showered, so the autonomous loop will not wash the new scents away
+    # inside this short window.
+    state.last_shower_at = now.timestamp()
+    advance(state, now + timedelta(hours=1), profile, settings)
+    assert state.underarm_scent > 10.0
+    assert state.anus_scent > 5.0
+    assert state.vulva_scent > 5.0

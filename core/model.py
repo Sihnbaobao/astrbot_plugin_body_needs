@@ -209,6 +209,10 @@ class Constitution:
     areola_size: float = 0.5
     areola_tone: float = 0.5
     montgomery: bool = False
+    labia_tone: float = 0.5
+    labia_size: float = 0.5
+    nipple_tone: float = 0.5
+    nipple_size: float = 0.5
 
 
 def constitution(persona_id: str) -> Constitution:
@@ -240,6 +244,10 @@ def constitution(persona_id: str) -> Constitution:
         areola_size=0.15 + 0.85 * _roll(persona_id, "body", "areola-size"),
         areola_tone=_roll(persona_id, "body", "areola-tone"),
         montgomery=_roll(persona_id, "body", "montgomery") > 0.45,
+        labia_tone=_roll(persona_id, "body", "labia-tone"),
+        labia_size=0.2 + 0.8 * _roll(persona_id, "body", "labia-size"),
+        nipple_tone=_roll(persona_id, "body", "nipple-tone"),
+        nipple_size=0.2 + 0.8 * _roll(persona_id, "body", "nipple-size"),
     )
 
 
@@ -355,6 +363,10 @@ class BodyState:
     scalp_scent: float = 10.0
     breath_scent: float = 6.0
     intimate_scent: float = 0.0
+    underarm_scent: float = 6.0
+    nipple_scent: float = 2.0
+    vulva_scent: float = 4.0
+    anus_scent: float = 4.0
     # Slow organ-load proxies. They are fictional summaries, not clinical
     # measurements: the kidney follows water/sodium/caffeine, the liver follows
     # diet and digestion, and the uterus follows the cycle and cramping.
@@ -512,6 +524,10 @@ class BodyState:
             "scalp_scent": self.scalp_scent,
             "breath_scent": self.breath_scent,
             "intimate_scent": self.intimate_scent,
+            "underarm_scent": self.underarm_scent,
+            "nipple_scent": self.nipple_scent,
+            "vulva_scent": self.vulva_scent,
+            "anus_scent": self.anus_scent,
             "kidney_load": self.kidney_load,
             "liver_load": self.liver_load,
             "uterine_congestion": self.uterine_congestion,
@@ -659,6 +675,10 @@ class BodyState:
             "scalp_scent",
             "breath_scent",
             "intimate_scent",
+            "underarm_scent",
+            "nipple_scent",
+            "vulva_scent",
+            "anus_scent",
             "kidney_load",
             "liver_load",
             "uterine_congestion",
@@ -759,6 +779,10 @@ class BodyState:
         state.scalp_scent = _clamp(state.scalp_scent)
         state.breath_scent = _clamp(state.breath_scent)
         state.intimate_scent = _clamp(state.intimate_scent)
+        state.underarm_scent = _clamp(state.underarm_scent)
+        state.nipple_scent = _clamp(state.nipple_scent)
+        state.vulva_scent = _clamp(state.vulva_scent)
+        state.anus_scent = _clamp(state.anus_scent)
         state.kidney_load = _clamp(state.kidney_load)
         state.liver_load = _clamp(state.liver_load)
         state.uterine_congestion = _clamp(state.uterine_congestion)
@@ -3223,6 +3247,10 @@ def _routine(
             state.scalp_scent = max(0.0, state.scalp_scent - 70.0)
             state.breath_scent = max(0.0, state.breath_scent - 35.0)
             state.intimate_scent = max(0.0, state.intimate_scent - 80.0)
+            state.underarm_scent = max(0.0, state.underarm_scent - 70.0)
+            state.nipple_scent = max(0.0, state.nipple_scent - 45.0)
+            state.vulva_scent = max(0.0, state.vulva_scent - 60.0)
+            state.anus_scent = max(0.0, state.anus_scent - 65.0)
             state.last_shower_at = moment.timestamp()
             _add_care(state, moment, "shower")
             _add_event(state, moment, "self_care", "洗了个澡", key=f"self-shower:{day}")
@@ -4393,6 +4421,41 @@ def advance(
         state.intimate_scent += (intimate_target - state.intimate_scent) * (
             1.0 - math.exp(-step_hours / 4.0)
         )
+        underarm_target = _clamp(
+            4.0
+            + state.sweat * 0.55
+            + state.skin_oil * 0.2
+            + max(0.0, state.ambient_temp - 24.0) * 1.1
+            + (6.0 if state.ambient_temp > 30.0 else 0.0)
+        )
+        state.underarm_scent += (underarm_target - state.underarm_scent) * (
+            1.0 - math.exp(-step_hours / 4.0)
+        )
+        nipple_target = _clamp(
+            2.0
+            + state.sweat * 0.12
+            + (state.milk * 0.45 if state.lactating else 0.0)
+            + state.intimate_scent * 0.08
+        )
+        state.nipple_scent += (nipple_target - state.nipple_scent) * (
+            1.0 - math.exp(-step_hours / 6.0)
+        )
+        vulva_target = _clamp(
+            3.0
+            + state.wetness * 0.22
+            + state.intimate_scent * 0.18
+            + (10.0 if in_period_now else 0.0)
+            + (6.0 if view is not None and view.phase == "ovulation" else 0.0)
+        )
+        state.vulva_scent += (vulva_target - state.vulva_scent) * (
+            1.0 - math.exp(-step_hours / 4.0)
+        )
+        anus_target = _clamp(
+            3.0 + state.anus_irritation * 0.35 + max(0.0, state.bowel - 55.0) * 0.2
+        )
+        state.anus_scent += (anus_target - state.anus_scent) * (
+            1.0 - math.exp(-step_hours / 5.0)
+        )
         # Organ load is a slow fictional proxy, not a lab result: the kidney
         # reacts to water, salt, caffeine and urine concentration; the liver to
         # diet and digestion; the uterus to the cycle and cramping.
@@ -4692,6 +4755,10 @@ def apply_action(
         state.scalp_scent = max(0.0, state.scalp_scent - 70.0)
         state.breath_scent = max(0.0, state.breath_scent - 35.0)
         state.intimate_scent = max(0.0, state.intimate_scent - 80.0)
+        state.underarm_scent = max(0.0, state.underarm_scent - 70.0)
+        state.nipple_scent = max(0.0, state.nipple_scent - 45.0)
+        state.vulva_scent = max(0.0, state.vulva_scent - 60.0)
+        state.anus_scent = max(0.0, state.anus_scent - 65.0)
         state.anus_irritation = max(0.0, state.anus_irritation - 45.0)
         state.urethra_irritation = max(0.0, state.urethra_irritation - 20.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
@@ -4760,6 +4827,8 @@ def apply_action(
                 )
         state.libido = 0.0
         state.intimate_scent = max(state.intimate_scent, 48.0 if ejaculated else 38.0)
+        state.vulva_scent = max(state.vulva_scent, 45.0)
+        state.nipple_scent = max(state.nipple_scent, 30.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.4, 0.0, 24.0)
         state.skin = _clamp(state.skin + 4.0)
         state.last_release_at = now_ts
@@ -4773,6 +4842,7 @@ def apply_action(
         state.libido = 0.0
         state.wetness = max(0.0, state.wetness - 30.0)
         state.intimate_scent = max(state.intimate_scent, 42.0)
+        state.vulva_scent = max(state.vulva_scent, 40.0)
         state.last_self_at = now_ts
         state.release_count += 1
         state.release_until = max(

@@ -522,7 +522,9 @@ function renderBodyStatus(persona) {
           const row = mouth[key];
           return {
             label: row.label || key,
-            text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
+            text:
+              row.text ||
+              (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
             detail: row.detail,
           };
         }),

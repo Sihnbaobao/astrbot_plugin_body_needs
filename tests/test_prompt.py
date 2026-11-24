@@ -431,16 +431,45 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
     }
     anatomy = payload["anatomy"]
     labels = [row["label"] for row in anatomy["rows"]]
-    assert labels == ["外阴", "阴道", "阴毛", "乳晕", "乳头"]
+    assert labels == [
+        "大阴唇",
+        "小阴唇",
+        "阴蒂",
+        "前庭",
+        "会阴",
+        "阴道",
+        "阴毛",
+        "乳晕",
+        "乳头",
+    ]
     assert all(row["detail"] for row in anatomy["rows"])
     mouth = payload["mouth"]
-    assert set(mouth) == {"plaque", "gum", "tongue", "saliva", "throat"}
+    assert set(mouth) == {
+        "plaque",
+        "gum",
+        "tongue_body",
+        "tongue",
+        "saliva",
+        "throat",
+    }
     assert mouth["saliva"]["level"]
     assert all(row["detail"] for row in mouth.values())
     assert all(row["detail"] for row in payload["organs"])
     assert all(row["detail"] for row in payload["scents"])
     scents = {row["key"]: row for row in payload["scents"]}
-    assert {"scent", "scalp", "breath", "foot", "period", "intimate"} <= set(scents)
+    assert {
+        "scent",
+        "scalp",
+        "breath",
+        "foot",
+        "underarm",
+        "vulva",
+        "anus",
+        "nipple",
+        "period",
+        "intimate",
+    } <= set(scents)
+    assert all(row["detail"] for row in payload["scents"])
 
 
 def test_scent_is_a_separate_meter() -> None:
@@ -493,3 +522,39 @@ def test_private_prompt_describes_hair_areola_and_mouth_detail() -> None:
     assert "乳头：" in block
     assert "口腔：牙齿" in block
     assert "舌苔" in block
+
+
+def test_private_scent_lines_cover_the_new_sources() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.underarm_scent = 60.0
+    state.vulva_scent = 55.0
+    state.anus_scent = 50.0
+    state.nipple_scent = 45.0
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "腋下：" in block
+    assert "下面：" in block
+    assert "肛门：" in block
+    assert "胸前：" in block
+
+
+def test_anatomy_rows_carry_appearance_detail() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    payload = build_web_state(make_state(now), now, make_profile(), Settings())
+    rows = {row["key"]: row for row in payload["anatomy"]["rows"]}
+    assert set(rows) == {
+        "labia_majora",
+        "labia_minora",
+        "clitoris",
+        "vestibule",
+        "perineum",
+        "vagina",
+        "pubic_hair",
+        "areola",
+        "nipple",
+    }
+    assert (
+        "个体" in rows["labia_majora"]["detail"]
+        or "专辑" in rows["labia_majora"]["detail"]
+    )
+    assert all(row["text"] for row in rows.values())

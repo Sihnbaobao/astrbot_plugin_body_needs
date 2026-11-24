@@ -590,3 +590,27 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* 详情弹窗正文：独立留白与滚动，不再贴着标题 */
+.dialog-body {
+  margin: 16px 22px 22px;
+  padding: 16px 18px;
+  max-height: calc(min(80vh, 720px) - 128px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(127, 137, 148, 0.08);
+  background: color-mix(in srgb, var(--panel) 88%, var(--text) 12%);
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .dialog-body {
+    margin: 12px 14px 18px;
+    padding: 14px;
+    max-height: calc(90vh - 150px);
+  }
+}
