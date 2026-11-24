@@ -1204,6 +1204,65 @@ def _organ_text(state: BodyState, view: CycleView | None) -> str:
     return "器官：" + "；".join(parts) + "。"
 
 
+def _scent_detail(
+    state: BodyState,
+    view: CycleView | None,
+    now: datetime,
+    key: str,
+) -> str:
+    """Return the long explanation behind one scent row."""
+    if key == "scent":
+        return (
+            f"全身味 {round(state.scent)}：皮脂 {round(state.skin_oil)}、"
+            f"出汗 {round(state.sweat)}、清洁度 {round(state.cleanliness)}；"
+            f"上次洗澡是 {_ago_or_never(state.last_shower_at, now)}。"
+        )
+    if key == "scalp":
+        hours = (
+            max(0.0, (now.timestamp() - state.last_shower_at) / 3600.0)
+            if state.last_shower_at
+            else 24.0
+        )
+        return (
+            f"头皮味 {round(state.scalp_scent)}：皮脂 {round(state.skin_oil)}，"
+            f"距上次洗澡 {round(hours)} 小时；发根和枕头会先有油味。"
+        )
+    if key == "breath":
+        return (
+            f"口气 {round(state.breath_scent)}：口腔脏度 {round(state.oral)}，"
+            f"口干 {round(state.dry_mouth)}，咖啡因 {round(state.caffeine)}；"
+            f"上次刷牙是 {_ago_or_never(state.last_brush_at, now)}。"
+        )
+    if key == "foot":
+        return (
+            f"脚 {round(state.foot_scent)}：出汗 {round(state.sweat)}，"
+            f"久坐 {round(state.sedentary)}，室温 {round(state.ambient_temp)}℃；"
+            f"洗澡会明显下降。"
+        )
+    if key == "period":
+        if view is None:
+            return "现在没有周期数据。"
+        return (
+            f"经期味 {round(state.period_scent)}：周期第 {view.day} 天，"
+            f"量 {view.flow} 级；洗一下会淡。"
+        )
+    if key == "intimate":
+        last = max(state.last_intimacy_at, state.last_self_at, state.last_release_at)
+        if last <= 0:
+            return "还没有记录。"
+        hours = max(0.0, (now.timestamp() - last) / 3600.0)
+        return (
+            f"事后味 {round(state.intimate_scent)}：距上次释放约 {round(hours)} 小时；"
+            f"刚结束最明显，洗澡会压掉。"
+        )
+    if key == "milk":
+        return (
+            f"奶味 {round(min(100.0, state.milk * 0.8))}：乳汁 {round(state.milk)}；"
+            f"哺乳期才会出现。"
+        )
+    return ""
+
+
 def _last_act_at(state: BodyState) -> float:
     """Return when she last came, whatever caused it, or 0 when never."""
     return max(state.last_intimacy_at, state.last_self_at, state.last_release_at)
@@ -1314,6 +1373,8 @@ def _scent_rows(
                 "tone": "ok",
             }
         )
+    for row in rows:
+        row["detail"] = _scent_detail(state, view, now, str(row["key"]))
     return rows
 
 
@@ -1808,6 +1869,218 @@ def build_status_text(
     return "\n".join(lines)
 
 
+def _ago_or_never(stamp: float, now: datetime) -> str:
+    """Like _ago, but says "never recorded" instead of "very long ago"."""
+    return _ago(stamp, now) if stamp else "还没有记录"
+
+
+def _arousal_value(state: BodyState, view: CycleView | None) -> float:
+    """Return the shared arousal proxy used by the anatomy text."""
+    value = max(float(state.wetness), float(state.libido) * 0.9)
+    if view is not None:
+        if view.phase == "ovulation":
+            value += 12.0
+        if view.flow > 0:
+            value += 6.0
+        if view.phase == "pregnant":
+            value += 8.0
+    return max(0.0, min(100.0, value))
+
+
+def _organ_detail(
+    state: BodyState,
+    view: CycleView | None,
+    now: datetime,
+    key: str,
+) -> str:
+    """Return a longer explanation for one organ row.
+
+    The card only shows a level and a number; the dialog behind a click gets a
+    sentence or two about what is actually driving it.
+    """
+    if key == "bladder":
+        tail = "已经憋得有点难受。" if state.bladder >= 75 else "还没到必须去的程度。"
+        return (
+            f"膀胱里大约 {round(state.bladder)}%，尿色 {state.urine_color} 级；"
+            f"上次上厕所是 {_ago_or_never(state.last_toilet_at, now)}。{tail}"
+        )
+    if key == "kidney":
+        return (
+            f"水分 {round(state.hydration)}%，钠 {round(state.sodium)}，"
+            f"咖啡因 {round(state.caffeine)}；水少、盐多或咖啡喝多了，"
+            f"这个负担会慢慢升上来，喝水后会降。"
+        )
+    if key == "liver":
+        return (
+            f"长期饮食质量 {round(state.diet_long)}，最近消化不适 "
+            f"{round(state.indigestion)}，口味偏咸 {round(state.sodium)}；"
+            f"油糖多、胃里胀的时候它最忙。"
+        )
+    if key == "uterus":
+        if view is None:
+            return "现在没有可用的周期数据。"
+        return (
+            f"周期第 {view.day} 天（{PHASE_LABELS.get(view.phase, view.phase)}），"
+            f"充血 {round(state.uterine_congestion)}；经量 {view.flow} 级，"
+            f"痛经 {view.cramps} 级。经期和孕期最涨，卵泡期最松。"
+        )
+    if key == "ovaries":
+        if view is None:
+            return "现在没有可用的周期数据。"
+        if view.anovulatory:
+            return "这个周期没有排卵，卵泡没有长成，孕激素不会升高。"
+        return (
+            f"{PHASE_LABELS.get(view.phase, view.phase)}：雌激素 "
+            f"{round(view.estrogen)}，孕激素 {round(view.progesterone)}，"
+            f"LH {round(view.lh)}。"
+        )
+    if key == "rectum":
+        return (
+            f"肠道里还有 {round(state.gut)} 的内容，其中约 {round(state.rectum)} "
+            f"已经到了直肠；上次排便是 {_ago_or_never(state.last_bowel_at, now)}。"
+            f"直肠装到一半以上才会有明显便意。"
+        )
+    if key == "urethra":
+        return (
+            f"尿道刺激 {round(state.urethra_irritation)}：尿色 {state.urine_color} 级、"
+            f"水分 {round(state.hydration)}、咖啡因 {round(state.caffeine)}；"
+            f"上次排尿是 {_ago_or_never(state.last_toilet_at, now)}，喝水能把它冲淡。"
+        )
+    if key == "anus":
+        return (
+            f"肛门刺激 {round(state.anus_irritation)}：上次排便是 "
+            f"{_ago_or_never(state.last_bowel_at, now)}；便干、缺水或擦得频繁时会更高，"
+            f"洗澡会明显压下去。"
+        )
+    return ""
+
+
+def _mouth_detail(state: BodyState, now: datetime, key: str) -> str:
+    """Return the long explanation for one mouth row."""
+    if key == "plaque":
+        return (
+            f"牙菌斑 {round(state.plaque)}：口腔脏度 {round(state.oral)}，"
+            f"上次刷牙是 {_ago_or_never(state.last_brush_at, now)}；刷牙会直接清零，"
+            f"之后大约 12 小时重新长回来一半。"
+        )
+    if key == "gum":
+        return (
+            f"牙龈刺激 {round(state.gum_irritation)}：菌斑多、缺水或生病时会上升，"
+            f"刷牙能缓解一点，但不会一次就消失。"
+        )
+    if key == "tongue":
+        return (
+            f"舌苔 {round(state.tongue_coat)}：消化不适 {round(state.indigestion)}，"
+            f"长期饮食质量 {round(state.diet_long)}"
+            + ("，最近还在生病" if state.illness else "")
+            + "；刷牙会刮掉一部分。"
+        )
+    if key == "saliva":
+        return (
+            f"唾液 {round(state.saliva)}：水分 {round(state.hydration)}，"
+            f"口干 {round(state.dry_mouth)}，咖啡因 {round(state.caffeine)}"
+            + ("，还在睡" if state.sleeping else "")
+            + "；喝水会很快回升。"
+        )
+    if key == "throat":
+        return (
+            f"咽部刺激 {round(state.throat)}：口干、生病和咖啡因一起推高，"
+            f"喝水会降一点。"
+        )
+    return ""
+
+
+def _anatomy_rows(
+    state: BodyState,
+    view: CycleView,
+    profile: Profile,
+) -> list[dict[str, Any]]:
+    """Build the clickable anatomy rows for the body-status page."""
+    arousal = _arousal_value(state, view)
+    hair = (
+        "剃光"
+        if view.pubic_hair == "shaved"
+        else PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair)
+        + " · "
+        + PUBIC_STYLE_LABELS.get(view.pubic_hair_style, view.pubic_hair_style)
+    )
+    areola = (
+        AREOLA_LABELS.get(view.areola, view.areola)
+        + " · "
+        + AREOLA_TINT_LABELS.get(view.areola_tint, view.areola_tint)
+        + (" · 蒙氏腺明显" if view.montgomery else "")
+    )
+    return [
+        {
+            "key": "vulva",
+            "label": "外阴",
+            "text": "大阴唇"
+            + LABIA_MAJORA_LABELS.get(view.labia_majora, "")
+            + " · 小阴唇"
+            + LABIA_MINORA_LABELS.get(view.labia_minora, "")
+            + " · 阴蒂"
+            + CLITORIS_LABELS.get(view.clitoris, "")
+            + " · 前庭"
+            + VESTIBULE_LABELS.get(view.vestibule, "")
+            + " · 会阴"
+            + PERINEUM_LABELS.get(view.perineum, ""),
+            "detail": (
+                f"唤起度 {round(arousal)}（湿润 {round(state.wetness)}、"
+                f"性欲 {round(state.libido)}，加上周期加成）；"
+                f"大阴唇、小阴唇和阴蒂会随之充血、外露，前庭变湿，"
+                f"经期和孕期会更容易泛红。"
+            ),
+        },
+        {
+            "key": "vagina",
+            "label": "阴道",
+            "text": VAGINA_TONE_LABELS.get(view.vagina_tone, "")
+            + " · "
+            + VAGINA_WARMTH_LABELS.get(view.vagina_warmth, "")
+            + " · "
+            + VAGINA_OPEN_LABELS.get(view.vagina_open, ""),
+            "detail": (
+                f"张力、温度和开合跟着唤起度和孕产状态走："
+                f"现在唤起度 {round(arousal)}，"
+                + (
+                    "孕期/哺乳期会更软更松。"
+                    if state.lactating or view.weeks >= 12
+                    else "平时是收着的。"
+                )
+            ),
+        },
+        {
+            "key": "pubic_hair",
+            "label": "阴毛",
+            "text": hair,
+            "detail": (
+                f"密度和样式是该人格固定的外观（当前 {hair}），"
+                f"不会因为换天或换状态改变；"
+                f"设置里的 PUBIC_HAIR 可以强制成无毛、稀疏或浓密。"
+            ),
+        },
+        {
+            "key": "areola",
+            "label": "乳晕",
+            "text": areola,
+            "detail": (
+                "大小和色调来自该人格的体质；孕期满 12 周和哺乳期会变大变深，"
+                "蒙氏腺是否明显也是个体差异。"
+            ),
+        },
+        {
+            "key": "nipple",
+            "label": "乳头",
+            "text": NIPPLE_LABELS.get(view.nipple, view.nipple),
+            "detail": (
+                f"唤起度 {round(arousal)}"
+                + ("，现在挺着。" if view.nipple == "erect" else "，现在软着。")
+                + "哺乳时也会更敏感。"
+            ),
+        },
+    ]
+
+
 def build_web_state(
     state: BodyState,
     now: datetime,
@@ -2121,36 +2394,8 @@ def build_web_state(
     anatomy = None
     if view is not None:
         anatomy = {
-            "labia_majora_label": LABIA_MAJORA_LABELS.get(
-                view.labia_majora, view.labia_majora
-            ),
-            "labia_minora_label": LABIA_MINORA_LABELS.get(
-                view.labia_minora, view.labia_minora
-            ),
-            "clitoris_label": CLITORIS_LABELS.get(view.clitoris, view.clitoris),
-            "vestibule_label": VESTIBULE_LABELS.get(view.vestibule, view.vestibule),
-            "perineum_label": PERINEUM_LABELS.get(view.perineum, view.perineum),
-            "vagina_tone_label": VAGINA_TONE_LABELS.get(
-                view.vagina_tone, view.vagina_tone
-            ),
-            "vagina_warmth_label": VAGINA_WARMTH_LABELS.get(
-                view.vagina_warmth, view.vagina_warmth
-            ),
-            "vagina_open_label": VAGINA_OPEN_LABELS.get(
-                view.vagina_open, view.vagina_open
-            ),
+            "rows": _anatomy_rows(state, view, profile),
             "pubic_hair": view.pubic_hair,
-            "pubic_hair_label": PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair),
-            "pubic_hair_style": view.pubic_hair_style,
-            "pubic_hair_style_label": PUBIC_STYLE_LABELS.get(
-                view.pubic_hair_style, view.pubic_hair_style
-            ),
-            "areola_label": AREOLA_LABELS.get(view.areola, view.areola),
-            "areola_tint_label": AREOLA_TINT_LABELS.get(
-                view.areola_tint, view.areola_tint
-            ),
-            "nipple_label": NIPPLE_LABELS.get(view.nipple, view.nipple),
-            "montgomery": bool(view.montgomery),
         }
 
     mouth = None
@@ -2195,6 +2440,8 @@ def build_web_state(
                 else ("warn" if state.throat >= 25 else "ok"),
             },
         }
+        for mouth_key in mouth:
+            mouth[mouth_key]["detail"] = _mouth_detail(state, now, mouth_key)
 
     intimacy = None
     if settings.enable_intimate and profile.gender == "female":
@@ -2411,6 +2658,10 @@ def build_web_state(
     for item in details:
         item["group"] = detail_groups.get(str(item.get("key") or ""), "其他")
 
+    organ_list = organ_rows(state, view)
+    for row in organ_list:
+        row["detail"] = _organ_detail(state, view, now, str(row.get("key") or ""))
+
     return {
         "id": profile.persona_id,
         "name": profile.name,
@@ -2425,7 +2676,7 @@ def build_web_state(
         "cycle": cycle,
         "anatomy": anatomy,
         "mouth": mouth,
-        "organs": organ_rows(state, view),
+        "organs": organ_list,
         "scents": _scent_rows(state, view, profile, now, settings),
         "intimacy": intimacy,
         "lactation": lactation,

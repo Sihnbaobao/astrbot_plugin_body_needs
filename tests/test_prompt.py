@@ -430,17 +430,15 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
         "anus",
     }
     anatomy = payload["anatomy"]
-    assert anatomy["labia_majora_label"]
-    assert anatomy["labia_minora_label"]
-    assert anatomy["clitoris_label"]
-    assert anatomy["vestibule_label"]
-    assert anatomy["perineum_label"]
-    assert anatomy["vagina_tone_label"]
-    assert anatomy["vagina_warmth_label"]
-    assert anatomy["vagina_open_label"]
+    labels = [row["label"] for row in anatomy["rows"]]
+    assert labels == ["外阴", "阴道", "阴毛", "乳晕", "乳头"]
+    assert all(row["detail"] for row in anatomy["rows"])
     mouth = payload["mouth"]
     assert set(mouth) == {"plaque", "gum", "tongue", "saliva", "throat"}
     assert mouth["saliva"]["level"]
+    assert all(row["detail"] for row in mouth.values())
+    assert all(row["detail"] for row in payload["organs"])
+    assert all(row["detail"] for row in payload["scents"])
     scents = {row["key"]: row for row in payload["scents"]}
     assert {"scent", "scalp", "breath", "foot", "period", "intimate"} <= set(scents)
 

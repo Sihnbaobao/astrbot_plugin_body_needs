@@ -460,6 +460,21 @@ function renderSleep(persona) {
   host.appendChild(facts);
 }
 
+function infoRow(row) {
+  const line = document.createElement("div");
+  line.appendChild(make("dt", "", row.label || ""));
+  const dd = make("dd", "", row.text || "");
+  if (row.note) dd.title = row.note;
+  line.appendChild(dd);
+  if (row.detail) {
+    line.classList.add("clickable");
+    line.addEventListener("click", function () {
+      openInfo(row.label || "详情", row.text || "", row.detail);
+    });
+  }
+  return line;
+}
+
 function bodyBlock(title, rows) {
   const list = (rows || []).filter(Boolean);
   if (!list.length) return null;
@@ -467,15 +482,17 @@ function bodyBlock(title, rows) {
   block.appendChild(make("h3", "body-block-title", title));
   const facts = make("dl", "facts");
   list.forEach(function (row) {
-    const line = document.createElement("div");
-    line.appendChild(make("dt", "", row.label || ""));
-    const dd = make("dd", "", row.text || "");
-    if (row.note) dd.title = row.note;
-    line.appendChild(dd);
-    facts.appendChild(line);
+    facts.appendChild(infoRow(row));
   });
   block.appendChild(facts);
   return block;
+}
+
+function openInfo(title, subtitle, detail) {
+  el("infoTitle").textContent = title;
+  el("infoSubtitle").textContent = subtitle || "";
+  el("infoDetail").textContent = detail || "";
+  el("infoDialog").showModal();
 }
 
 function renderBodyStatus(persona) {
@@ -488,50 +505,13 @@ function renderBodyStatus(persona) {
       label: row.label || "",
       text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
       note: row.note,
+      detail: row.detail,
     };
   });
   blocks.push(bodyBlock("器官", organRows));
 
   const a = persona.anatomy;
-  if (a) {
-    const hair =
-      a.pubic_hair === "shaved"
-        ? "剃光"
-        : (a.pubic_hair_label || "") +
-          (a.pubic_hair_style_label ? " · " + a.pubic_hair_style_label : "");
-    blocks.push(
-      bodyBlock("下体", [
-        {
-          label: "外阴",
-          text:
-            "大阴唇" + (a.labia_majora_label || "—") +
-            " · 小阴唇" + (a.labia_minora_label || "—") +
-            " · 阴蒂" + (a.clitoris_label || "—") +
-            " · 前庭" + (a.vestibule_label || "—") +
-            " · 会阴" + (a.perineum_label || "—"),
-        },
-        {
-          label: "阴道",
-          text:
-            (a.vagina_tone_label || "—") +
-            " · " +
-            (a.vagina_warmth_label || "—") +
-            " · " +
-            (a.vagina_open_label || "—"),
-        },
-        { label: "阴毛", text: hair },
-        {
-          label: "乳晕",
-          text:
-            (a.areola_label || "—") +
-            " · " +
-            (a.areola_tint_label || "—") +
-            (a.montgomery ? " · 蒙氏腺明显" : ""),
-        },
-        { label: "乳头", text: a.nipple_label || "—" },
-      ]),
-    );
-  }
+  if (a && a.rows) blocks.push(bodyBlock("下体", a.rows));
 
   const mouth = persona.mouth;
   if (mouth) {
@@ -543,6 +523,7 @@ function renderBodyStatus(persona) {
           return {
             label: row.label || key,
             text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
+            detail: row.detail,
           };
         }),
       ),
@@ -571,16 +552,13 @@ function renderScents(persona) {
   host.replaceChildren();
   const facts = make("dl", "facts");
   rows.forEach(function (row) {
-    const line = document.createElement("div");
-    line.appendChild(make("dt", "", row.label || ""));
-    line.appendChild(
-      make(
-        "dd",
-        "",
-        (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
-      ),
+    facts.appendChild(
+      infoRow({
+        label: row.label || "",
+        text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
+        detail: row.detail,
+      }),
     );
-    facts.appendChild(line);
   });
   host.appendChild(facts);
 }
@@ -1644,6 +1622,7 @@ function setTab(name) {
     tab.classList.toggle("active", tab.dataset.tab === name);
   });
   el("panel-live").hidden = name !== "live";
+  el("panel-body").hidden = name !== "body";
   el("panel-fertility").hidden = name !== "fertility";
   el("panel-settings").hidden = name !== "settings";
   if (state.fertilityAnim) {
@@ -1665,6 +1644,12 @@ function bind() {
   });
   el("moreDialog").addEventListener("click", function (event) {
     if (event.target === el("moreDialog")) el("moreDialog").close();
+  });
+  el("closeInfo").addEventListener("click", function () {
+    el("infoDialog").close();
+  });
+  el("infoDialog").addEventListener("click", function (event) {
+    if (event.target === el("infoDialog")) el("infoDialog").close();
   });
   document.querySelectorAll("#tabs [data-tab]").forEach(function (tab) {
     tab.addEventListener("click", function () {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>身体 · 生理需求</title>
-    <link rel="stylesheet" href="./style.css?v=28" />
+    <link rel="stylesheet" href="./style.css?v=29" />
     <link rel="stylesheet" href="./theme.css?v=9" />
   </head>
   <body>
@@ -27,6 +27,7 @@
 
     <nav class="tabs" id="tabs" aria-label="页面">
       <button class="tab active" type="button" data-tab="live">现在</button>
+      <button class="tab" type="button" data-tab="body">身体</button>
       <button class="tab" type="button" data-tab="fertility" id="fertilityTab" hidden>周期</button>
       <button class="tab" type="button" data-tab="settings">设置</button>
     </nav>
@@ -68,22 +69,6 @@
               <div id="sleepBody"></div>
             </section>
 
-            <section class="card organ-card" id="bodyCard" hidden>
-              <div class="card-head">
-                <h2>身体状态</h2>
-                <span class="hint">器官、下体与口腔的细节</span>
-              </div>
-              <div id="bodyBody"></div>
-            </section>
-
-            <section class="card scent-card" id="scentCard" hidden>
-              <div class="card-head">
-                <h2>体味</h2>
-                <span class="hint">分来源看</span>
-              </div>
-              <div id="scentBody"></div>
-            </section>
-
             <section class="card cycle-card" id="maleCard" hidden>
               <div class="card-head">
                 <h2>成年男性</h2>
@@ -116,6 +101,29 @@
           </div>
         </div>
 
+      </section>
+
+      <section class="panel" id="panel-body" hidden>
+        <div class="grid two-col">
+          <div class="col">
+            <section class="card organ-card" id="bodyCard" hidden>
+              <div class="card-head">
+                <h2>身体状态</h2>
+                <span class="hint">点一项看细节</span>
+              </div>
+              <div id="bodyBody"></div>
+            </section>
+          </div>
+          <div class="col">
+            <section class="card scent-card" id="scentCard" hidden>
+              <div class="card-head">
+                <h2>体味</h2>
+                <span class="hint">点一项看来源</span>
+              </div>
+              <div id="scentBody"></div>
+            </section>
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="panel-fertility" hidden>
@@ -196,8 +204,9 @@
             <div>
               <h3>器官与体味</h3>
               <p>
-                “器官负荷”是水分、盐、咖啡因、饮食和周期共同推出来的慢代理，不是化验值；
-                体味按头皮、口气、脚、经期、哺乳和事后分开看，洗澡和刷牙只压掉对应的来源。
+                「身体」页里的器官、下体、口腔和体味都可以点开看细节：数值只是结论，
+                弹窗里会写清楚是什么在推着它（水分、盐、咖啡因、周期、上次洗澡/刷牙等）。
+                这些是虚构的代理值，不是化验结果。
               </p>
             </div>
             <div>
@@ -223,11 +232,22 @@
       <div class="inner-stats dialog-stats" id="innerStats"></div>
     </dialog>
 
+    <dialog class="detail-dialog" id="infoDialog" aria-labelledby="infoTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="infoTitle">详情</h2>
+          <p id="infoSubtitle"></p>
+        </div>
+        <button class="btn ghost" id="closeInfo" type="button">关闭</button>
+      </div>
+      <p class="info-detail" id="infoDetail"></p>
+    </dialog>
+
     <footer>
       身体状态由 astrbot_plugin_body_needs 维护 · TA 不会因为数值而被迫说话
     </footer>
 
     <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
-    <script type="module" src="./app.js?v=60"></script>
+    <script type="module" src="./app.js?v=61"></script>
   </body>
 </html>

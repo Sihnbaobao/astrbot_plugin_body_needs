@@ -3092,3 +3092,21 @@ footer {
   letter-spacing: 0.08em;
   opacity: 0.66;
 }
+
+/* 身体状态 / 体味：可点击的行与详情弹窗 */
+.facts > div.clickable {
+  cursor: pointer;
+}
+
+.facts > div.clickable:hover dd,
+.facts > div.clickable:focus dd {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.info-detail {
+  margin: 4px 0 0;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  font-size: 14px;
+}
