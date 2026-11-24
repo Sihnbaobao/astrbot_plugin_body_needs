@@ -435,7 +435,8 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
         "大阴唇",
         "小阴唇",
         "阴蒂",
-        "前庭",
+        "尿道口",
+        "阴道口",
         "会阴",
         "阴道",
         "阴毛",
@@ -533,7 +534,7 @@ def test_private_scent_lines_cover_the_new_sources() -> None:
     state.nipple_scent = 45.0
     block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
     assert "腋下：" in block
-    assert "下面：" in block
+    assert "小穴：" in block
     assert "肛门：" in block
     assert "胸前：" in block
 
@@ -546,7 +547,8 @@ def test_anatomy_rows_carry_appearance_detail() -> None:
         "labia_majora",
         "labia_minora",
         "clitoris",
-        "vestibule",
+        "urethra_opening",
+        "vagina_opening",
         "perineum",
         "vagina",
         "pubic_hair",

@@ -437,7 +437,7 @@ def wetness_label(value: float) -> str:
     if value >= 45:
         return "内裤有点潮"
     if value >= 20:
-        return "下面有点湿，身体发热"
+        return "小穴有点湿，身体发热"
     return ""
 
 
@@ -1136,15 +1136,15 @@ def _genital_text(view: CycleView) -> str:
     major = LABIA_MAJORA_LABELS.get(view.labia_majora, view.labia_majora)
     minor = LABIA_MINORA_LABELS.get(view.labia_minora, view.labia_minora)
     clitoris = CLITORIS_LABELS.get(view.clitoris, view.clitoris)
-    vestibule = VESTIBULE_LABELS.get(view.vestibule, view.vestibule)
+    opening = VESTIBULE_LABELS.get(view.vestibule, view.vestibule)
     perineum = PERINEUM_LABELS.get(view.perineum, view.perineum)
     tone = VAGINA_TONE_LABELS.get(view.vagina_tone, view.vagina_tone)
     warmth = VAGINA_WARMTH_LABELS.get(view.vagina_warmth, view.vagina_warmth)
     opened = VAGINA_OPEN_LABELS.get(view.vagina_open, view.vagina_open)
     return (
-        f"外阴：大阴唇{major}、小阴唇{minor}、阴蒂{clitoris}、"
-        f"前庭{vestibule}、会阴{perineum}；"
-        f"阴道：{tone}、{warmth}、{opened}。"
+        f"外阴：大阴唇{major}、小阴唇{minor}、阴蒂{clitoris}、会阴{perineum}；"
+        f"阴道口{opening}、{opened}；"
+        f"阴道：{tone}、{warmth}。"
     )
 
 
@@ -1510,7 +1510,7 @@ def _scent_lines(
     if state.underarm_scent >= 45.0:
         lines.append("腋下：抬一下手就能闻到一点汗味。")
     if profile.gender == "female" and state.vulva_scent >= 35.0:
-        lines.append("下面：有一点自己的味道，混着湿润感，洗一下会淡。")
+        lines.append("小穴：有一点自己的味道，混着湿润感，洗一下会淡。")
     if state.anus_scent >= 35.0:
         lines.append("肛门：刚排过，还有点味道。")
     if state.nipple_scent >= 40.0:
@@ -2136,6 +2136,9 @@ def _anatomy_rows(
     perineum_color = (
         "有点发红" if view.flow > 0 else ("浅粉" if arousal < 60.0 else "泛粉")
     )
+    urethra_color = (
+        "泛红" if state.urethra_irritation >= 30.0 or arousal >= 70.0 else "淡粉"
+    )
 
     hair = (
         "剃光"
@@ -2201,11 +2204,28 @@ def _anatomy_rows(
             ),
         },
         {
-            "key": "vestibule",
-            "label": "前庭",
-            "text": VESTIBULE_LABELS.get(view.vestibule, "") + " · " + vestibule_color,
+            "key": "urethra_opening",
+            "label": "尿道口",
+            "text": urethra_color
+            + " · "
+            + ("湿润" if state.wetness >= 45.0 else "偏干"),
             "detail": (
-                f"前庭现在 {VESTIBULE_LABELS.get(view.vestibule, '')}、{vestibule_color}；"
+                f"尿道口在阴蒂下方、阴道口上方；现在{urethra_color}，"
+                f"尿道刺激 {round(state.urethra_irritation)}。"
+                f"唤起和排尿后会短暂泛红，尿色深、喝水少时刺激感更明显。"
+            ),
+        },
+        {
+            "key": "vagina_opening",
+            "label": "阴道口",
+            "text": VESTIBULE_LABELS.get(view.vestibule, "")
+            + " · "
+            + vestibule_color
+            + " · "
+            + VAGINA_OPEN_LABELS.get(view.vagina_open, ""),
+            "detail": (
+                f"阴道口被小阴唇包着；现在 {VESTIBULE_LABELS.get(view.vestibule, '')}，"
+                f"颜色{vestibule_color}，{VAGINA_OPEN_LABELS.get(view.vagina_open, '')}。"
                 f"湿润来自唤起、排卵和分泌物，经期会泛红。"
             ),
         },
