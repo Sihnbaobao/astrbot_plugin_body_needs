@@ -1314,9 +1314,7 @@ def build_prompt_block(
         if male:
             lines.append(male)
         if state.libido >= 60:
-            lines.append(
-                "性欲：身体很想要；这种事她心里清楚，不用对任何人说，也不用在聊天里解释。"
-            )
+            lines.append("性欲：身体很想要；这种事她心里清楚，不用对任何人说。")
         elif state.libido >= 35:
             lines.append(
                 f"性欲：{libido_label(state.libido)}（私密，只在合适的时候自然流露）"
