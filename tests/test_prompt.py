@@ -429,14 +429,18 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
         "urethra",
         "anus",
     }
-    assert cycle["labia_majora"] in {"plump", "full", "parted"}
-    assert cycle["labia_minora"] in {"tucked", "peek", "flared"}
-    assert cycle["clitoris"] in {"hidden", "peek", "engorged"}
-    assert cycle["vestibule"] in {"dry", "damp", "glossy", "red"}
-    assert cycle["perineum"] in {"normal", "warm", "tender"}
-    assert cycle["vagina_tone"] in {"firm", "soft", "yielding", "thin"}
-    assert cycle["vagina_warmth"] in {"warm", "hot"}
-    assert cycle["vagina_open"] in {"closed", "parted", "open"}
+    anatomy = payload["anatomy"]
+    assert anatomy["labia_majora_label"]
+    assert anatomy["labia_minora_label"]
+    assert anatomy["clitoris_label"]
+    assert anatomy["vestibule_label"]
+    assert anatomy["perineum_label"]
+    assert anatomy["vagina_tone_label"]
+    assert anatomy["vagina_warmth_label"]
+    assert anatomy["vagina_open_label"]
+    mouth = payload["mouth"]
+    assert set(mouth) == {"plaque", "gum", "tongue", "saliva", "throat"}
+    assert mouth["saliva"]["level"]
     scents = {row["key"]: row for row in payload["scents"]}
     assert {"scent", "scalp", "breath", "foot", "period", "intimate"} <= set(scents)
 

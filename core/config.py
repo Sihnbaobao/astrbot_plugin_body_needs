@@ -14,6 +14,7 @@ from typing import Any
 
 CONTRACEPTIONS = ("none", "condom", "pill")
 GENDERS = ("auto", "female", "male", "none")
+PUBIC_HAIRS = ("auto", "none", "sparse", "medium", "bushy")
 GROUP_DETAILS = ("basic", "full")
 INTENSITIES = ("subtle", "natural", "strong")
 
@@ -76,6 +77,8 @@ class Settings:
         group_detail: How much body detail a group chat may see.
         intensity: How strongly the prompt block is phrased.
         enable_cycle: Track the menstrual cycle.
+        pubic_hair: auto reads the persona constitution; anything else pins the
+            look (none = 白虎 / naturally hairless).
         enable_intimate: Track intimate physiology; needs a resolvable gender
             and a private chat, and never depends on age.
         enable_away: Let a private self-release briefly suppress replies.
@@ -105,6 +108,7 @@ class Settings:
     group_detail: str = "basic"
     intensity: str = "natural"
     enable_cycle: bool = True
+    pubic_hair: str = "auto"
     enable_intimate: bool = True
     enable_away: bool = False
     enable_pregnancy: bool = True
@@ -167,6 +171,7 @@ class Settings:
             group_detail=_choice(get("GROUP_DETAIL", "basic"), GROUP_DETAILS, "basic"),
             intensity=_choice(get("INTENSITY", "natural"), INTENSITIES, "natural"),
             enable_cycle=_as_bool(get("ENABLE_CYCLE", True), True),
+            pubic_hair=_choice(get("PUBIC_HAIR", "auto"), PUBIC_HAIRS, "auto"),
             enable_intimate=_as_bool(get("ENABLE_INTIMATE", True), True),
             enable_away=_as_bool(get("ENABLE_AWAY", False), False),
             enable_pregnancy=_as_bool(get("ENABLE_PREGNANCY", True), True),

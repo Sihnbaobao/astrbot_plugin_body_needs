@@ -138,6 +138,7 @@ CONFIG_SPEC: dict[str, tuple[str, type]] = {
     "GROUP_DETAIL": ("group_detail", str),
     "INTENSITY": ("intensity", str),
     "ENABLE_CYCLE": ("enable_cycle", bool),
+    "PUBIC_HAIR": ("pubic_hair", str),
     "ENABLE_INTIMATE": ("enable_intimate", bool),
     "ENABLE_AWAY": ("enable_away", bool),
     "ENABLE_PREGNANCY": ("enable_pregnancy", bool),
@@ -157,6 +158,7 @@ CONFIG_OPTIONS: dict[str, tuple[str, ...]] = {
     "GROUP_DETAIL": ("basic", "full"),
     "INTENSITY": ("subtle", "natural", "strong"),
     "CONTRACEPTION": ("none", "condom", "pill"),
+    "PUBIC_HAIR": ("auto", "none", "sparse", "medium", "bushy"),
 }
 CONFIG_RANGES: dict[str, tuple[int, int]] = {
     "AGE": (0, 100000),

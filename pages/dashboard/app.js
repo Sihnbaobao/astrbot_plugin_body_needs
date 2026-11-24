@@ -45,6 +45,7 @@ const CONFIG_FIELDS = [
   {
     group: "私密生理",
     fields: [
+      { key: "PUBIC_HAIR", label: "阴毛外观", type: "select", options: ["auto", "none", "sparse", "medium", "bushy"], optionLabels: { auto: "按人格", none: "无毛（白虎）", sparse: "稀疏", medium: "适中", bushy: "浓密" }, hint: "auto 由人格体质决定，多数角色无毛；也可以强制无毛或指定疏密。只是外观，不影响任何功能。" },
       { key: "ENABLE_INTIMATE", label: "启用私密生理", type: "bool", hint: "性欲与亲密记录；需要能识别出性别，只在私聊生效。判定不看年龄。" },
       { key: "ENABLE_AWAY", label: "自慰后暂时不回消息", type: "bool", hint: "私聊里自慰后的 4-12 分钟内不回复；关掉后照常回。" },
       { key: "ENABLE_PREGNANCY", label: "启用怀孕", type: "bool", hint: "易孕期亲密有概率受孕；受孕后停经并按孕周推进。判定不看年龄。" },
@@ -459,39 +460,103 @@ function renderSleep(persona) {
   host.appendChild(facts);
 }
 
-function renderOrgans(persona) {
-  const card = el("organCard");
-  const rows = persona.organs || [];
-  if (!rows.length) {
-    card.hidden = true;
-    return;
-  }
-  card.hidden = false;
-  const host = el("organBody");
-  host.replaceChildren();
+function bodyBlock(title, rows) {
+  const list = (rows || []).filter(Boolean);
+  if (!list.length) return null;
+  const block = make("div", "body-block");
+  block.appendChild(make("h3", "body-block-title", title));
   const facts = make("dl", "facts");
-  rows.forEach(function (row) {
+  list.forEach(function (row) {
     const line = document.createElement("div");
     line.appendChild(make("dt", "", row.label || ""));
-    const dd = make(
-      "dd",
-      "",
-      (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
-    );
+    const dd = make("dd", "", row.text || "");
     if (row.note) dd.title = row.note;
     line.appendChild(dd);
     facts.appendChild(line);
   });
-  host.appendChild(facts);
-  const notes = rows
-    .filter(function (row) {
-      return row.note && (row.tone !== "ok" || Number(row.value) >= 50);
-    })
-    .map(function (row) {
-      return row.label + "：" + row.note;
-    })
-    .join("；");
-  if (notes) host.appendChild(make("p", "cycle-note", notes));
+  block.appendChild(facts);
+  return block;
+}
+
+function renderBodyStatus(persona) {
+  const card = el("bodyCard");
+  if (!card) return;
+  const blocks = [];
+
+  const organRows = (persona.organs || []).map(function (row) {
+    return {
+      label: row.label || "",
+      text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
+      note: row.note,
+    };
+  });
+  blocks.push(bodyBlock("器官", organRows));
+
+  const a = persona.anatomy;
+  if (a) {
+    const hair =
+      a.pubic_hair === "shaved"
+        ? "剃光"
+        : (a.pubic_hair_label || "") +
+          (a.pubic_hair_style_label ? " · " + a.pubic_hair_style_label : "");
+    blocks.push(
+      bodyBlock("下体", [
+        {
+          label: "外阴",
+          text:
+            "大阴唇" + (a.labia_majora_label || "—") +
+            " · 小阴唇" + (a.labia_minora_label || "—") +
+            " · 阴蒂" + (a.clitoris_label || "—") +
+            " · 前庭" + (a.vestibule_label || "—") +
+            " · 会阴" + (a.perineum_label || "—"),
+        },
+        {
+          label: "阴道",
+          text:
+            (a.vagina_tone_label || "—") +
+            " · " +
+            (a.vagina_warmth_label || "—") +
+            " · " +
+            (a.vagina_open_label || "—"),
+        },
+        { label: "阴毛", text: hair },
+        {
+          label: "乳晕",
+          text:
+            (a.areola_label || "—") +
+            " · " +
+            (a.areola_tint_label || "—") +
+            (a.montgomery ? " · 蒙氏腺明显" : ""),
+        },
+        { label: "乳头", text: a.nipple_label || "—" },
+      ]),
+    );
+  }
+
+  const mouth = persona.mouth;
+  if (mouth) {
+    blocks.push(
+      bodyBlock(
+        "口腔",
+        Object.keys(mouth).map(function (key) {
+          const row = mouth[key];
+          return {
+            label: row.label || key,
+            text: (row.level || "") + " · " + Math.round(Number(row.value) || 0) + "%",
+          };
+        }),
+      ),
+    );
+  }
+
+  const visible = blocks.filter(Boolean);
+  if (!visible.length) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const host = el("bodyBody");
+  host.replaceChildren.apply(host, visible);
 }
 
 function renderScents(persona) {
@@ -558,39 +623,9 @@ function renderCycle(persona) {
         " · " +
         (cycle.cervix_open ? "微张" : "闭合"),
     ]);
-    rows.push([
-      "外阴",
-      "大阴唇" +
-        (cycle.labia_majora_label || "—") +
-        " · 小阴唇" +
-        (cycle.labia_minora_label || "—") +
-        " · 阴蒂" +
-        (cycle.clitoris_label || "—") +
-        " · 前庭" +
-        (cycle.vestibule_label || "—") +
-        " · 会阴" +
-        (cycle.perineum_label || "—"),
-    ]);
-    rows.push([
-      "阴道",
-      (cycle.vagina_tone_label || "—") +
-        " · " +
-        (cycle.vagina_warmth_label || "—") +
-        " · " +
-        (cycle.vagina_open_label || "—"),
-    ]);
     if (cycle.breast_fullness_label) {
       rows.push(["乳房", cycle.breast_fullness_label]);
     }
-    rows.push(["阴毛", (cycle.pubic_hair_label || "—") +
-      (cycle.pubic_hair === "shaved"
-        ? ""
-        : " · " + (cycle.pubic_hair_style_label || "—"))]);
-    rows.push(["乳晕", (cycle.areola_label || "—") +
-        " · " +
-        (cycle.areola_tint_label || "—") +
-        (cycle.montgomery ? " · 蒙氏腺明显" : "")]);
-    rows.push(["乳头", cycle.nipple_label || "—"]);
     if (cycle.race) {
       rows.push([
         "种族",
@@ -676,38 +711,8 @@ function renderCycle(persona) {
         " · " +
         (cycle.cervix_open ? "微张" : "闭合"),
     ],
-    [
-      "外阴",
-      "大阴唇" +
-        (cycle.labia_majora_label || "—") +
-        " · 小阴唇" +
-        (cycle.labia_minora_label || "—") +
-        " · 阴蒂" +
-        (cycle.clitoris_label || "—") +
-        " · 前庭" +
-        (cycle.vestibule_label || "—") +
-        " · 会阴" +
-        (cycle.perineum_label || "—"),
-    ],
-    [
-      "阴道",
-      (cycle.vagina_tone_label || "—") +
-        " · " +
-        (cycle.vagina_warmth_label || "—") +
-        " · " +
-        (cycle.vagina_open_label || "—"),
-    ],
     ["盆腔", cycle.pelvic_pressure_label || "—"],
     ["乳房", cycle.breast_fullness_label || "—"],
-    ["阴毛", (cycle.pubic_hair_label || "—") +
-      (cycle.pubic_hair === "shaved"
-        ? ""
-        : " · " + (cycle.pubic_hair_style_label || "—"))],
-    ["乳晕", (cycle.areola_label || "—") +
-        " · " +
-        (cycle.areola_tint_label || "—") +
-        (cycle.montgomery ? " · 蒙氏腺明显" : "")],
-    ["乳头", cycle.nipple_label || "—"],
     ["经前", symptomBits.length ? symptomBits.join("、") : "—"],
     [
       "血块",
@@ -1433,7 +1438,7 @@ function render(data) {
     el("events").replaceChildren(make("li", "empty", "还没有值得记下的事。"));
     el("eventCount").textContent = "";
     el("cycleCard").hidden = true;
-    el("organCard").hidden = true;
+    el("bodyCard").hidden = true;
     el("scentCard").hidden = true;
     el("maleCard").hidden = true;
     el("fertilityTab").hidden = true;
@@ -1445,7 +1450,7 @@ function render(data) {
   renderMeters(persona.meters);
   renderCare(persona.care, persona.now_minutes);
   renderSleep(persona);
-  renderOrgans(persona);
+  renderBodyStatus(persona);
   renderScents(persona);
   renderDetails(persona.details);
   renderLast(persona.last);

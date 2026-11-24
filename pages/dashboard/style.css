@@ -3077,3 +3077,18 @@ footer {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* 身体状态卡：器官 / 下体 / 口腔 分组 */
+.body-block + .body-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(127, 137, 148, 0.24);
+}
+
+.body-block-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.66;
+}

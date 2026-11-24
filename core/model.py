@@ -230,7 +230,10 @@ def constitution(persona_id: str) -> Constitution:
         self_rate=0.3 * (16.0 ** _roll(persona_id, "body", "release")),
         skin_oil_rate=0.65 + 0.7 * _roll(persona_id, "body", "skin-oil"),
         skin_clarity=55.0 + 35.0 * _roll(persona_id, "body", "skin-clarity"),
-        pubic_hair_density=0.15 + 0.85 * _roll(persona_id, "body", "pubic-density"),
+        # Biased low: most personas are naturally hairless (白虎), and the rest
+        # spread over sparse / medium / bushy. A config can override it.
+        pubic_hair_density=0.15
+        + 0.85 * _roll(persona_id, "body", "pubic-density") ** 1.6,
         pubic_hair_style=("natural", "trimmed", "landing_strip", "shaved")[
             int(_roll(persona_id, "body", "pubic-style") * 4)
         ],
@@ -2074,10 +2077,22 @@ def _endocrine_maturity(age: float | None, persona_id: str) -> tuple[float, str]
     return 1.0, "adult"
 
 
+def _pubic_hair_level(density: float) -> str:
+    """Return the hair level for a density; low values are naturally bare."""
+    if density < 0.35:
+        return "none"
+    if density < 0.55:
+        return "sparse"
+    if density < 0.78:
+        return "medium"
+    return "bushy"
+
+
 def _mucus_detail(
     state: BodyState,
     *,
     profile: Profile,
+    settings: Settings,
     estrogen: float,
     progesterone: float,
     phase: str,
@@ -2241,14 +2256,15 @@ def _mucus_detail(
     # constitution so two personas do not share one default body.
     const = constitution(profile.persona_id)
     pubic_hair_style = const.pubic_hair_style
+    pubic_hair = _pubic_hair_level(const.pubic_hair_density)
     if pubic_hair_style == "shaved":
         pubic_hair = "shaved"
-    elif const.pubic_hair_density < 0.35:
-        pubic_hair = "sparse"
-    elif const.pubic_hair_density < 0.7:
-        pubic_hair = "medium"
-    else:
-        pubic_hair = "bushy"
+    if settings.pubic_hair != "auto":
+        # A configured look wins over the seeded one, but "shaved" keeps its
+        # style label so the page can still say the hair was removed.
+        pubic_hair = settings.pubic_hair
+        if pubic_hair == "none":
+            pubic_hair_style = "none"
 
     areola_size = const.areola_size
     areola_tone = const.areola_tone
@@ -2324,6 +2340,7 @@ def cycle_view(
         detail = _mucus_detail(
             state,
             profile=profile,
+            settings=settings,
             estrogen=75.0,
             progesterone=80.0,
             phase="pregnant",
@@ -2361,6 +2378,7 @@ def cycle_view(
         detail = _mucus_detail(
             state,
             profile=profile,
+            settings=settings,
             estrogen=8.0,
             progesterone=3.0,
             phase="premenarche",
@@ -2394,6 +2412,7 @@ def cycle_view(
         detail = _mucus_detail(
             state,
             profile=profile,
+            settings=settings,
             estrogen=12.0,
             progesterone=3.0,
             phase="menopause",
@@ -2555,6 +2574,7 @@ def cycle_view(
     detail = _mucus_detail(
         state,
         profile=profile,
+        settings=settings,
         estrogen=estrogen,
         progesterone=progesterone,
         phase=phase,

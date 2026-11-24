@@ -2085,47 +2085,6 @@ def build_web_state(
                 view.cervix_firmness, view.cervix_firmness
             ),
             "cervix_open": view.cervix_open,
-            "labia_majora": view.labia_majora,
-            "labia_majora_label": LABIA_MAJORA_LABELS.get(
-                view.labia_majora, view.labia_majora
-            ),
-            "labia_minora": view.labia_minora,
-            "labia_minora_label": LABIA_MINORA_LABELS.get(
-                view.labia_minora, view.labia_minora
-            ),
-            "clitoris": view.clitoris,
-            "clitoris_label": CLITORIS_LABELS.get(view.clitoris, view.clitoris),
-            "vestibule": view.vestibule,
-            "vestibule_label": VESTIBULE_LABELS.get(view.vestibule, view.vestibule),
-            "perineum": view.perineum,
-            "perineum_label": PERINEUM_LABELS.get(view.perineum, view.perineum),
-            "vagina_tone": view.vagina_tone,
-            "vagina_tone_label": VAGINA_TONE_LABELS.get(
-                view.vagina_tone, view.vagina_tone
-            ),
-            "vagina_warmth": view.vagina_warmth,
-            "vagina_warmth_label": VAGINA_WARMTH_LABELS.get(
-                view.vagina_warmth, view.vagina_warmth
-            ),
-            "vagina_open": view.vagina_open,
-            "vagina_open_label": VAGINA_OPEN_LABELS.get(
-                view.vagina_open, view.vagina_open
-            ),
-            "pubic_hair": view.pubic_hair,
-            "pubic_hair_label": PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair),
-            "pubic_hair_style": view.pubic_hair_style,
-            "pubic_hair_style_label": PUBIC_STYLE_LABELS.get(
-                view.pubic_hair_style, view.pubic_hair_style
-            ),
-            "areola": view.areola,
-            "areola_label": AREOLA_LABELS.get(view.areola, view.areola),
-            "areola_tint": view.areola_tint,
-            "areola_tint_label": AREOLA_TINT_LABELS.get(
-                view.areola_tint, view.areola_tint
-            ),
-            "nipple": view.nipple,
-            "nipple_label": NIPPLE_LABELS.get(view.nipple, view.nipple),
-            "montgomery": bool(view.montgomery),
             "pelvic_pressure": view.pelvic_pressure,
             "pelvic_pressure_label": pelvic_label(view.pelvic_pressure),
             "breast_fullness": view.breast_fullness,
@@ -2157,6 +2116,84 @@ def build_web_state(
             "hot_flash": state.hot_flash_until > now.timestamp(),
             "spotting": view.spotting,
             "perimenopausal": view.perimenopausal,
+        }
+
+    anatomy = None
+    if view is not None:
+        anatomy = {
+            "labia_majora_label": LABIA_MAJORA_LABELS.get(
+                view.labia_majora, view.labia_majora
+            ),
+            "labia_minora_label": LABIA_MINORA_LABELS.get(
+                view.labia_minora, view.labia_minora
+            ),
+            "clitoris_label": CLITORIS_LABELS.get(view.clitoris, view.clitoris),
+            "vestibule_label": VESTIBULE_LABELS.get(view.vestibule, view.vestibule),
+            "perineum_label": PERINEUM_LABELS.get(view.perineum, view.perineum),
+            "vagina_tone_label": VAGINA_TONE_LABELS.get(
+                view.vagina_tone, view.vagina_tone
+            ),
+            "vagina_warmth_label": VAGINA_WARMTH_LABELS.get(
+                view.vagina_warmth, view.vagina_warmth
+            ),
+            "vagina_open_label": VAGINA_OPEN_LABELS.get(
+                view.vagina_open, view.vagina_open
+            ),
+            "pubic_hair": view.pubic_hair,
+            "pubic_hair_label": PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair),
+            "pubic_hair_style": view.pubic_hair_style,
+            "pubic_hair_style_label": PUBIC_STYLE_LABELS.get(
+                view.pubic_hair_style, view.pubic_hair_style
+            ),
+            "areola_label": AREOLA_LABELS.get(view.areola, view.areola),
+            "areola_tint_label": AREOLA_TINT_LABELS.get(
+                view.areola_tint, view.areola_tint
+            ),
+            "nipple_label": NIPPLE_LABELS.get(view.nipple, view.nipple),
+            "montgomery": bool(view.montgomery),
+        }
+
+    mouth = None
+    if settings.enable_hygiene:
+        mouth = {
+            "plaque": {
+                "label": "牙菌斑",
+                "value": round(state.plaque, 1),
+                "level": plaque_label(state.plaque),
+                "tone": "hot"
+                if state.plaque >= 70
+                else ("warn" if state.plaque >= 45 else "ok"),
+            },
+            "gum": {
+                "label": "牙龈",
+                "value": round(state.gum_irritation, 1),
+                "level": gum_label(state.gum_irritation),
+                "tone": "hot"
+                if state.gum_irritation >= 55
+                else ("warn" if state.gum_irritation >= 30 else "ok"),
+            },
+            "tongue": {
+                "label": "舌苔",
+                "value": round(state.tongue_coat, 1),
+                "level": tongue_label(state.tongue_coat),
+                "tone": "hot"
+                if state.tongue_coat >= 65
+                else ("warn" if state.tongue_coat >= 40 else "ok"),
+            },
+            "saliva": {
+                "label": "唾液",
+                "value": round(state.saliva, 1),
+                "level": saliva_label(state.saliva),
+                "tone": "warn" if state.saliva < 40 or state.saliva >= 85 else "ok",
+            },
+            "throat": {
+                "label": "咽部",
+                "value": round(state.throat, 1),
+                "level": throat_label(state.throat),
+                "tone": "hot"
+                if state.throat >= 55
+                else ("warn" if state.throat >= 25 else "ok"),
+            },
         }
 
     intimacy = None
@@ -2344,59 +2381,6 @@ def build_web_state(
         "weather",
         "illness",
     ]
-    if settings.enable_hygiene:
-        details.extend(
-            [
-                {
-                    "key": "plaque",
-                    "label": "牙菌斑",
-                    "value": round(state.plaque, 1),
-                    "unit": "%",
-                    "level": plaque_label(state.plaque),
-                    "tone": "hot"
-                    if state.plaque >= 70
-                    else ("warn" if state.plaque >= 45 else "ok"),
-                },
-                {
-                    "key": "gum",
-                    "label": "牙龈",
-                    "value": round(state.gum_irritation, 1),
-                    "unit": "%",
-                    "level": gum_label(state.gum_irritation),
-                    "tone": "hot"
-                    if state.gum_irritation >= 55
-                    else ("warn" if state.gum_irritation >= 30 else "ok"),
-                },
-                {
-                    "key": "tongue",
-                    "label": "舌苔",
-                    "value": round(state.tongue_coat, 1),
-                    "unit": "%",
-                    "level": tongue_label(state.tongue_coat),
-                    "tone": "hot"
-                    if state.tongue_coat >= 65
-                    else ("warn" if state.tongue_coat >= 40 else "ok"),
-                },
-                {
-                    "key": "saliva",
-                    "label": "唾液",
-                    "value": round(state.saliva, 1),
-                    "unit": "%",
-                    "level": saliva_label(state.saliva),
-                    "tone": "warn" if state.saliva < 40 or state.saliva >= 85 else "ok",
-                },
-                {
-                    "key": "throat",
-                    "label": "咽部",
-                    "value": round(state.throat, 1),
-                    "unit": "%",
-                    "level": throat_label(state.throat),
-                    "tone": "hot"
-                    if state.throat >= 55
-                    else ("warn" if state.throat >= 25 else "ok"),
-                },
-            ]
-        )
     details.sort(
         key=lambda item: (
             detail_order.index(item["key"]) if item["key"] in detail_order else 99
@@ -2423,11 +2407,6 @@ def build_web_state(
         "sodium": "饮食与能量",
         "weather": "环境与状态",
         "illness": "环境与状态",
-        "plaque": "清洁与体味",
-        "gum": "清洁与体味",
-        "tongue": "清洁与体味",
-        "saliva": "清洁与体味",
-        "throat": "清洁与体味",
     }
     for item in details:
         item["group"] = detail_groups.get(str(item.get("key") or ""), "其他")
@@ -2444,6 +2423,8 @@ def build_web_state(
         "meters": meters,
         "details": details,
         "cycle": cycle,
+        "anatomy": anatomy,
+        "mouth": mouth,
         "organs": organ_rows(state, view),
         "scents": _scent_rows(state, view, profile, now, settings),
         "intimacy": intimacy,

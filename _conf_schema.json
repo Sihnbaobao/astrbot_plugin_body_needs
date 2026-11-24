@@ -93,6 +93,19 @@
     "default": true,
     "hint": "经期、排卵期、黄体期和相应的小腹坠胀、情绪、胃口变化。只对女性人格生效。"
   },
+  "PUBIC_HAIR": {
+    "description": "阴毛（外观）",
+    "type": "string",
+    "default": "auto",
+    "options": [
+      "auto",
+      "none",
+      "sparse",
+      "medium",
+      "bushy"
+    ],
+    "hint": "auto 由人格体质决定，多数角色是无毛（白虎）；none 强制无毛，也可以选稀疏 / 适中 / 浓密。和年龄、功能开关无关，只是外观。"
+  },
   "ENABLE_INTIMATE": {
     "description": "启用私密生理",
     "type": "bool",

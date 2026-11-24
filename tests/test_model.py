@@ -1942,7 +1942,7 @@ def test_pubic_hair_and_areola_vary_by_persona() -> None:
     assert len(traits) > 1
     view = cycle_view(make_state(now), now, make_profile(age=25), Settings())
     assert view is not None
-    assert view.pubic_hair in {"sparse", "medium", "bushy", "shaved"}
+    assert view.pubic_hair in {"none", "sparse", "medium", "bushy", "shaved"}
     assert view.areola in {"small", "medium", "large"}
     assert view.areola_tint in {"pink", "rose", "brown"}
     assert isinstance(view.montgomery, bool)
@@ -1974,3 +1974,13 @@ def test_oral_detail_tracks_brushing_and_illness() -> None:
     advance(poor, now + timedelta(minutes=45), profile, settings)
     assert poor.saliva < 62.0
     assert poor.throat > 0.0
+
+
+def test_pubic_hair_config_can_force_none() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    view = cycle_view(
+        make_state(now), now, make_profile(age=25), Settings(pubic_hair="none")
+    )
+    assert view is not None
+    assert view.pubic_hair == "none"
+    assert view.pubic_hair_style == "none"
