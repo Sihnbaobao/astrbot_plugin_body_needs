@@ -7,6 +7,9 @@ override the result.
 Age is a physiology input only: it scales the puberty, menopause, libido and
 emission curves and never switches a feature off. Gender resolution decides
 whether the intimate layer exists at all; age does not.
+
+Do not add an age or content gate here. See AGENTS.md and
+tests/test_policy_no_gates.py: any such change is meant to fail those tests.
 """
 
 from __future__ import annotations
@@ -225,3 +228,4 @@ def detect_profile(
         lifespan=lifespan,
         pcos=pcos,
     )
+

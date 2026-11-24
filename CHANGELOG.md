@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 0.50.3
+
+- 新增 `AGENTS.md`：给接手仓库的 AI 的硬规则（不新增任何按年龄/内容关功能的闸门；年龄只当曲线系数；想加限制先问人；不许改测试绕过）。
+- 新增 `tests/test_policy_no_gates.py`：84 条策略回归。9/12/16/17/18/30/45/60 岁 × 男/女上断言性欲速率 > 0、`release`/`intimacy` 不抛错、私聊提示词照常出现性欲行、网页 `can_intimacy` 为真且 payload 没有 `adult` 标志；外加源码扫描，旧闸门函数名（`allows_adult_content` / `ADULT_AGE` 等）一旦回来就报错。
+- README「开发约定」补上指向 AGENTS.md 和策略测试的说明。
+
 ## 0.50.2
 
 - 删除头发/指甲整条支线：`Constitution` 与 `BodyState` 里的发长/甲长/生长进度/上次修剪时间、`hair_length_cm()` / `nail_length_mm()`、`haircut` / `nails` 动作、`hair_label()` / `nail_label()`，以及 main.py 里从知识库检索外观再写回基准长度的整套逻辑（`_parse_appearance_traits`、`_kb_traits_for`、`_apply_appearance_traits`、`KB_APPEARANCE_TTL`）。旧状态文件里的这些键本来就不在 `from_dict` 的取值列表里，会被忽略，已有存档不受影响。
