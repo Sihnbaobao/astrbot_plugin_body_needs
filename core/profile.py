@@ -228,4 +228,3 @@ def detect_profile(
         lifespan=lifespan,
         pcos=pcos,
     )
-
