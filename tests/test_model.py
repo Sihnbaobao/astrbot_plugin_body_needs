@@ -1870,3 +1870,61 @@ def test_low_hydration_darkens_the_urine() -> None:
     state.last_wake_at = (now - timedelta(hours=2)).timestamp()
     advance(state, now, make_profile(), Settings())
     assert state.urine_color >= 2
+
+
+def test_genitals_follow_arousal() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    settings = Settings()
+    profile = make_profile(age=25)
+    anchor = (now.date() - timedelta(days=6)).isoformat()
+
+    calm_state = make_state(now)
+    calm_state.cycle_anchor = anchor
+    calm = cycle_view(calm_state, now, profile, settings)
+
+    hot_state = make_state(now)
+    hot_state.cycle_anchor = anchor
+    hot_state.wetness = 90.0
+    hot_state.libido = 90.0
+    hot = cycle_view(hot_state, now, profile, settings)
+
+    assert calm is not None and hot is not None
+    assert calm.clitoris == "hidden"
+    assert hot.clitoris == "engorged"
+    assert calm.labia_minora == "tucked"
+    assert hot.labia_minora == "flared"
+    assert calm.vagina_open == "closed"
+    assert hot.vagina_open == "open"
+    assert hot.vagina_warmth == "hot"
+    assert hot.vestibule == "glossy"
+
+
+def test_rectum_fills_from_the_gut_and_a_bowel_movement_clears_it() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.gut = 45.0
+    advance(state, now + timedelta(minutes=15), profile, settings)
+    assert state.rectum > 0.0
+    before = state.anus_irritation
+    apply_action(state, "toilet", now + timedelta(minutes=16), profile, settings)
+    assert state.rectum == 0.0
+    assert state.anus_irritation > before
+
+
+def test_urethra_irritation_tracks_concentrated_urine() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    dry = make_state(now)
+    dry.hydration = 25.0
+    dry.urine_color = 3
+    dry.caffeine = 60.0
+    wet = make_state(now)
+    wet.hydration = 90.0
+    wet.urine_color = 0
+    wet.caffeine = 0.0
+    advance(dry, now + timedelta(hours=2), profile, settings)
+    advance(wet, now + timedelta(hours=2), profile, settings)
+    assert dry.urethra_irritation > wet.urethra_irritation

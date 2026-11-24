@@ -66,6 +66,19 @@ MUCUS_COLOR_LABELS = {
 CERVIX_POSITION_LABELS = {"low": "偏低", "mid": "中位", "high": "偏高"}
 CERVIX_FIRMNESS_LABELS = {"firm": "偏硬", "medium": "中等", "soft": "偏软"}
 VULVA_LABELS = {"comfortable": "清爽", "damp": "有点潮", "wet": "湿"}
+LABIA_MAJORA_LABELS = {"plump": "饱满", "full": "微微分开", "parted": "张开"}
+LABIA_MINORA_LABELS = {"tucked": "贴合", "peek": "微露", "flared": "外翻"}
+CLITORIS_LABELS = {"hidden": "藏着", "peek": "微露", "engorged": "充血挺起"}
+VESTIBULE_LABELS = {"dry": "干燥", "damp": "湿润", "glossy": "泛着水光", "red": "泛红"}
+PERINEUM_LABELS = {"normal": "正常", "warm": "有点发红", "tender": "发胀"}
+VAGINA_TONE_LABELS = {
+    "firm": "紧致",
+    "soft": "柔软",
+    "yielding": "松软",
+    "thin": "薄而干",
+}
+VAGINA_WARMTH_LABELS = {"warm": "温热", "hot": "发烫"}
+VAGINA_OPEN_LABELS = {"closed": "闭合", "parted": "微张", "open": "张开"}
 PUBERTY_STAGE_LABELS = {
     "prepubertal": "发育前",
     "early": "发育早期",
@@ -130,6 +143,35 @@ def load_tone(value: float) -> str:
     if value >= 55:
         return "warn"
     return "ok"
+
+
+def rectum_label(value: float) -> str:
+    """Describe how much is waiting in the rectum."""
+    if value < 12:
+        return "空的"
+    if value < 35:
+        return "有点内容"
+    if value < 65:
+        return "有便意"
+    return "憋得慌"
+
+
+def urethra_label(value: float) -> str:
+    """Describe how the urethra feels, not how full the bladder is."""
+    if value < 25:
+        return "正常"
+    if value < 50:
+        return "有点热"
+    return "灼热"
+
+
+def anus_label(value: float) -> str:
+    """Describe the anus after a bowel movement or a long day."""
+    if value < 25:
+        return "正常"
+    if value < 55:
+        return "有点刺激"
+    return "火辣发胀"
 
 
 def _uterus_text(view: CycleView) -> str:
@@ -255,6 +297,42 @@ def organ_rows(state: BodyState, view: CycleView | None) -> list[dict[str, Any]]
                 "note": "这个周期无排卵" if view.anovulatory else "随周期活动",
             }
         )
+    rows.extend(
+        [
+            {
+                "key": "rectum",
+                "label": "直肠",
+                "value": round(state.rectum, 1),
+                "level": rectum_label(state.rectum),
+                "tone": "hot"
+                if state.rectum >= 70
+                else ("warn" if state.rectum >= 40 else "ok"),
+                "note": "刚排空" if state.rectum < 12 else "等着排出去",
+            },
+            {
+                "key": "urethra",
+                "label": "尿道",
+                "value": round(state.urethra_irritation, 1),
+                "level": urethra_label(state.urethra_irritation),
+                "tone": "hot"
+                if state.urethra_irritation >= 55
+                else ("warn" if state.urethra_irritation >= 30 else "ok"),
+                "note": "水喝少了" if state.hydration < 50 else "没什么特别",
+            },
+            {
+                "key": "anus",
+                "label": "肛门",
+                "value": round(state.anus_irritation, 1),
+                "level": anus_label(state.anus_irritation),
+                "tone": "hot"
+                if state.anus_irritation >= 55
+                else ("warn" if state.anus_irritation >= 30 else "ok"),
+                "note": "刚排过，擦得有点多"
+                if state.anus_irritation >= 30
+                else "没什么特别",
+            },
+        ]
+    )
     return rows
 
 
@@ -948,15 +1026,42 @@ def _mucus_text(view: CycleView) -> str:
     stretch = (
         f"，能拉丝约 {view.mucus_stretch:.0f} cm" if view.mucus_stretch >= 1.0 else ""
     )
-    vulva = VULVA_LABELS.get(view.vulva, "")
     if view.phase == "menstrual":
         return (
             f"分泌物：经血为主，{FLOW_LABELS.get(view.flow, '')}，{color}；"
-            f"宫颈{position}、{firmness}{opened}；外阴{vulva}。"
+            f"宫颈{position}、{firmness}{opened}。"
         )
     return (
         f"分泌物：量{amount}，{texture}，{color}{stretch}；"
-        f"宫颈{position}、{firmness}{opened}；外阴{vulva}。"
+        f"宫颈{position}、{firmness}{opened}。"
+    )
+
+
+def _genital_text(view: CycleView) -> str:
+    """Return the private line for the outer genitals and the vagina.
+
+    The old line said only "外阴湿". A body has several parts that change on
+    their own, so the labia, clitoris, vestibule and perineum are described
+    separately from the vaginal tone, warmth and opening.
+
+    Args:
+        view: Current cycle view.
+
+    Returns:
+        One Chinese sentence.
+    """
+    major = LABIA_MAJORA_LABELS.get(view.labia_majora, view.labia_majora)
+    minor = LABIA_MINORA_LABELS.get(view.labia_minora, view.labia_minora)
+    clitoris = CLITORIS_LABELS.get(view.clitoris, view.clitoris)
+    vestibule = VESTIBULE_LABELS.get(view.vestibule, view.vestibule)
+    perineum = PERINEUM_LABELS.get(view.perineum, view.perineum)
+    tone = VAGINA_TONE_LABELS.get(view.vagina_tone, view.vagina_tone)
+    warmth = VAGINA_WARMTH_LABELS.get(view.vagina_warmth, view.vagina_warmth)
+    opened = VAGINA_OPEN_LABELS.get(view.vagina_open, view.vagina_open)
+    return (
+        f"外阴：大阴唇{major}、小阴唇{minor}、阴蒂{clitoris}、"
+        f"前庭{vestibule}、会阴{perineum}；"
+        f"阴道：{tone}、{warmth}、{opened}。"
     )
 
 
@@ -975,7 +1080,13 @@ def _organ_text(state: BodyState, view: CycleView | None) -> str:
         return ""
     parts = []
     for row in rows:
-        if row["key"] in ("uterus", "ovaries"):
+        if row["key"] in ("rectum", "urethra", "anus") and row["level"] in (
+            "正常",
+            "空的",
+        ):
+            # These three are quiet by default; only speak up when notable.
+            continue
+        if row["key"] in ("uterus", "ovaries", "rectum", "urethra", "anus"):
             parts.append(f"{row['label']}：{row['level']}")
         else:
             parts.append(f"{row['label']}{row['level']}")
@@ -1292,6 +1403,7 @@ def build_prompt_block(
             if mood_line:
                 lines.append(mood_line)
             lines.append(_mucus_text(view))
+            lines.append(_genital_text(view))
             lines.append(_organ_text(state, view))
             warm = "，排卵后偏高" if view.progesterone > 25.0 else ""
             lines.append(f"基础体温：{view.bbt:.2f}℃{warm}")
@@ -1532,6 +1644,7 @@ def build_status_text(
                 if mood_line:
                     lines.append(mood_line)
                 lines.append(_mucus_text(view))
+                lines.append(_genital_text(view))
                 lines.append(_organ_text(state, view))
             if view.fertile:
                 lines.append("身体：这几天更容易受孕。")
@@ -1845,6 +1958,32 @@ def build_web_state(
             "cervix_open": view.cervix_open,
             "vulva": view.vulva,
             "vulva_label": VULVA_LABELS.get(view.vulva, view.vulva),
+            "labia_majora": view.labia_majora,
+            "labia_majora_label": LABIA_MAJORA_LABELS.get(
+                view.labia_majora, view.labia_majora
+            ),
+            "labia_minora": view.labia_minora,
+            "labia_minora_label": LABIA_MINORA_LABELS.get(
+                view.labia_minora, view.labia_minora
+            ),
+            "clitoris": view.clitoris,
+            "clitoris_label": CLITORIS_LABELS.get(view.clitoris, view.clitoris),
+            "vestibule": view.vestibule,
+            "vestibule_label": VESTIBULE_LABELS.get(view.vestibule, view.vestibule),
+            "perineum": view.perineum,
+            "perineum_label": PERINEUM_LABELS.get(view.perineum, view.perineum),
+            "vagina_tone": view.vagina_tone,
+            "vagina_tone_label": VAGINA_TONE_LABELS.get(
+                view.vagina_tone, view.vagina_tone
+            ),
+            "vagina_warmth": view.vagina_warmth,
+            "vagina_warmth_label": VAGINA_WARMTH_LABELS.get(
+                view.vagina_warmth, view.vagina_warmth
+            ),
+            "vagina_open": view.vagina_open,
+            "vagina_open_label": VAGINA_OPEN_LABELS.get(
+                view.vagina_open, view.vagina_open
+            ),
             "pelvic_pressure": view.pelvic_pressure,
             "pelvic_pressure_label": pelvic_label(view.pelvic_pressure),
             "breast_fullness": view.breast_fullness,

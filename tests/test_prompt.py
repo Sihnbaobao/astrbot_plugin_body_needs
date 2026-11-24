@@ -419,7 +419,24 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
     assert cycle["cervix_position"] in {"low", "mid", "high"}
     assert "pelvic_pressure" in cycle
     organs = {row["key"]: row for row in payload["organs"]}
-    assert set(organs) == {"bladder", "kidney", "liver", "uterus", "ovaries"}
+    assert set(organs) == {
+        "bladder",
+        "kidney",
+        "liver",
+        "uterus",
+        "ovaries",
+        "rectum",
+        "urethra",
+        "anus",
+    }
+    assert cycle["labia_majora"] in {"plump", "full", "parted"}
+    assert cycle["labia_minora"] in {"tucked", "peek", "flared"}
+    assert cycle["clitoris"] in {"hidden", "peek", "engorged"}
+    assert cycle["vestibule"] in {"dry", "damp", "glossy", "red"}
+    assert cycle["perineum"] in {"normal", "warm", "tender"}
+    assert cycle["vagina_tone"] in {"firm", "soft", "yielding", "thin"}
+    assert cycle["vagina_warmth"] in {"warm", "hot"}
+    assert cycle["vagina_open"] in {"closed", "parted", "open"}
     scents = {row["key"]: row for row in payload["scents"]}
     assert {"scent", "scalp", "breath", "foot", "period", "intimate"} <= set(scents)
 
@@ -435,3 +452,28 @@ def test_scent_is_a_separate_meter() -> None:
     assert "scent" in meters
     assert meters["scent"]["level"] == scent_label(62.0)
     assert meters["scent"]["tone"] == "warn"
+
+
+def test_private_prompt_describes_vulva_vagina_and_the_lower_tract() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.cycle_anchor = (now.date() - timedelta(days=6)).isoformat()
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "外阴：大阴唇" in block
+    assert "小阴唇" in block
+    assert "阴道：" in block
+    assert "会阴" in block
+    # Quiet by default: the organ line does not nag about a normal rectum.
+    assert "肛门：" not in block
+
+
+def test_organ_line_reports_a_notable_rectum_urethra_and_anus() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.rectum = 55.0
+    state.urethra_irritation = 40.0
+    state.anus_irritation = 35.0
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "直肠：" in block
+    assert "尿道：" in block
+    assert "肛门：" in block

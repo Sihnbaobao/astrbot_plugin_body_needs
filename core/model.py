@@ -87,6 +87,8 @@ GUT_BASE = 0.30
 GUT_PASSAGE = 0.35
 GUT_URGE_START = 25.0
 GUT_URGE_GAIN = 1.5
+# Share of the stored gut content that already sits in the rectum segment.
+RECTUM_SHARE = 0.8
 HAIR_TRIM_AT = 82.0
 NAIL_TRIM_AT = 76.0
 # A persona only looks after herself once nobody has interacted for a while.
@@ -290,6 +292,12 @@ class BodyState:
     oral: float = 20.0
     gut: float = 8.0
     bowel: float = 0.0
+    # Rectum fill is the share of the gut content that has already reached the
+    # storage segment; anus/urethra keep their own irritation scores so the
+    # private detail can say more than "需要上厕所".
+    rectum: float = 0.0
+    urethra_irritation: float = 0.0
+    anus_irritation: float = 0.0
     temperature: float = 36.6
     sweat: float = 0.0
     heart_rate: float = 72.0
@@ -442,6 +450,9 @@ class BodyState:
             "skin": self.skin,
             "gut": self.gut,
             "bowel": self.bowel,
+            "rectum": self.rectum,
+            "urethra_irritation": self.urethra_irritation,
+            "anus_irritation": self.anus_irritation,
             "temperature": self.temperature,
             "sweat": self.sweat,
             "heart_rate": self.heart_rate,
@@ -591,6 +602,9 @@ class BodyState:
             "oral",
             "gut",
             "bowel",
+            "rectum",
+            "urethra_irritation",
+            "anus_irritation",
             "temperature",
             "sweat",
             "heart_rate",
@@ -677,6 +691,9 @@ class BodyState:
         ):
             setattr(state, key, _clamp(getattr(state, key)))
         state.bowel = _clamp(state.bowel)
+        state.rectum = _clamp(state.rectum)
+        state.urethra_irritation = _clamp(state.urethra_irritation)
+        state.anus_irritation = _clamp(state.anus_irritation)
         state.illness = str(data.get("illness") or "")
         state.pain_site = str(data.get("pain_site") or "")
         state.weather = str(data.get("weather") or "clear")
@@ -901,6 +918,16 @@ class CycleView:
     cervix_firmness: str = "firm"
     cervix_open: bool = False
     vulva: str = "comfortable"
+    # The vulva is not one label: labia, clitoris, vestibule and perineum each
+    # change on their own, and the vagina has its own tone, warmth and opening.
+    labia_majora: str = "plump"
+    labia_minora: str = "tucked"
+    clitoris: str = "hidden"
+    vestibule: str = "dry"
+    perineum: str = "normal"
+    vagina_tone: str = "firm"
+    vagina_warmth: str = "warm"
+    vagina_open: str = "closed"
     pelvic_pressure: float = 0.0
     breast_fullness: float = 0.0
     follicle: float = 0.0
@@ -2109,6 +2136,71 @@ def _mucus_detail(
     else:
         vulva = "comfortable"
 
+    # Arousal is not stored on its own: wetness and libido already move
+    # together, and the cycle adds its own congestion around ovulation.
+    arousal = _clamp(
+        max(wetness, state.libido * 0.9)
+        + (12.0 if phase == "ovulation" else 0.0)
+        + (6.0 if flow > 0 else 0.0)
+        + (8.0 if phase == "pregnant" else 0.0)
+    )
+    if arousal >= 70.0:
+        clitoris = "engorged"
+    elif arousal >= 42.0:
+        clitoris = "peek"
+    else:
+        clitoris = "hidden"
+
+    if weeks >= 28 or arousal >= 80.0:
+        labia_majora = "parted"
+    elif arousal >= 55.0:
+        labia_majora = "full"
+    else:
+        labia_majora = "plump"
+
+    if arousal >= 72.0:
+        labia_minora = "flared"
+    elif arousal >= 40.0:
+        labia_minora = "peek"
+    else:
+        labia_minora = "tucked"
+
+    if volume >= 70.0 or wetness >= 68.0:
+        vestibule = "glossy"
+    elif wetness >= 42.0:
+        vestibule = "damp"
+    elif flow > 0:
+        vestibule = "red"
+    else:
+        vestibule = "dry"
+
+    if phase == "menopause":
+        vestibule = "dry"
+        vagina_tone = "thin"
+    elif phase == "premenarche":
+        vagina_tone = "firm"
+    elif weeks >= 28 or state.lactating:
+        vagina_tone = "soft"
+    elif arousal >= 80.0:
+        vagina_tone = "yielding"
+    else:
+        vagina_tone = "firm"
+
+    if weeks >= 30:
+        perineum = "tender"
+    elif flow > 0:
+        perineum = "warm"
+    else:
+        perineum = "normal"
+
+    vagina_warmth = "hot" if arousal >= 65.0 else "warm"
+    if arousal >= 82.0:
+        vagina_open = "open"
+    elif arousal >= 55.0:
+        vagina_open = "parted"
+    else:
+        vagina_open = "closed"
+
     pelvic = _clamp(
         state.uterine_congestion * 0.7
         + flow * 5.0
@@ -2123,6 +2215,14 @@ def _mucus_detail(
         "cervix_firmness": firmness,
         "cervix_open": opened,
         "vulva": vulva,
+        "labia_majora": labia_majora,
+        "labia_minora": labia_minora,
+        "clitoris": clitoris,
+        "vestibule": vestibule,
+        "perineum": perineum,
+        "vagina_tone": vagina_tone,
+        "vagina_warmth": vagina_warmth,
+        "vagina_open": vagina_open,
         "pelvic_pressure": round(pelvic, 1),
     }
 
@@ -2173,15 +2273,7 @@ def cycle_view(
             lh=8.0,
             weeks=weeks,
             cycle_length=max(21, profile.cycle_length),
-            mucus_volume=detail["mucus_volume"],
-            mucus_texture=detail["mucus_texture"],
-            mucus_color=detail["mucus_color"],
-            mucus_stretch=detail["mucus_stretch"],
-            cervix_position=detail["cervix_position"],
-            cervix_firmness=detail["cervix_firmness"],
-            cervix_open=detail["cervix_open"],
-            vulva=detail["vulva"],
-            pelvic_pressure=detail["pelvic_pressure"],
+            **detail,
             breast_fullness=round(min(100.0, 45.0 + weeks * 1.2), 1),
             endocrine_maturity=maturity,
             puberty_stage=stage,
@@ -2218,15 +2310,7 @@ def cycle_view(
             puberty=True,
             cycle_length=max(21, profile.cycle_length),
             discharge=1,
-            mucus_volume=detail["mucus_volume"],
-            mucus_texture=detail["mucus_texture"],
-            mucus_color=detail["mucus_color"],
-            mucus_stretch=detail["mucus_stretch"],
-            cervix_position=detail["cervix_position"],
-            cervix_firmness=detail["cervix_firmness"],
-            cervix_open=detail["cervix_open"],
-            vulva=detail["vulva"],
-            pelvic_pressure=detail["pelvic_pressure"],
+            **detail,
             breast_fullness=round(10.0 + 18.0 * maturity, 1),
             endocrine_maturity=maturity,
             puberty_stage=stage,
@@ -2257,15 +2341,7 @@ def cycle_view(
             lh=35.0,
             cycle_length=max(21, profile.cycle_length),
             discharge=0,
-            mucus_volume=detail["mucus_volume"],
-            mucus_texture=detail["mucus_texture"],
-            mucus_color=detail["mucus_color"],
-            mucus_stretch=detail["mucus_stretch"],
-            cervix_position=detail["cervix_position"],
-            cervix_firmness=detail["cervix_firmness"],
-            cervix_open=detail["cervix_open"],
-            vulva=detail["vulva"],
-            pelvic_pressure=detail["pelvic_pressure"],
+            **detail,
             breast_fullness=round(8.0 + 10.0 * maturity, 1),
             endocrine_maturity=maturity,
             puberty_stage="menopause",
@@ -2441,15 +2517,7 @@ def cycle_view(
         headache=headache,
         backache=backache,
         discharge=discharge,
-        mucus_volume=detail["mucus_volume"],
-        mucus_texture=detail["mucus_texture"],
-        mucus_color=detail["mucus_color"],
-        mucus_stretch=detail["mucus_stretch"],
-        cervix_position=detail["cervix_position"],
-        cervix_firmness=detail["cervix_firmness"],
-        cervix_open=detail["cervix_open"],
-        vulva=detail["vulva"],
-        pelvic_pressure=detail["pelvic_pressure"],
+        **detail,
         breast_fullness=round(breast_fullness, 1),
         follicle=round(state.follicle * 100.0, 1),
         endocrine_maturity=maturity,
@@ -2467,6 +2535,25 @@ CARE_LABELS = {
     "shower": "洗澡",
     "brush": "刷牙",
 }
+
+
+def _clear_bowel(state: BodyState, at: float) -> None:
+    """Empty the gut and score the anus, rectum and the effort afterwards.
+
+    Args:
+        state: Body state to update.
+        at: Timestamp of the bowel movement.
+    """
+    state.gut = max(0.0, state.gut - 85.0)
+    state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+    state.rectum = _clamp(max(0.0, state.gut - GUT_URGE_START) * RECTUM_SHARE)
+    state.anus_irritation = _clamp(
+        state.anus_irritation
+        + 12.0
+        + max(0.0, 55.0 - state.fiber) * 0.16
+        + (5.0 if state.hydration < 45.0 else 0.0)
+    )
+    state.last_bowel_at = at
 
 
 def _add_care(state: BodyState, at: datetime, kind: str) -> None:
@@ -2734,9 +2821,7 @@ def _routine(
             state.last_toilet_at = moment.timestamp()
             _add_care(state, moment, "toilet")
         if state.bowel >= 85.0:
-            state.gut = max(0.0, state.gut - 85.0)
-            state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
-            state.last_bowel_at = moment.timestamp()
+            _clear_bowel(state, moment.timestamp())
             state.last_toilet_at = moment.timestamp()
             _add_care(state, moment, "toilet")
             _add_event(
@@ -3108,9 +3193,7 @@ def _routine(
         and state.bowel >= 50.0
     )
     if morning_urge or meal_reflex or state.bowel >= 65.0:
-        state.gut = max(0.0, state.gut - 85.0)
-        state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
-        state.last_bowel_at = moment.timestamp()
+        _clear_bowel(state, moment.timestamp())
         state.last_toilet_at = moment.timestamp()
         _add_care(state, moment, "toilet")
         _add_event(
@@ -3728,6 +3811,7 @@ def _recompute_primary(
     state.oral_health = _clamp(100.0 - state.oral)
     alert = circadian_alertness(now)
     state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
+    state.rectum = _clamp(max(0.0, state.gut - GUT_URGE_START) * RECTUM_SHARE)
     penalty = max(0.0, 40.0 - state.satiety) * 0.20
     penalty += max(0.0, 40.0 - state.hydration) * 0.25
     penalty += max(0.0, state.bowel - 70.0) * 0.10
@@ -3904,6 +3988,26 @@ def advance(
         fiber_factor = 0.8 + state.fiber / 250.0
         state.bowel = _clamp(
             (state.gut - GUT_URGE_START) * GUT_URGE_GAIN * fiber_factor
+        )
+        state.rectum = _clamp(max(0.0, state.gut - GUT_URGE_START) * RECTUM_SHARE)
+        urethra_target = _clamp(
+            8.0
+            + state.urine_color * 16.0
+            + max(0.0, 55.0 - state.hydration) * 0.6
+            + state.caffeine * 0.15
+            + (6.0 if in_period_now else 0.0)
+        )
+        state.urethra_irritation += (urethra_target - state.urethra_irritation) * (
+            1.0 - math.exp(-step_hours / 8.0)
+        )
+        anus_target = _clamp(
+            6.0
+            + (10.0 if state.fiber < 40.0 else 0.0)
+            + state.indigestion * 0.08
+            + (6.0 if state.bowel >= 70.0 else 0.0)
+        )
+        state.anus_irritation += (anus_target - state.anus_irritation) * (
+            1.0 - math.exp(-step_hours / 10.0)
         )
         iron_rate = (
             1.0 + (float(view.flow) if view is not None else 2.0) * 0.5
@@ -4439,6 +4543,8 @@ def apply_action(
         state.scalp_scent = max(0.0, state.scalp_scent - 70.0)
         state.breath_scent = max(0.0, state.breath_scent - 35.0)
         state.intimate_scent = max(0.0, state.intimate_scent - 80.0)
+        state.anus_irritation = max(0.0, state.anus_irritation - 45.0)
+        state.urethra_irritation = max(0.0, state.urethra_irritation - 20.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_shower_at = now_ts
         _add_care(state, now, "shower")
@@ -4449,10 +4555,11 @@ def apply_action(
         _add_care(state, now, "brush")
     elif action == "toilet":
         if state.bowel >= 20.0:
-            state.gut = max(0.0, state.gut - 85.0)
-            state.bowel = _clamp((state.gut - GUT_URGE_START) * GUT_URGE_GAIN)
-            state.last_bowel_at = now_ts
+            _clear_bowel(state, now_ts)
         state.urine = 2.0
+        state.urethra_irritation = _clamp(
+            state.urethra_irritation + 5.0 + max(0.0, state.urine_color - 1) * 6.0
+        )
         state.last_toilet_at = now_ts
         _add_care(state, now, "toilet")
     elif action == "nap":

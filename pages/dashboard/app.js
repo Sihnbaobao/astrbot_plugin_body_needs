@@ -558,7 +558,27 @@ function renderCycle(persona) {
         " · " +
         (cycle.cervix_open ? "微张" : "闭合"),
     ]);
-    rows.push(["外阴", cycle.vulva_label || "—"]);
+    rows.push([
+      "外阴",
+      "大阴唇" +
+        (cycle.labia_majora_label || "—") +
+        " · 小阴唇" +
+        (cycle.labia_minora_label || "—") +
+        " · 阴蒂" +
+        (cycle.clitoris_label || "—") +
+        " · 前庭" +
+        (cycle.vestibule_label || "—") +
+        " · 会阴" +
+        (cycle.perineum_label || "—"),
+    ]);
+    rows.push([
+      "阴道",
+      (cycle.vagina_tone_label || "—") +
+        " · " +
+        (cycle.vagina_warmth_label || "—") +
+        " · " +
+        (cycle.vagina_open_label || "—"),
+    ]);
     if (cycle.breast_fullness_label) {
       rows.push(["乳房", cycle.breast_fullness_label]);
     }
@@ -647,7 +667,27 @@ function renderCycle(persona) {
         " · " +
         (cycle.cervix_open ? "微张" : "闭合"),
     ],
-    ["外阴", cycle.vulva_label || "—"],
+    [
+      "外阴",
+      "大阴唇" +
+        (cycle.labia_majora_label || "—") +
+        " · 小阴唇" +
+        (cycle.labia_minora_label || "—") +
+        " · 阴蒂" +
+        (cycle.clitoris_label || "—") +
+        " · 前庭" +
+        (cycle.vestibule_label || "—") +
+        " · 会阴" +
+        (cycle.perineum_label || "—"),
+    ],
+    [
+      "阴道",
+      (cycle.vagina_tone_label || "—") +
+        " · " +
+        (cycle.vagina_warmth_label || "—") +
+        " · " +
+        (cycle.vagina_open_label || "—"),
+    ],
     ["盆腔", cycle.pelvic_pressure_label || "—"],
     ["乳房", cycle.breast_fullness_label || "—"],
     ["经前", symptomBits.length ? symptomBits.join("、") : "—"],
