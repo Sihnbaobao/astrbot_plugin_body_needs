@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>身体 · 生理需求</title>
+    <link rel="stylesheet" href="./style.css?v=27" />
+    <link rel="stylesheet" href="./theme.css?v=9" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">身</div>
+        <div class="brand-text">
+          <strong>身体</strong>
+          <span id="subtitle">正在读取…</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <label class="persona-picker" id="personaWrap" hidden>
+          <span>人格</span>
+          <select id="personaSelect"></select>
+        </label>
+        <button class="btn ghost" id="refreshBtn" type="button">刷新</button>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="页面">
+      <button class="tab active" type="button" data-tab="live">现在</button>
+      <button class="tab" type="button" data-tab="fertility" id="fertilityTab" hidden>周期</button>
+      <button class="tab" type="button" data-tab="settings">设置</button>
+    </nav>
+
+    <div class="notice" id="notice" hidden></div>
+
+    <main>
+      <section class="panel active" id="panel-live">
+        <section class="card hero">
+          <div class="hero-main">
+            <span class="eyebrow" id="profileLine">此刻的身体</span>
+            <h1 id="heroName">—</h1>
+            <p class="hero-sentence" id="summary">—</p>
+            <div class="hero-chips" id="heroChips"></div>
+          </div>
+          <div class="hero-clock">
+            <span id="clock">—</span>
+            <small>状态随真实时间流逝</small>
+          </div>
+        </section>
+
+        <div class="grid two-col">
+          <div class="col">
+            <section class="card meters-card">
+              <div class="card-head">
+                <h2>身体指标</h2>
+                <span class="hint">储备 100 = 充足 · 压力 100 = 满</span>
+              </div>
+              <div id="meters" class="metrics-grid">
+                <p class="empty">正在读取…</p>
+              </div>
+            </section>
+
+            <section class="card sleep-card" id="sleepCard" hidden>
+              <div class="card-head">
+                <h2>睡眠</h2>
+                <span class="hint" id="sleepHint">—</span>
+              </div>
+              <div id="sleepBody"></div>
+            </section>
+
+            <section class="card organ-card" id="organCard" hidden>
+              <div class="card-head">
+                <h2>器官负荷</h2>
+                <span class="hint">当前状态，不是化验值</span>
+              </div>
+              <div id="organBody"></div>
+            </section>
+
+            <section class="card scent-card" id="scentCard" hidden>
+              <div class="card-head">
+                <h2>体味</h2>
+                <span class="hint">分来源看</span>
+              </div>
+              <div id="scentBody"></div>
+            </section>
+
+            <section class="card cycle-card" id="maleCard" hidden>
+              <div class="card-head">
+                <h2>成年男性</h2>
+                <span class="hint">私密</span>
+              </div>
+              <div id="maleBody"></div>
+            </section>
+          </div>
+
+          <div class="col">
+            <section class="card care-timeline-card">
+              <div class="card-head">
+                <h2>作息</h2>
+                <span class="hint">最近 24 小时</span>
+              </div>
+              <div class="care-summary" id="careSummary"></div>
+              <div class="care-periods" id="careRows"></div>
+              <div class="last-row" id="lastRow"></div>
+            </section>
+
+            <section class="card events-card">
+              <div class="card-head">
+                <h2>身体事件</h2>
+                <span class="hint" id="eventCount"></span>
+              </div>
+              <ul class="events" id="events">
+                <li class="empty">还没有值得记下的事。</li>
+              </ul>
+            </section>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="panel" id="panel-fertility" hidden>
+        <div class="grid">
+          <section class="card cycle-card" id="cycleCard" hidden>
+            <div class="card-head">
+              <h2>生理期</h2>
+              <span class="hint" id="cyclePhase"></span>
+            </div>
+            <div id="cycleBody"></div>
+            <div class="card-actions cycle-actions" id="cycleActions" hidden>
+              <span class="cycle-actions-label">经期记录</span>
+              <button class="btn ghost" data-cycle="start" type="button">记录经期开始</button>
+              <button class="btn ghost" data-cycle="delay" type="button">周期顺延一天</button>
+            </div>
+          </section>
+        </div>
+        <section class="card fertility-page">
+          <div class="card-head">
+            <h2>受精</h2>
+            <span class="hint" id="fertilityHint">—</span>
+          </div>
+          <div class="fertility-hero">
+            <div class="fertility-art" id="fertilityArt"></div>
+            <div class="fertility-info" id="fertilityInfo"></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel" id="panel-settings" hidden>
+        <section class="card settings-card">
+          <div class="card-head">
+            <h2>插件设置</h2>
+            <span class="hint" id="settingsHint">保存后立即生效</span>
+          </div>
+          <p class="settings-note">
+            这些设置会立即写入插件配置；带开关的项保存后马上生效。
+          </p>
+          <div class="settings-form" id="settingsForm"></div>
+          <div class="settings-actions">
+            <button class="btn" id="saveSettingsBtn" type="button">保存设置</button>
+            <span class="hint" id="settingsStatus"></span>
+          </div>
+        </section>
+
+        <section class="card notes notes-page">
+          <div class="card-head">
+            <h2>它是怎么运转的</h2>
+          </div>
+          <div class="notes-grid">
+            <div>
+              <h3>时间是真的</h3>
+              <p>
+                状态按真实时间推进，不靠定时任务。TA 隔了多久没吃东西、睡了几个小时、
+                上次洗澡是什么时候，都会在下次开口前结算。
+              </p>
+            </div>
+            <div>
+              <h3>不是命令</h3>
+              <p>
+                吃饭、喝水、洗澡、上厕所都由她按自己的状态和作息发生，聊天里没有
+                “喂她”的指令。身体状态只作为背景写进对话，不强迫 TA 说什么。
+              </p>
+            </div>
+            <div>
+              <h3>私密分层</h3>
+              <p>
+                群聊默认只看到饱食度、水分和精力；更细的身体细节只在私聊里出现。
+              </p>
+            </div>
+            <div>
+              <h3>数值方向</h3>
+              <p>
+                饱食度、水分、精力、清洁、口腔都是 100 = 充足或干净；膀胱压力和性欲
+                是 100 = 满或强。条形变红表示这一项该注意了。
+              </p>
+            </div>
+            <div>
+              <h3>器官与体味</h3>
+              <p>
+                “器官负荷”是水分、盐、咖啡因、饮食和周期共同推出来的慢代理，不是化验值；
+                体味按头皮、口气、脚、经期、哺乳和事后分开看，洗澡和刷牙只压掉对应的来源。
+              </p>
+            </div>
+            <div>
+              <h3>数据在哪里</h3>
+              <p>
+                每个人格一份 JSON，保存在插件的 <code>data/plugin_data</code> 下。
+                重置只会重新生成这一份，不影响别人。
+              </p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog class="detail-dialog" id="moreDialog" aria-labelledby="moreTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="moreTitle">更多指标</h2>
+          <p>胃内容、血糖、睡眠债、体温、心跳这些不在概览里的数据</p>
+        </div>
+        <button class="btn ghost" id="closeMore" type="button">关闭</button>
+      </div>
+      <div class="inner-stats dialog-stats" id="innerStats"></div>
+    </dialog>
+
+    <footer>
+      身体状态由 astrbot_plugin_body_needs 维护 · TA 不会因为数值而被迫说话
+    </footer>
+
+    <!-- 桥接脚本由 AstrBot 注入在 body 结束标签之前，所以这里必须用 module。 -->
+    <script type="module" src="./app.js?v=59"></script>
+  </body>
+</html>

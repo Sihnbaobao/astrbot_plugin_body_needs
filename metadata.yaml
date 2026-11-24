@@ -1,0 +1,21 @@
+name: astrbot_plugin_body_needs
+display_name: 身体 · 生理需求
+short_desc: 让她会饿、会渴、会累，也有自己的生理周期
+desc: >-
+  给 Persona 一副按真实时间运转的身体：饥饿、口渴、如厕、清洁、口腔、睡眠，
+  女性生理期（含青春期、宫颈黏液和器官负荷）以及男性生理反应。状态会写进对话上下文，
+  也会随吃喝洗漱真实改变；体味按头皮、口气、脚、经期、哺乳等来源分开追踪。
+help: >-
+  在聊天里用 /身体 看状态；吃饭、喝水、洗澡、上厕所由她按自己的状态和作息处理。
+  她会因为时间流逝真的饿、真的渴、真的困；女性人格有生理期、分泌物细节和器官状态，
+  青春期角色有初潮和不规律周期，男性人格有梦遗、晨勃和白天反应。
+version: 0.50.0
+author: Sihnbaobao
+repo: https://github.com/Sihnbaobao/astrbot_plugin_body_needs
+astrbot_version: ">=4.24.0"
+social_link: https://github.com/Sihnbaobao
+tags:
+  - 人格
+  - 生理
+  - 陪伴
+  - 角色扮演

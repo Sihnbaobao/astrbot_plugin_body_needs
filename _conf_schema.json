@@ -1,0 +1,179 @@
+{
+  "ENABLED": {
+    "description": "启用身体系统",
+    "type": "bool",
+    "default": true,
+    "hint": "总开关。关掉后不注入提示词、不挂工具，已有状态文件保留。"
+  },
+  "GENDER": {
+    "description": "生理性别",
+    "type": "string",
+    "default": "auto",
+    "options": [
+      "auto",
+      "female",
+      "male",
+      "none"
+    ],
+    "hint": "auto 会从人格正文里的称谓和性别词判断；判断不准时直接指定 female / male。none 只有饥渴清洁，没有生理期和成人模块。"
+  },
+  "AGE": {
+    "description": "年龄（0 = 从人格读取）",
+    "type": "int",
+    "default": 0,
+    "hint": "喂给生理曲线：初潮/绝经、青春期发育、女性成年后的性欲缓降、男性性欲和梦遗/晨勃的分段系数。人格正文里写明的年龄优先；正文没写才用这里的值。"
+  },
+  "LIFESPAN": {
+    "description": "种族寿命（0 = 从人格读取）",
+    "type": "int",
+    "default": 0,
+    "hint": "长生种族用这个。填 1200 就按精灵算：所有年龄曲线按“人类 80 岁 = 1 倍”换算，300 岁相当于人类 20 岁。留空则从人格正文里认精灵/恶魔/吸血鬼/矮人/龙族/天使/神族，认不出按人类 80 年。"
+  },
+  "PERSONA_ID": {
+    "description": "【人格】固定使用哪个人格的身体",
+    "type": "string",
+    "default": "",
+    "_special": "select_persona",
+    "hint": "留空 = 跟随当前会话的人格；插件页默认显示 AstrBot 的默认人格。选一个 = 固定这个人的身体，其他会话切人格也不会换身体。"
+  },
+  "TIMEZONE": {
+    "description": "时区",
+    "type": "string",
+    "default": "",
+    "hint": "IANA 时区，如 Asia/Shanghai。留空使用 AstrBot 全局时区。"
+  },
+  "SLEEP_WINDOW": {
+    "description": "睡眠时段",
+    "type": "string",
+    "default": "00:00-08:00",
+    "hint": "这个时段里消化变慢、睡眠债恢复，也可能发生男性人格的夜间生理事件。格式 HH:MM-HH:MM。"
+  },
+  "CYCLE_LENGTH": {
+    "description": "生理期周期（天）",
+    "type": "int",
+    "default": 28,
+    "hint": "两次经期开始之间的天数，18-45。只对女性人格生效。青春期角色（年龄 < 18）的实际周期会在这个值上下漂 ±5 天，用来模拟初潮后还不规律。"
+  },
+  "PERIOD_LENGTH": {
+    "description": "经期持续（天）",
+    "type": "int",
+    "default": 5,
+    "hint": "每次经期持续几天，2-10。只对女性人格生效。"
+  },
+  "CYCLE_START": {
+    "description": "经期起点（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "格式 YYYY-MM-DD，填了就把这天当作第 1 天。留空会自动错开，不会一装好就正好来经期。"
+  },
+  "GROUP_DETAIL": {
+    "description": "群聊里显示多少",
+    "type": "string",
+    "default": "basic",
+    "options": [
+      "basic",
+      "full"
+    ],
+    "hint": "basic 只给饥饿、口渴、精力；full 额外给非性相关的经期信息。性细节永远不进群聊。"
+  },
+  "INTENSITY": {
+    "description": "身体存在感",
+    "type": "string",
+    "default": "natural",
+    "options": [
+      "subtle",
+      "natural",
+      "strong"
+    ],
+    "hint": "subtle 只在明显不舒服时提醒；natural 每次给完整状态；strong 会强调身体对情绪和注意力的影响。"
+  },
+  "ENABLE_CYCLE": {
+    "description": "启用女性生理期",
+    "type": "bool",
+    "default": true,
+    "hint": "经期、排卵期、黄体期和相应的小腹坠胀、情绪、胃口变化。只对女性人格生效。"
+  },
+  "ENABLE_INTIMATE": {
+    "description": "启用私密生理",
+    "type": "bool",
+    "default": true,
+    "hint": "男性人格的梦遗、晨勃，以及性欲值、亲密记录和事后气味；需要能识别出性别、只在私聊生效。插件页设置里也可以开关。"
+  },
+  "ENABLE_AWAY": {
+    "description": "自慰后暂时不回消息",
+    "type": "bool",
+    "default": false,
+    "hint": "独立运行时由 body 自己静默；接 persona_presence 时建议关掉，让它读 vitals 决定回不回。"
+  },
+  "ENABLE_PREGNANCY": {
+    "description": "启用怀孕",
+    "type": "bool",
+    "default": true,
+    "hint": "女性人格在易孕期内亲密时，有一定概率受孕；受孕后会停经并按孕周推进，280 天后写一条出生事件。受孕判定只看性别、是否已在孕期和当下是否处于易孕期，不看年龄。关掉后亲密没有任何后果。"
+  },
+  "CONTRACEPTION": {
+    "description": "避孕方式",
+    "type": "string",
+    "default": "none",
+    "options": [
+      "none",
+      "condom",
+      "pill"
+    ],
+    "hint": "none = 不避孕（受孕概率约 18%）；condom / pill 会把概率降到 1-2%。只影响受孕判定。"
+  },
+  "ENABLE_HYGIENE": {
+    "description": "启用清洁与口腔",
+    "type": "bool",
+    "default": true,
+    "hint": "洗澡和刷牙会随时间变脏；关掉后不再显示这两项。"
+  },
+  "ENABLE_SLEEP": {
+    "description": "启用睡眠时段",
+    "type": "bool",
+    "default": true,
+    "hint": "睡觉时消化变慢、睡眠债恢复；关掉后所有时间都按清醒速度计算。"
+  },
+  "ENABLE_SLEEP_GATE": {
+    "description": "睡着时不回消息",
+    "type": "bool",
+    "default": true,
+    "hint": "她真的睡着时，任何会话都不回复；醒来后照常。指令仍然放行。躺在床上还没睡着时不算睡着，可以迷迷糊糊回一句。"
+  },
+  "ENABLE_NAP": {
+    "description": "允许白天午睡",
+    "type": "bool",
+    "default": true,
+    "hint": "约一半的下午会在 13-17 点之间眯 20-60 分钟，那段时间同样静默；极度疲惫时白天也会睡过去。"
+  },
+  "ENABLE_TOOLS": {
+    "description": "给她身体工具",
+    "type": "bool",
+    "default": true,
+    "hint": "模型可以调用 body_status 看状态、body_action 记录真的吃了/喝了/洗了。关掉后只用 /身体 指令。"
+  },
+  "PROMPT_EXTRA": {
+    "description": "附加提示（可选）",
+    "type": "text",
+    "default": "",
+    "hint": "追加在身体提示块末尾，比如「她习惯忍着不说」。最多 500 字。"
+  },
+  "EVENT_KEEP_DAYS": {
+    "description": "身体事件保留（天）",
+    "type": "int",
+    "default": 7,
+    "hint": "经期开始、梦遗这类事件在提示词里保留多久，1-30。"
+  },
+  "MAX_EVENTS": {
+    "description": "最多保留事件数",
+    "type": "int",
+    "default": 30,
+    "hint": "状态文件里最多存多少条身体事件，5-100。"
+  },
+  "DEBUG": {
+    "description": "调试日志",
+    "type": "bool",
+    "default": false,
+    "hint": "输出更多解析和注入日志；平时不用开。"
+  }
+}
