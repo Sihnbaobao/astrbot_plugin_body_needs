@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 0.50.2
+
+- 删除头发/指甲整条支线：`Constitution` 与 `BodyState` 里的发长/甲长/生长进度/上次修剪时间、`hair_length_cm()` / `nail_length_mm()`、`haircut` / `nails` 动作、`hair_label()` / `nail_label()`，以及 main.py 里从知识库检索外观再写回基准长度的整套逻辑（`_parse_appearance_traits`、`_kb_traits_for`、`_apply_appearance_traits`、`KB_APPEARANCE_TTL`）。旧状态文件里的这些键本来就不在 `from_dict` 的取值列表里，会被忽略，已有存档不受影响。
+- 事后气味改成看“多久之前发生的”，不再用 30 这个数值门槛：≤1 小时写“刚结束，味还很重”，≤8 小时写“事后还留着一点”，≤36 小时写“很淡”；洗澡之后不再提。刚结束和事中本来就有味，不该等数值攒够才提。
+- 梦遗现在也会留下事后气味（之前只有做爱和自慰会写）。
+- 页面“体味”卡片的事后一行改成显示刚结束 / 还留着一点 / 很淡了，跟着时间走。
+- 168 条测试通过。
+
 ## 0.50.1
 
 - 修掉删闸门留下的两处语法损坏：`core/model.py` 的私密气味目标值块、`core/prompt.py` 的体味行缩进错位，之前这两个模块根本无法编译。

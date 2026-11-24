@@ -345,6 +345,7 @@ def test_private_scent_lines_cover_scalp_breath_and_afterglow() -> None:
     state.scalp_scent = 55.0
     state.breath_scent = 55.0
     state.intimate_scent = 55.0
+    state.last_self_at = now.timestamp() - 2 * 3600
     block = build_prompt_block(
         state, now, make_profile(age=25), Settings(), private=True
     )
@@ -353,12 +354,41 @@ def test_private_scent_lines_cover_scalp_breath_and_afterglow() -> None:
     assert "事后身上" in block
 
 
+def test_intimate_scent_follows_the_act_not_the_meter() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    # A recent act is enough on its own: the meter can be low or zero.
+    state.intimate_scent = 0.0
+    state.last_intimacy_at = now.timestamp() - 20 * 60
+    block = build_prompt_block(
+        state, now, make_profile(age=25), Settings(), private=True
+    )
+    assert "事后身上" in block
+
+    # A wash is what removes it, not a value threshold.
+    state.last_shower_at = now.timestamp()
+    state.intimate_scent = 0.0
+    washed = build_prompt_block(
+        state, now, make_profile(age=25), Settings(), private=True
+    )
+    assert "事后身上" not in washed
+
+    # And it fades out once the act is old enough.
+    state.last_shower_at = 0.0
+    state.last_intimacy_at = now.timestamp() - 40 * 3600
+    stale = build_prompt_block(
+        state, now, make_profile(age=25), Settings(), private=True
+    )
+    assert "事后身上" not in stale
+
+
 def test_age_never_hides_intimate_prompt_or_web_block() -> None:
     now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
     state = make_state(now)
     state.libido = 90.0
     state.wetness = 85.0
     state.intimate_scent = 70.0
+    state.last_intimacy_at = now.timestamp() - 2 * 3600
     profile = make_profile(age=16)
     block = build_prompt_block(state, now, profile, Settings(), private=True)
     assert "性欲" in block

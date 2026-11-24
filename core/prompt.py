@@ -336,17 +336,6 @@ def bowel_label(value: float) -> str:
     return "很急"
 
 
-def hair_label(value: float) -> str:
-    """Describe how much the hair has grown since the last cut."""
-    if value < 55:
-        return "正常"
-    if value < 75:
-        return "有点长"
-    if value < 90:
-        return "该剪了"
-    return "太长了"
-
-
 def weather_label(kind: str) -> str:
     """Return a short Chinese label for a simulated weather kind."""
     return {
@@ -460,17 +449,6 @@ def sweat_label(value: float) -> str:
     if value < 60:
         return "出汗了"
     return "汗湿"
-
-
-def nail_label(value: float) -> str:
-    """Describe how much the nails have grown since the last trim."""
-    if value < 50:
-        return "正常"
-    if value < 70:
-        return "有点长"
-    if value < 88:
-        return "该剪了"
-    return "太长了"
 
 
 def clean_label(value: float) -> str:
@@ -1004,10 +982,40 @@ def _organ_text(state: BodyState, view: CycleView | None) -> str:
     return "器官：" + "；".join(parts) + "。"
 
 
+def _last_act_at(state: BodyState) -> float:
+    """Return when she last came, whatever caused it, or 0 when never."""
+    return max(state.last_intimacy_at, state.last_self_at, state.last_release_at)
+
+
+def _intimate_level(hours: float | None) -> str:
+    """Describe a scent by how long ago the act was, not by a meter."""
+    if hours is None:
+        return "没有"
+    if hours <= 1.0:
+        return "刚结束"
+    if hours <= 8.0:
+        return "还留着一点"
+    if hours <= 36.0:
+        return "很淡了"
+    return "没有"
+
+
+def _intimate_line(profile: Profile, hours: float) -> str:
+    """Describe the scent of the last act, from just-finished to faint."""
+    flavor = "腥甜" if profile.gender == "female" else "腥"
+    if hours <= 1.0:
+        return f"身体：刚结束，事后身上{flavor}味和汗味还很重，黏着没干。"
+    if hours <= 8.0:
+        return f"身体：事后身上留着一点淡淡的{flavor}味，混着汗味，洗一下会淡。"
+    return f"身体：还留着一点很淡的{flavor}味，自己闻得到。"
+
+
 def _scent_rows(
     state: BodyState,
     view: CycleView | None,
     profile: Profile,
+    now: datetime,
+    settings: Settings,
 ) -> list[dict[str, Any]]:
     """Return the scent sources shown on the page.
 
@@ -1015,6 +1023,8 @@ def _scent_rows(
         state: Current body state.
         view: Current cycle view, or None.
         profile: Resolved profile; the intimate line reads by gender.
+        now: Current local time.
+        settings: Plugin settings; the intimate row follows ENABLE_INTIMATE.
 
     Returns:
         A list of row dictionaries.
@@ -1058,15 +1068,20 @@ def _scent_rows(
             "tone": "warn" if state.period_scent >= 30 else "ok",
         },
     ]
-    rows.append(
-        {
-            "key": "intimate",
-            "label": "亲密后",
-            "value": round(state.intimate_scent, 1),
-            "level": "还留着一点" if state.intimate_scent >= 30 else "淡了",
-            "tone": "warn" if state.intimate_scent >= 50 else "ok",
-        }
-    )
+    if settings.enable_intimate:
+        last_act = _last_act_at(state)
+        hours = (
+            max(0.0, (now.timestamp() - last_act) / 3600.0) if last_act > 0.0 else None
+        )
+        rows.append(
+            {
+                "key": "intimate",
+                "label": "亲密后",
+                "value": round(state.intimate_scent, 1),
+                "level": _intimate_level(hours),
+                "tone": "warn" if hours is not None and hours <= 8.0 else "ok",
+            }
+        )
     if state.lactating:
         rows.append(
             {
@@ -1084,13 +1099,21 @@ def _scent_lines(
     state: BodyState,
     view: CycleView | None,
     profile: Profile,
+    now: datetime,
+    settings: Settings,
 ) -> list[str]:
     """Return private scent lines, one per noticeable source.
+
+    The intimate line is driven by when the act happened rather than by the
+    meter: right afterwards there is always something to smell, and a wash is
+    what removes it.
 
     Args:
         state: Current body state.
         view: Cycle view, or None.
         profile: Resolved profile; the intimate line reads by gender.
+        now: Current local time.
+        settings: Plugin settings; the line follows ENABLE_INTIMATE.
 
     Returns:
         A list of Chinese sentences.
@@ -1111,11 +1134,13 @@ def _scent_lines(
         lines.append("脚：闷了一天，袜子上有点味道。")
     if state.period_scent >= 30.0:
         lines.append("经期：身上有一点血腥味。")
-    if state.intimate_scent >= 30.0:
-        if profile.gender == "female":
-            lines.append("身体：事后身上留着一点淡淡的腥甜味，混着汗味，洗一下会淡。")
-        else:
-            lines.append("身体：事后身上留着一点淡淡的腥味，混着汗味，洗一下会淡。")
+    if settings.enable_intimate:
+        last_act = _last_act_at(state)
+        if last_act > 0.0:
+            hours = max(0.0, (now.timestamp() - last_act) / 3600.0)
+            washed = state.last_shower_at >= last_act and state.intimate_scent < 10.0
+            if hours <= 36.0 and not washed:
+                lines.append(_intimate_line(profile, hours))
     if state.lactating and state.milk >= 40.0:
         lines.append("胸前：有一点奶味，衣服上也能闻到。")
     return lines
@@ -1278,7 +1303,7 @@ def build_prompt_block(
         if show_private and state.lactating:
             lines.append(_lactation_text(state))
     if show_private:
-        for scent_line in _scent_lines(state, view, profile):
+        for scent_line in _scent_lines(state, view, profile, now, settings):
             lines.append(scent_line)
         if view is None:
             organ_line = _organ_text(state, view)
@@ -1513,7 +1538,7 @@ def build_status_text(
             if view.fertile:
                 lines.append("身体：这几天更容易受孕。")
         if private:
-            for scent_line in _scent_lines(state, view, profile):
+            for scent_line in _scent_lines(state, view, profile, now, settings):
                 lines.append(scent_line)
             if view is None:
                 organ_line = _organ_text(state, view)
@@ -2083,7 +2108,7 @@ def build_web_state(
         "details": details,
         "cycle": cycle,
         "organs": organ_rows(state, view),
-        "scents": _scent_rows(state, view, profile),
+        "scents": _scent_rows(state, view, profile, now, settings),
         "intimacy": intimacy,
         "lactation": lactation,
         "male": male,

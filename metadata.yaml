@@ -9,7 +9,7 @@ help: >-
   在聊天里用 /身体 看状态；吃饭、喝水、洗澡、上厕所由她按自己的状态和作息处理。
   她会因为时间流逝真的饿、真的渴、真的困；女性人格有生理期、分泌物细节和器官状态，
   青春期角色有初潮和不规律周期，男性人格有梦遗、晨勃和白天反应。
-version: 0.50.1
+version: 0.50.2
 author: Sihnbaobao
 repo: https://github.com/Sihnbaobao/astrbot_plugin_body_needs
 astrbot_version: ">=4.24.0"

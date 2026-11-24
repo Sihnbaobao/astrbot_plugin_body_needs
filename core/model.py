@@ -198,12 +198,6 @@ class Constitution:
     stomach_capacity: float
     gut_transit: float
     self_rate: float
-    hair_target_cm: float = 38.0
-    hair_span_cm: float = 5.0
-    hair_growth_cm_day: float = 0.04
-    nail_target_mm: float = 2.0
-    nail_span_mm: float = 2.4
-    nail_growth_mm_day: float = 0.11
     skin_oil_rate: float = 1.0
     skin_clarity: float = 70.0
 
@@ -225,31 +219,9 @@ def constitution(persona_id: str) -> Constitution:
         # Log-uniform 0.3-4.8: most personas sit near once a day, a few at
         # either end; stable for the persona like sleep need.
         self_rate=0.3 * (16.0 ** _roll(persona_id, "body", "release")),
-        hair_target_cm=20.0 + 35.0 * _roll(persona_id, "body", "hair-target"),
-        hair_span_cm=4.0 + 4.0 * _roll(persona_id, "body", "hair-span"),
-        hair_growth_cm_day=0.035 + 0.02 * _roll(persona_id, "body", "hair-rate"),
-        nail_target_mm=1.4 + 1.8 * _roll(persona_id, "body", "nail-target"),
-        nail_span_mm=1.8 + 1.6 * _roll(persona_id, "body", "nail-span"),
-        nail_growth_mm_day=0.08 + 0.06 * _roll(persona_id, "body", "nail-rate"),
         skin_oil_rate=0.65 + 0.7 * _roll(persona_id, "body", "skin-oil"),
         skin_clarity=55.0 + 35.0 * _roll(persona_id, "body", "skin-clarity"),
     )
-
-
-def hair_length_cm(state: BodyState, profile: Profile) -> float:
-    """Return the actual hair length for this persona in centimetres."""
-    const = constitution(profile.persona_id)
-    base = state.hair_base_cm or const.hair_target_cm
-    span = state.hair_span_cm or const.hair_span_cm
-    return base + (state.hair_growth / 100.0) * span
-
-
-def nail_length_mm(state: BodyState, profile: Profile) -> float:
-    """Return the actual nail length for this persona in millimetres."""
-    const = constitution(profile.persona_id)
-    base = state.nail_base_mm or const.nail_target_mm
-    span = state.nail_span_mm or const.nail_span_mm
-    return base + (state.nail_growth / 100.0) * span
 
 
 def _parse_ts(value: Any) -> float:
@@ -318,12 +290,6 @@ class BodyState:
     oral: float = 20.0
     gut: float = 8.0
     bowel: float = 0.0
-    hair_growth: float = 26.0
-    nail_growth: float = 22.0
-    hair_base_cm: float = 0.0
-    hair_span_cm: float = 0.0
-    nail_base_mm: float = 0.0
-    nail_span_mm: float = 0.0
     temperature: float = 36.6
     sweat: float = 0.0
     heart_rate: float = 72.0
@@ -415,8 +381,6 @@ class BodyState:
     last_brush_at: float = 0.0
     last_toilet_at: float = 0.0
     last_bowel_at: float = 0.0
-    last_haircut_at: float = 0.0
-    last_nails_at: float = 0.0
     last_nap_at: float = 0.0
     sleeping: bool = False
     sleep_since: float = 0.0
@@ -478,12 +442,6 @@ class BodyState:
             "skin": self.skin,
             "gut": self.gut,
             "bowel": self.bowel,
-            "hair_growth": self.hair_growth,
-            "nail_growth": self.nail_growth,
-            "hair_base_cm": self.hair_base_cm,
-            "hair_span_cm": self.hair_span_cm,
-            "nail_base_mm": self.nail_base_mm,
-            "nail_span_mm": self.nail_span_mm,
             "temperature": self.temperature,
             "sweat": self.sweat,
             "heart_rate": self.heart_rate,
@@ -569,8 +527,6 @@ class BodyState:
             "last_brush_at": self.last_brush_at,
             "last_toilet_at": self.last_toilet_at,
             "last_bowel_at": self.last_bowel_at,
-            "last_haircut_at": self.last_haircut_at,
-            "last_nails_at": self.last_nails_at,
             "last_nap_at": self.last_nap_at,
             "sleeping": self.sleeping,
             "sleep_since": self.sleep_since,
@@ -635,12 +591,6 @@ class BodyState:
             "oral",
             "gut",
             "bowel",
-            "hair_growth",
-            "nail_growth",
-            "hair_base_cm",
-            "hair_span_cm",
-            "nail_base_mm",
-            "nail_span_mm",
             "temperature",
             "sweat",
             "heart_rate",
@@ -684,8 +634,6 @@ class BodyState:
             "last_brush_at",
             "last_toilet_at",
             "last_bowel_at",
-            "last_haircut_at",
-            "last_nails_at",
             "last_nap_at",
             "last_release_at",
             "last_self_at",
@@ -729,12 +677,6 @@ class BodyState:
         ):
             setattr(state, key, _clamp(getattr(state, key)))
         state.bowel = _clamp(state.bowel)
-        state.hair_growth = _clamp(state.hair_growth)
-        state.nail_growth = _clamp(state.nail_growth)
-        state.hair_base_cm = max(0.0, state.hair_base_cm)
-        state.hair_span_cm = max(0.0, state.hair_span_cm)
-        state.nail_base_mm = max(0.0, state.nail_base_mm)
-        state.nail_span_mm = max(0.0, state.nail_span_mm)
         state.illness = str(data.get("illness") or "")
         state.pain_site = str(data.get("pain_site") or "")
         state.weather = str(data.get("weather") or "clear")
@@ -991,8 +933,6 @@ ACTION_LABELS = {
     "shower": "洗了澡",
     "brush": "刷了牙",
     "toilet": "去了厕所",
-    "haircut": "剪了头发",
-    "nails": "剪了指甲",
     "nap": "小睡了一会儿",
     "supplies": "补了卫生用品",
     "intimacy": "做完爱",
@@ -2524,8 +2464,6 @@ CARE_LABELS = {
     "snack": "零食",
     "drink": "喝水",
     "toilet": "厕所",
-    "haircut": "剪头发",
-    "nails": "剪指甲",
     "shower": "洗澡",
     "brush": "刷牙",
 }
@@ -3721,6 +3659,7 @@ def _advance_male_events(
                     )
                     _add_event(state, at, "wet_dream", "昨晚梦遗了", key=key)
                     state.last_release_at = at.timestamp()
+                    state.intimate_scent = max(state.intimate_scent, 42.0)
                     state.libido = _clamp(state.libido - 50)
                     state.refractory_until = (
                         at.timestamp()
@@ -4508,14 +4447,6 @@ def apply_action(
         state.breath_scent = 2.0
         state.last_brush_at = now_ts
         _add_care(state, now, "brush")
-    elif action == "haircut":
-        state.hair_growth = 0.0
-        state.last_haircut_at = now_ts
-        _add_care(state, now, "haircut")
-    elif action == "nails":
-        state.nail_growth = 0.0
-        state.last_nails_at = now_ts
-        _add_care(state, now, "nails")
     elif action == "toilet":
         if state.bowel >= 20.0:
             state.gut = max(0.0, state.gut - 85.0)
