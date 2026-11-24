@@ -1061,6 +1061,169 @@ def _sleep_aftermath(state: BodyState, now: datetime, profile: Profile) -> list[
     return lines[:2]
 
 
+def _interoception_lines(state: BodyState, now: datetime, private: bool) -> list[str]:
+    """Return lived hunger, thirst and bladder sensations for a private chat.
+
+    The meters remain the source of truth; these lines translate them into a
+    first-person feeling with a coarse 0-10 intensity, so the number is still
+    visible but no longer the whole message.
+
+    Args:
+        state: Current body state.
+        now: Current local time.
+        private: Whether detailed private sensations are allowed.
+
+    Returns:
+        Up to three lines, strongest first.
+    """
+    if not private:
+        return []
+    rows: list[tuple[float, str]] = []
+    hunger = max(0.0, min(10.0, (60.0 - state.satiety) / 6.0))
+    if state.stomach < 40.0:
+        hunger = min(10.0, hunger + 2.0)
+    if state.glucose < 45.0:
+        hunger = min(10.0, hunger + 1.0)
+    if hunger >= 3.0:
+        if hunger < 5.0:
+            text = "胃里有点空，像少了点什么"
+        elif hunger < 8.0:
+            text = "胃里空落落的，偶尔轻轻缩一下"
+        else:
+            text = "饿得有点发慌，手有点软"
+        rows.append((hunger, f"{text}（饿 {hunger:.0f}/10）"))
+
+    thirst = max(0.0, min(10.0, (65.0 - state.hydration) / 6.5))
+    if state.dry_mouth >= 40.0:
+        thirst = min(10.0, thirst + 2.0)
+    if thirst >= 3.0:
+        if thirst < 5.0:
+            text = "嗓子有点干"
+        elif thirst < 8.0:
+            text = "舌头顶到上颚有点黏"
+        else:
+            text = "嘴唇干得想舔，咽口水都少"
+        rows.append((thirst, f"{text}（渴 {thirst:.0f}/10）"))
+
+    bladder = max(0.0, min(10.0, (state.bladder - 25.0) / 7.0))
+    if state.urine >= 55.0:
+        bladder = min(10.0, bladder + 1.0)
+    if bladder >= 3.0:
+        if bladder < 5.0:
+            text = "小腹有一点坠"
+        elif bladder < 8.0:
+            text = "想找个洗手间，坐着不太踏实"
+        else:
+            text = "憋得坐不住，注意力全在小腹"
+        rows.append((bladder, f"{text}（尿意 {bladder:.0f}/10）"))
+
+    rows.sort(key=lambda item: item[0], reverse=True)
+    lines = [text for _, text in rows[:3]]
+    if lines:
+        where = (
+            "家里就有厨房和洗手间。"
+            if state.location == "home"
+            else "在外面，得找地方。"
+        )
+        lines.append(where)
+    return lines
+
+
+def build_sense_text(
+    state: BodyState,
+    now: datetime,
+    profile: Profile,
+    settings: Settings,
+    sense: str,
+    private: bool,
+) -> str:
+    """Render one self-perception snapshot: look, touch or smell.
+
+    This is a view over the existing state, not a new simulation. It stays
+    deliberately modest in groups; private chats may include the chest and
+    lower abdomen but still use plain, non-explicit wording.
+
+    Args:
+        state: Current body state.
+        now: Current local time.
+        profile: Resolved persona profile.
+        settings: Plugin settings.
+        sense: "look", "touch" or "smell".
+        private: Whether private-only details are allowed.
+
+    Returns:
+        A short first-person sensory description.
+    """
+    sense = sense if sense in ("look", "touch", "smell") else "look"
+    view = cycle_view(state, now, profile, settings)
+    if sense == "smell":
+        if not private:
+            return "只能闻到一点头发和衣服的味道。"
+        scents = _scent_lines(state, view, profile, now, settings)
+        if not scents:
+            return "身上没什么特别的味道。"
+        cleaned = [line.split("：", 1)[-1] for line in scents[:3]]
+        return "凑近闻了闻：" + "；".join(cleaned)
+
+    if sense == "look":
+        bits: list[str] = []
+        if state.temperature >= 37.0:
+            bits.append("脸颊有点发烫")
+        elif state.temperature < 36.3:
+            bits.append("脸色有点白，嘴唇也没什么血色")
+        if state.sweat >= 20.0:
+            bits.append("鼻尖和鬓角有一层薄汗")
+        if state.skin_oil >= 55.0:
+            bits.append("额头有点油光")
+        if state.eye_strain >= 55.0:
+            bits.append("眼睛有点干，眼下发青")
+        if state.dry_mouth >= 40.0:
+            bits.append("嘴唇有点干")
+        if state.scalp_scent >= 45.0:
+            bits.append("头发有点塌，发根不蓬松")
+        if state.sleep_debt >= 8.0:
+            bits.append("眼皮看着有点沉")
+        if state.sedentary >= 60.0:
+            bits.append("肩膀微微耸着")
+        if private and view is not None:
+            if view.breast >= 2:
+                bits.append("胸口有点胀")
+            if state.bladder >= 60.0:
+                bits.append("小腹有一点坠")
+        if state.location == "home":
+            bits.append("身上穿着居家的衣服")
+        else:
+            bits.append(
+                f"穿得{clothing_label(state.ambient_temp, state.clothing_warmth)}"
+            )
+        if not bits:
+            bits.append("看起来很平常，没什么特别的地方")
+        prefix = "镜子里是你熟悉的那张脸。你看到：" if private else "你能看到："
+        return prefix + "；".join(bits) + "。"
+
+    bits = []
+    bits.append(f"指尖碰到脸颊，温度{temperature_label(state.temperature)}")
+    if state.sweat >= 20.0:
+        bits.append("手心有点潮")
+    if state.skin_oil >= 55.0:
+        bits.append("皮肤摸起来有点滑腻")
+    if state.heart_rate >= 88.0:
+        bits.append("心跳比平时快")
+    if state.sedentary >= 60.0:
+        bits.append("后颈和肩膀发僵")
+    if state.leg_fatigue >= 40.0:
+        bits.append("小腿按下去有点酸")
+    if state.pain >= 25.0:
+        bits.append(f"{state.pain_site or '身上'}按着有点疼")
+    if private and view is not None:
+        if view.breast >= 2:
+            bits.append("胸口按下去有点胀")
+        if state.bladder >= 60.0:
+            bits.append("小腹按下去有点坠")
+    prefix = "你抬手摸了摸自己：" if private else "你碰了碰自己："
+    return prefix + "；".join(bits) + "。"
+
+
 def _supply_text(state: BodyState, view: CycleView | None) -> str:
     """Return the sanitary-supply line, only while it matters."""
     if view is None or view.phase != "menstrual":
@@ -1605,14 +1768,17 @@ def build_prompt_block(
             for key in important:
                 lines.append(f"{METER_NAMES[key]}：{meter_label(key, values[key])}")
     elif show_all:
-        lines.append(
-            f"胃：{satiety_label(state.satiety)}（{_ago(state.last_eat_at, now)}吃过东西）"
-        )
-        lines.append(
-            f"水分：{hydration_label(state.hydration)}（{_ago(state.last_drink_at, now)}喝过水）"
-        )
-        if state.bladder >= 35:
-            lines.append(f"小便：{bladder_label(state.bladder)}")
+        if show_private:
+            lines.extend(_interoception_lines(state, now, private))
+        else:
+            lines.append(
+                f"胃：{satiety_label(state.satiety)}（{_ago(state.last_eat_at, now)}吃过东西）"
+            )
+            lines.append(
+                f"水分：{hydration_label(state.hydration)}（{_ago(state.last_drink_at, now)}喝过水）"
+            )
+            if state.bladder >= 35:
+                lines.append(f"小便：{bladder_label(state.bladder)}")
         if state.bowel >= 35:
             lines.append(f"排便：{bowel_label(state.bowel)}")
         if state.temperature < 36.3 or state.temperature >= 36.9:

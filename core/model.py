@@ -2923,6 +2923,7 @@ def _routine(
     profile: Profile,
     settings: Settings,
     const: Constitution,
+    defer_care: bool = False,
 ) -> None:
     """Let a persona run her own body on an ordinary daily rhythm.
 
@@ -2936,6 +2937,8 @@ def _routine(
         profile: Persona profile; supplies only matter for a cycling body.
         settings: Plugin settings; hygiene can be switched off.
         const: Per-persona baseline, used for the meal size.
+        defer_care: Defer ordinary meals and toilet trips because she is in an
+            active conversation; urgent needs still act.
     """
     if state.sleeping and state.sleep_since <= moment.timestamp() < state.sleep_wake_at:
         return
@@ -3040,6 +3043,11 @@ def _routine(
             continue
         key = f"self-meal:{day}:{slot_name}"
         if state.flags.get(key):
+            continue
+        hungry = state.stomach < 60.0 or state.satiety < 55.0 or state.glucose < 45.0
+        if not hungry:
+            continue
+        if defer_care and state.stomach > 12.0 and state.glucose > 25.0:
             continue
         if state.stomach > 90.0 or since_meal <= 3600:
             continue
@@ -3184,7 +3192,7 @@ def _routine(
         state.flags[toilet_key] = moment.timestamp()
         _add_care(state, moment, "toilet")
         _maybe_toilet_release(state, moment, profile, settings, "urine")
-    elif state.urine >= 30.0:
+    elif state.urine >= 45.0 and (not defer_care or state.urine >= 88.0):
         state.urine = 2.0
         state.last_toilet_at = moment.timestamp()
         _add_care(state, moment, "toilet")
@@ -4092,6 +4100,7 @@ def advance(
     mood: dict[str, Any] | None = None,
     busy_until: float = 0.0,
     busy_kind: str = "",
+    interactive: bool = False,
 ) -> BodyState:
     """Let time pass and update internal state, meters and events.
 
@@ -4103,11 +4112,15 @@ def advance(
         mood: Optional emotion snapshot that colors appetite and tension.
         busy_until: When the current hobby session ends, so bedtime can wait.
         busy_kind: What she is busy with, for prompts and the page.
+        interactive: Whether a conversation is active right now. In that case
+            ordinary meals and toilet trips wait for her to choose; only urgent
+            needs act on their own.
 
     Returns:
         The same state, advanced.
     """
     now_ts = now.timestamp()
+    defer_from = now_ts - 15 * 60 if interactive else float("inf")
     state.busy_until = float(busy_until or 0.0)
     state.busy_kind = str(busy_kind or "") if state.busy_until > now_ts else ""
     if state.updated_at <= 0:
@@ -4169,10 +4182,24 @@ def advance(
         # Run the daily rhythm once per clock hour, including the hour the
         # step starts in. Checking only hour changes skipped meals whenever an
         # advance happened to start after the scheduled hour.
-        _routine(state, cursor, profile, settings, const)
+        _routine(
+            state,
+            cursor,
+            profile,
+            settings,
+            const,
+            defer_care=cursor.timestamp() >= defer_from,
+        )
         mark = cursor.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
         while mark <= chunk_end:
-            _routine(state, mark, profile, settings, const)
+            _routine(
+                state,
+                mark,
+                profile,
+                settings,
+                const,
+                defer_care=mark.timestamp() >= defer_from,
+            )
             mark += timedelta(hours=1)
         cycle_day = state.cycle_day
         in_period_now = (

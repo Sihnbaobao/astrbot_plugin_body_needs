@@ -680,6 +680,31 @@ def test_three_meals_and_care_log() -> None:
     assert state.care == sorted(state.care, key=lambda item: item["t"])
 
 
+def test_active_chat_defers_ordinary_meals() -> None:
+    from core.model import _routine, constitution
+
+    now = datetime(2026, 11, 18, 9, 40, tzinfo=TZ)
+    settings = Settings(sleep_window="01:00-07:00")
+    profile = make_profile(age=24)
+    state = make_state(now)
+    state.last_wake_at = datetime(2026, 11, 18, 8, 0, tzinfo=TZ).timestamp()
+    state.last_eat_at = (now - timedelta(hours=4)).timestamp()
+    state.stomach = 30.0
+    state.satiety = 30.0
+    state.glucose = 40.0
+    const = constitution(profile.persona_id)
+
+    _routine(state, now, profile, settings, const, defer_care=True)
+    assert not any(item["kind"] == "meal" for item in state.care)
+
+    # The deferred call may have started a shower; clear it so the second call
+    # reaches the meal branch.
+    state.care_until = 0.0
+    state.care_kind = ""
+    _routine(state, now, profile, settings, const, defer_care=False)
+    assert any(item["kind"] == "meal" for item in state.care)
+
+
 def test_autonomy_runs_even_during_a_chat() -> None:
     now = datetime(2026, 11, 19, 22, 0, tzinfo=TZ)
     state = make_state(now - timedelta(hours=10))

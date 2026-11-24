@@ -43,7 +43,12 @@ from .core.model import (
     sleep_view,
 )
 from .core.profile import Profile, detect_profile
-from .core.prompt import build_prompt_block, build_status_text, build_web_state
+from .core.prompt import (
+    build_prompt_block,
+    build_sense_text,
+    build_status_text,
+    build_web_state,
+)
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_body_needs"
@@ -705,6 +710,7 @@ class BodyNeedsPlugin(Star):
                 mood,
                 busy_until=busy_until,
                 busy_kind=busy_kind,
+                interactive=active,
             )
             self._consume_body_request(state, profile, now, umo=umo)
             if active:
@@ -1233,6 +1239,27 @@ class BodyNeedsPlugin(Star):
         )
         tools.add_tool(
             FunctionTool(
+                name="body_sense",
+                description=(
+                    "看看、摸摸或闻闻自己现在的身体。私聊给完整感受，"
+                    "群聊只给外表和温度。"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "sense": {
+                            "type": "string",
+                            "description": "用哪种感官",
+                            "enum": ["look", "touch", "smell"],
+                        }
+                    },
+                    "required": ["sense"],
+                },
+                handler=self._tool_sense,
+            )
+        )
+        tools.add_tool(
+            FunctionTool(
                 name="body_action",
                 description=(
                     "记录自己做过的一件照顾身体的事，并结算身体变化：吃饭、吃零食、喝水、"
@@ -1282,6 +1309,27 @@ class BodyNeedsPlugin(Star):
             logger.warning("[body] body_status 失败：%s", exc)
             return f"读取身体状态失败：{exc}"
 
+    async def _tool_sense(
+        self, event: AstrMessageEvent, sense: str = "look", **_: Any
+    ) -> str:
+        """Tool handler: render a look, touch or smell snapshot."""
+        try:
+            persona_id, profile, now = await self._identity(event)
+            state = await self._load_advanced(
+                persona_id, profile, now, umo=event.unified_msg_origin
+            )
+            return build_sense_text(
+                state,
+                now,
+                profile,
+                self.settings,
+                str(sense or "look"),
+                event.is_private_chat(),
+            )
+        except Exception as exc:
+            logger.warning("[body] body_sense 失败：%s", exc)
+            return f"感受身体失败：{exc}"
+
     async def _tool_action(
         self,
         event: AstrMessageEvent,
@@ -1301,9 +1349,19 @@ class BodyNeedsPlugin(Star):
                 str(action or "").strip(),
                 ejaculated=bool(ejaculated),
             )
+            afterglow = {
+                "eat": "胃里落下去一点，身上暖起来",
+                "snack": "嘴里有点味道了，胃没那么空",
+                "drink": "喉咙润了，嘴里没那么黏",
+                "toilet": "小腹一下子松了",
+                "nap": "脑子里的噪音退了一点",
+                "shower": "热水冲过后颈，肩膀松了一截",
+                "brush": "嘴里清爽了",
+            }.get(str(action or "").strip(), "")
             return (
                 f"{result.label}。{result.detail}。"
-                f"现在的身体：饱食度 {round(state.satiety)}/100，"
+                + (f"{afterglow}。" if afterglow else "")
+                + f"现在的身体：饱食度 {round(state.satiety)}/100，"
                 f"水分 {round(state.hydration)}/100，精力 {round(state.energy)}/100。"
             )
         except ValueError as exc:

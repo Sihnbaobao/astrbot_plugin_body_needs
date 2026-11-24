@@ -363,6 +363,47 @@ def test_private_block_includes_mucus_and_organs() -> None:
     assert "宫颈" not in group
 
 
+def test_private_prompt_uses_sensations_with_numbers() -> None:
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.satiety = 20.0
+    state.stomach = 15.0
+    state.hydration = 30.0
+    state.bladder = 70.0
+
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "/10" in private
+    assert "饿" in private
+    assert "尿意" in private
+    assert "胃：" not in private
+
+    group = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="basic"), private=False
+    )
+    assert "胃：" in group
+    assert "/10" not in group
+
+
+def test_self_perception_stays_modest_in_groups() -> None:
+    from core.prompt import build_sense_text
+
+    now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
+    state = make_state(now)
+    state.temperature = 37.2
+    state.sweat = 30.0
+    state.bladder = 80.0
+    profile = make_profile()
+
+    private = build_sense_text(state, now, profile, Settings(), "look", True)
+    assert "镜子" in private
+    group = build_sense_text(state, now, profile, Settings(), "look", False)
+    assert "镜子" not in group
+    assert "小腹" not in group
+    assert build_sense_text(state, now, profile, Settings(), "smell", False).startswith(
+        "只能闻到"
+    )
+
+
 def test_body_noise_and_sleep_aftermath_lines() -> None:
     now = datetime(2026, 11, 18, 8, 10, tzinfo=TZ)
     state = make_state(now)
