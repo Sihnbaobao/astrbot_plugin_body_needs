@@ -996,40 +996,6 @@ def _cycle_text(view: CycleView, include_mucus: bool = True) -> str:
     return text
 
 
-def _missed_lines(
-    state: BodyState,
-    now: datetime,
-    umo: str,
-    limit: int = 4,
-) -> list[str]:
-    """Return the messages that arrived while she was asleep.
-
-    Args:
-        state: Current body state.
-        now: Current local time.
-        umo: Session origin to match; empty matches every session.
-        limit: How many of the newest messages to keep.
-
-    Returns:
-        Short clock-and-excerpt strings, oldest first.
-    """
-    cutoff = now.timestamp() - 12 * 3600
-    rows: list[str] = []
-    for item in state.missed[-12:]:
-        stamp = float(item.get("at") or 0)
-        if stamp < cutoff:
-            continue
-        owner = str(item.get("umo") or "")
-        if umo and owner and owner != umo:
-            continue
-        text = str(item.get("text") or "").strip()
-        if not text:
-            continue
-        moment = datetime.fromtimestamp(stamp, now.tzinfo)
-        rows.append(f"{moment:%H:%M}「{text[:40]}」")
-    return rows[-limit:]
-
-
 def _supply_text(state: BodyState, view: CycleView | None) -> str:
     """Return the sanitary-supply line, only while it matters."""
     if view is None or view.phase != "menstrual":
@@ -1440,7 +1406,7 @@ def _scent_rows(
         rows.append(
             {
                 "key": "intimate",
-                "label": "亲密后",
+                "label": "事后",
                 "value": round(state.intimate_scent, 1),
                 "level": _intimate_level(hours),
                 "tone": "warn" if hours is not None and hours <= 8.0 else "ok",
@@ -1648,7 +1614,7 @@ def build_prompt_block(
             lines.append("身体：肚子有点不舒服，不太想动。")
 
     if (
-        show_private
+        show_all
         and settings.intensity != "subtle"
         and (state.stomach < 35 or state.glucose < 50 or state.sleep_debt > 6)
     ):
@@ -1661,10 +1627,10 @@ def build_prompt_block(
         )
         if state.hot_flash_until > now.timestamp():
             lines.append("身体：突然一阵潮热，后背有点汗。")
+        mood_line = _cycle_mood_text(view)
+        if mood_line:
+            lines.append(mood_line)
         if show_private:
-            mood_line = _cycle_mood_text(view)
-            if mood_line:
-                lines.append(mood_line)
             lines.append(_mucus_text(view))
             lines.append(_genital_text(view))
             lines.append(_traits_text(view))
@@ -1725,16 +1691,10 @@ def build_prompt_block(
             f"睡眠：{sleep.line}，躺着但还没睡着；要是有人说话，可以迷迷糊糊回一句。"
         )
     elif sleep is not None and not sleep.asleep:
-        missed_rows = _missed_lines(state, now, umo)
-        woke_recently = bool(
-            state.last_wake_at and 0 <= now.timestamp() - state.last_wake_at <= 6 * 3600
-        )
         if sleep.just_woke:
             lines.append(f"睡眠：{sleep.line}，脑子还在慢慢清醒。")
         elif sleep.line:
             lines.append(f"睡眠：{sleep.line}")
-        if missed_rows and (sleep.just_woke or woke_recently):
-            lines.append("睡着时没看到的消息：" + "；".join(missed_rows))
     if state.busy_kind and state.busy_until > now.timestamp():
         busy = datetime.fromtimestamp(state.busy_until, now.tzinfo)
         lines.append(f"手上的事：{state.busy_kind}，大概 {busy:%H:%M} 才告一段落。")
@@ -1772,7 +1732,7 @@ def build_prompt_block(
     if state.nasal >= 30.0:
         lines.append("鼻子：有点堵，流清鼻涕。")
 
-    if show_private:
+    if show_all:
         load = (
             max(0.0, 35.0 - state.satiety)
             + max(0.0, 35.0 - state.hydration)

@@ -164,6 +164,30 @@ def test_group_full_shows_cycle_but_not_intimate() -> None:
     assert "不必提经期" not in block
 
 
+def test_group_full_keeps_sleep_debt_and_mood() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.sleep_debt = 20.0
+    state.cycle_anchor = (now.date() - timedelta(days=26)).isoformat()
+    block = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="full"), private=False
+    )
+    assert "睡眠债" in block
+    assert "经前" in block
+    assert "耐心" in block
+
+
+def test_group_basic_still_hides_sleep_debt_and_cycle_mood() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.sleep_debt = 20.0
+    state.cycle_anchor = (now.date() - timedelta(days=26)).isoformat()
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=False)
+    assert "睡眠债" not in block
+    assert "经前" not in block
+    assert "耐心" not in block
+
+
 def test_group_basic_hides_pregnancy_and_lactation_events() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)
@@ -470,6 +494,7 @@ def test_web_state_exposes_mucus_organs_and_scent_sources() -> None:
         "period",
         "intimate",
     } <= set(scents)
+    assert scents["intimate"]["label"] == "事后"
     assert all(row["detail"] for row in payload["scents"])
 
 

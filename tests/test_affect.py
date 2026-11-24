@@ -75,6 +75,17 @@ def test_match_emotion_by_persona_name() -> None:
     assert match_emotion({}, "璃月") is None
 
 
+def test_publish_exposes_the_busy_window(tmp_path) -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    state = _state()
+    state.release_until = now.timestamp() + 600
+    publish(tmp_path, state, None, now)
+    payload = json.loads((tmp_path / "vitals.json").read_text(encoding="utf-8"))
+    entry = payload["personas"]["test"]
+    assert entry["busy_until"] == now.timestamp() + 600
+    assert entry["away_until"] == 0.0
+
+
 def test_publish_merges_personas(tmp_path) -> None:
     now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
     first = _state(persona_id="a")

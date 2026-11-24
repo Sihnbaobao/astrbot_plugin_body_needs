@@ -443,7 +443,6 @@ class BodyState:
     sleep_phase: float = 0.0
     sleep_anchor_at: float = 0.0
     sleep_intent: float = 0.0
-    missed: list[dict[str, Any]] = field(default_factory=list)
     last_release_at: float = 0.0
     last_self_at: float = 0.0
     intimacy_count: int = 0
@@ -601,7 +600,6 @@ class BodyState:
             "sleep_phase": self.sleep_phase,
             "sleep_anchor_at": self.sleep_anchor_at,
             "sleep_intent": self.sleep_intent,
-            "missed": list(self.missed),
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
             "intimacy_count": self.intimacy_count,
@@ -877,17 +875,6 @@ class BodyState:
         )
         state.sleep_anchor_at = _number(data.get("sleep_anchor_at"))
         state.sleep_intent = _number(data.get("sleep_intent"))
-        missed = data.get("missed")
-        if isinstance(missed, list):
-            state.missed = [
-                {
-                    "at": _number(item.get("at")),
-                    "umo": str(item.get("umo") or ""),
-                    "text": str(item.get("text") or "")[:80],
-                }
-                for item in missed
-                if isinstance(item, dict) and item.get("at")
-            ][-12:]
         if not state.sleeping:
             state.sleep_since = 0.0
             state.sleep_wake_at = 0.0

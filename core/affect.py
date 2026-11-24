@@ -181,6 +181,8 @@ def build_affect(state: BodyState, view: CycleView | None) -> dict[str, Any]:
         "tearfulness": round(tearfulness, 3),
         "away_until": state.away_until,
         "away_reason": state.away_reason,
+        "busy_until": max(state.release_until, state.care_until),
+        "last_self_at": state.last_self_at,
         "labels": labels,
         "line": line,
     }

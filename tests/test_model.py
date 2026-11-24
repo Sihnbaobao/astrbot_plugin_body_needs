@@ -1493,18 +1493,21 @@ def test_affect_reports_premenstrual_irritability() -> None:
     assert "经前" in affect["line"]
 
 
-def test_private_prompt_mentions_cycle_mood_but_group_does_not() -> None:
+def test_private_and_group_full_mention_cycle_mood_but_basic_does_not() -> None:
     from core.prompt import build_prompt_block
 
     now = datetime(2026, 11, 21, 20, 0, tzinfo=TZ)
-    settings = Settings(group_detail="full")
     profile = make_profile(age=24)
     state = make_state(now)
     state.cycle_anchor = (now - timedelta(days=25)).date().isoformat()
-    private = build_prompt_block(state, now, profile, settings, True)
-    group = build_prompt_block(state, now, profile, settings, False)
+    private = build_prompt_block(state, now, profile, Settings(), True)
+    full = build_prompt_block(state, now, profile, Settings(group_detail="full"), False)
+    basic = build_prompt_block(
+        state, now, profile, Settings(group_detail="basic"), False
+    )
     assert "经前" in private
-    assert "经前" not in group
+    assert "经前" in full
+    assert "经前" not in basic
 
 
 def test_period_libido_is_lower_than_ovulation() -> None:

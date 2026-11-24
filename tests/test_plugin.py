@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -23,13 +25,49 @@ class FakeResult:
         return self.text
 
 
+class At:
+    """Minimal At component; the class name is what the recorder checks."""
+
+    def __init__(self, qq) -> None:
+        self.qq = qq
+
+
+class Reply:
+    """Minimal Reply component; the class name is what the recorder checks."""
+
+    def __init__(self, sender_id, message_str: str = "") -> None:
+        self.sender_id = sender_id
+        self.message_str = message_str
+
+
 class FakeEvent:
     """Minimal AstrMessageEvent replacement."""
 
-    def __init__(self, *, private: bool = True, text: str = "/身体 状态") -> None:
+    def __init__(
+        self,
+        *,
+        private: bool = True,
+        text: str = "/身体 状态",
+        components=None,
+        sender: str = "小明",
+        at_or_wake: bool = False,
+    ) -> None:
         self.unified_msg_origin = "test:umo"
         self.message_str = text
         self.private = private
+        self.message_obj = SimpleNamespace(message=list(components or []))
+        self.sender = sender
+        self.at_or_wake = at_or_wake
+
+    def get_self_id(self) -> str:
+        return "42"
+
+    def get_sender_name(self) -> str:
+        return self.sender
+
+    @property
+    def is_at_or_wake_command(self) -> bool:
+        return self.at_or_wake
 
     def plain_result(self, text: str) -> FakeResult:
         return FakeResult(text)
@@ -271,6 +309,137 @@ async def test_pending_persona_request_applies_release(monkeypatch, tmp_path) ->
 
 
 @pytest.mark.asyncio
+async def test_persona_request_is_ignored_during_cooldown(
+    monkeypatch, tmp_path
+) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    state = BodyState(persona_id="test")
+    state.last_self_at = now.timestamp() - 600
+    request = plugin.data_dir / "body_request.json"
+    request.write_text('{"action": "release"}', encoding="utf-8")
+    assert plugin._consume_body_request(state, profile, now) is False
+    assert state.release_count == 0
+    assert not request.exists()
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
+async def test_persona_request_stays_in_its_own_session(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    state = BodyState(persona_id="test")
+    request = plugin.data_dir / "body_request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action": "release",
+                "umo": "aiocqhttp:FriendMessage:1",
+                "created_at": now.timestamp(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert (
+        plugin._consume_body_request(
+            state, profile, now, umo="aiocqhttp:FriendMessage:2"
+        )
+        is False
+    )
+    assert state.release_count == 0
+    assert request.exists()
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
+async def test_consume_release_request_applies_immediately(
+    monkeypatch, tmp_path
+) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    event = FakeEvent()
+    now = plugin._now()
+    request = plugin.data_dir / "body_request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action": "release",
+                "umo": event.unified_msg_origin,
+                "created_at": now.timestamp(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert await plugin.consume_release_request(event) is True
+    assert not request.exists()
+    state = plugin.store.load("test", now)
+    assert state.release_count == 1
+    assert state.release_until > now.timestamp()
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
+async def test_quiet_window_forwards_messages_to_persona(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    forwarded: list[tuple[str, str, str]] = []
+
+    async def fake_forward(persona_id, event, reason) -> None:
+        forwarded.append((persona_id, reason, event.message_str))
+
+    monkeypatch.setattr(plugin, "_forward_window_message", fake_forward)
+    now = plugin._now()
+    state = plugin.store.load("test", now)
+    state.sleeping = True
+    state.sleep_since = now.timestamp() - 1800
+    state.sleep_wake_at = now.timestamp() + 3600
+    state.sleep_kind = "night"
+    plugin.store.save(state)
+    await plugin.stay_asleep(FakeEvent(text="在吗"))
+    assert forwarded == [("test", "sleep", "在吗")]
+
+
+@pytest.mark.asyncio
+async def test_busy_window_forwards_messages_to_persona(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    forwarded: list[tuple[str, str, str]] = []
+
+    async def fake_forward(persona_id, event, reason) -> None:
+        forwarded.append((persona_id, reason, event.message_str))
+
+    monkeypatch.setattr(plugin, "_forward_window_message", fake_forward)
+    now = plugin._now()
+    state = plugin.store.load("test", now)
+    state.release_until = now.timestamp() + 300
+    plugin.store.save(state)
+    await plugin.pause_for_release(FakeEvent(text="在吗？"))
+    assert forwarded == [("test", "busy", "在吗？")]
+
+
+@pytest.mark.asyncio
+async def test_return_from_release_notifies_persona(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    now = plugin._now()
+    state = plugin.store.load("test", now)
+    state.release_until = now.timestamp() + 1
+    plugin.store.save(state)
+
+    notified: list[tuple[str, str, str]] = []
+
+    async def fake_notify(persona_id, reason, trigger_umo="") -> None:
+        notified.append((persona_id, reason, trigger_umo))
+
+    monkeypatch.setattr(plugin, "_notify_body_return", fake_notify)
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    await plugin._load_advanced("test", profile, now, umo="g")
+    await plugin._load_advanced("test", profile, now + timedelta(seconds=3), umo="g")
+    assert notified == [("test", "busy", "g")]
+
+
+@pytest.mark.asyncio
 async def test_genderless_persona_gets_no_intimacy_tool(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "一个普通的助手。")
     await plugin.initialize()
@@ -306,9 +475,6 @@ async def test_sleep_gate_silences_sessions_but_not_commands(
     command.stopped = False
     await plugin.stay_asleep(command)
     assert command.stopped is False
-
-    saved = plugin.store.load("test", now)
-    assert [item["text"] for item in saved.missed][-1:] == ["在吗"]
 
 
 def test_sleep_snapshot_and_contract(monkeypatch, tmp_path) -> None:

@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 0.55.2
+
+- 恢复 persona_presence 的“先去解决”握手：决策 AI 选择 `body_action=release` 时写 `body_request.json`，并立即调用 body 的 `consume_release_request`，本条不回、直接进入忙碌期；下一个私聊事件仍会兜底消费残留请求。
+- 请求消费加了三道护栏：`umo` 不匹配不串会话、30 分钟内刚解决过或正在 release 的请求直接忽略、非 release 动作不进队列。
+- `vitals.json` 新增 `busy_until`（release/洗澡的忙碌窗口）和 `last_self_at`，persona_presence 用来判断“她正忙”和 30 分钟冷却；亲密模块关闭时请求直接丢弃。
+- 静默期的消息不再由 body 判断或保存：body 只把原始事件转给 persona_presence（`on_body_window_message`），窗口结束时通知一次（`on_body_return`）。候选筛选、上下文、判断、生成回复和发送全部在 persona 侧。
+- body 不再往提示词里写“没看到的消息”，也不再写 `review.json`。
+- 删除 `BodyState.missed` 字段；旧存档里的 `missed` 键会被直接忽略。
+- 体味卡片的“亲密后”改为“事后”：做爱和自慰都会留下这个味道，原来的词只覆盖了前者。
+- 后台 `_maybe_release` 的概率路径保持不变，两条路并存，冷却避免重复触发。
+
 ## 0.55.1
 
 - “前庭”这个名字容易被理解成耳朵的前庭，拆成更直白的「尿道口」和「阴道口」两条：尿道口显示颜色和湿润、阴道口显示湿润/颜色/开合，各自带说明（位置、驱动因素）。

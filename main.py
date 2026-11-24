@@ -201,6 +201,7 @@ class BodyNeedsPlugin(Star):
         self._libido_scores: dict[str, dict[str, Any]] = {}
         self._libido_pending: set[str] = set()
         self._libido_cooldown: dict[str, tuple[str, float]] = {}
+        self._busy_until_seen: dict[str, float] = {}
         self._tick_task: asyncio.Task[None] | None = None
 
     # ── 生命周期与配置 ──
@@ -607,9 +608,19 @@ class BodyNeedsPlugin(Star):
         return base if isinstance(base, dict) else None
 
     def _consume_body_request(
-        self, state: BodyState, profile: Profile, now: datetime
+        self, state: BodyState, profile: Profile, now: datetime, umo: str = ""
     ) -> bool:
-        """Apply one pending persona_presence request, if present."""
+        """Apply one pending persona_presence request, if present.
+
+        Args:
+            state: Body state being advanced.
+            profile: Resolved persona profile.
+            now: Current local time.
+            umo: Session origin of the event that is consuming the request.
+
+        Returns:
+            True when a release was applied.
+        """
         path = Path(self.data_dir) / "body_request.json"
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -617,8 +628,36 @@ class BodyNeedsPlugin(Star):
             if path.exists():
                 path.unlink(missing_ok=True)
             return False
+        if not isinstance(payload, dict):
+            path.unlink(missing_ok=True)
+            return False
+        if str(payload.get("action") or "release") != "release":
+            path.unlink(missing_ok=True)
+            return False
+        if not (profile.gender_resolved and self.settings.enable_intimate):
+            path.unlink(missing_ok=True)
+            return False
+        try:
+            age = now.timestamp() - float(payload.get("created_at") or 0.0)
+        except (TypeError, ValueError):
+            age = 0.0
+        if payload.get("created_at") and age > 300:
+            # A request left behind by a restart must not fire hours later.
+            path.unlink(missing_ok=True)
+            return False
         persona = str(payload.get("persona") or "").strip()
         if persona and persona not in (profile.persona_id, profile.name):
+            return False
+        owner = str(payload.get("umo") or "").strip()
+        if owner and umo and owner != umo:
+            # A request belongs to the session that made it.
+            return False
+        now_ts = now.timestamp()
+        if state.release_until > now_ts or now_ts - state.last_self_at < 1800:
+            # The autonomous roll or an earlier request already took care of
+            # it; the decision AI chose a moment too close to that.
+            path.unlink(missing_ok=True)
+            logger.debug("[body] 忽略重复的 persona release 请求")
             return False
         try:
             apply_action(state, "release", now, profile, self.settings)
@@ -645,8 +684,17 @@ class BodyNeedsPlugin(Star):
                 polling passes False so it does not suppress sleep recovery.
             umo: Unified message origin used for the knowledge-base lookup.
         """
+        ended = ""
         async with self._lock:
             state = self.store.load(persona_id, now)
+            now_ts = now.timestamp()
+            was_asleep = bool(state.sleeping) and not (
+                state.sleep_wake_at and now_ts >= state.sleep_wake_at
+            )
+            busy_end = max(state.release_until, state.care_until)
+            if busy_end > now_ts:
+                self._busy_until_seen[persona_id] = busy_end
+            pending_busy_end = self._busy_until_seen.get(persona_id, 0.0)
             mood = self._emotion_for(persona_id)
             busy_until, busy_kind = self._busy_now(persona_id)
             advance(
@@ -658,9 +706,14 @@ class BodyNeedsPlugin(Star):
                 busy_until=busy_until,
                 busy_kind=busy_kind,
             )
-            self._consume_body_request(state, profile, now)
+            self._consume_body_request(state, profile, now, umo=umo)
             if active:
                 state.last_active_at = now.timestamp()
+            if was_asleep and not state.sleeping:
+                ended = "sleep"
+            elif pending_busy_end and pending_busy_end <= now_ts:
+                ended = "busy"
+                self._busy_until_seen.pop(persona_id, None)
             self.store.save(state)
             publish_affect(
                 self.data_dir,
@@ -676,6 +729,8 @@ class BodyNeedsPlugin(Star):
                 now,
                 set_current=active,
             )
+        if ended:
+            await self._notify_body_return(persona_id, ended, umo)
         return state
 
     async def _mutate(
@@ -761,9 +816,46 @@ class BodyNeedsPlugin(Star):
             return
         try:
             persona_id, profile, now = await self._identity(event)
-            await self._load_advanced(persona_id, profile, now)
+            await self._load_advanced(
+                persona_id,
+                profile,
+                now,
+                umo=str(getattr(event, "unified_msg_origin", "") or ""),
+            )
         except Exception as exc:
             logger.warning("[body] 读取 persona 请求失败：%s", exc)
+
+    async def consume_release_request(self, event: AstrMessageEvent) -> bool:
+        """Apply a pending release request for this private event immediately.
+
+        persona_presence writes body_request.json when the persona decides to
+        skip a message and take care of herself. Applying it at once makes the
+        busy window start with the message that triggered it instead of waiting
+        for the next one; the file stays as a fallback for a restart in between.
+
+        Args:
+            event: The private message event that triggered the decision.
+
+        Returns:
+            True when she is now busy with a release.
+        """
+        self._refresh()
+        if not self.settings.enabled or not event.is_private_chat():
+            return False
+        if not (Path(self.data_dir) / "body_request.json").exists():
+            return False
+        try:
+            persona_id, profile, now = await self._identity(event)
+            state = await self._load_advanced(
+                persona_id,
+                profile,
+                now,
+                umo=str(getattr(event, "unified_msg_origin", "") or ""),
+            )
+        except Exception as exc:
+            logger.warning("[body] 立即处理 persona 请求失败：%s", exc)
+            return False
+        return state.release_until > now.timestamp()
 
     # ── 兴趣爱好：她正忙着的时候，睡意可以等一等 ──
 
@@ -847,7 +939,7 @@ class BodyNeedsPlugin(Star):
                 return
             if state.sleep_wake_at and now.timestamp() >= state.sleep_wake_at:
                 return
-            await self._record_missed(persona_id, now, event)
+            await self._forward_window_message(persona_id, event, "sleep")
             event.stop_event()
             if self.settings.debug:
                 logger.info(
@@ -881,9 +973,16 @@ class BodyNeedsPlugin(Star):
             return
         try:
             persona_id, profile, now = await self._identity(event)
-            state = await self._load_advanced(persona_id, profile, now, active=False)
+            state = await self._load_advanced(
+                persona_id,
+                profile,
+                now,
+                active=False,
+                umo=str(getattr(event, "unified_msg_origin", "") or ""),
+            )
             busy_until = max(state.release_until, state.care_until)
             if busy_until > now.timestamp():
+                await self._forward_window_message(persona_id, event, "busy")
                 event.stop_event()
                 if self.settings.debug:
                     doing = (
@@ -898,31 +997,47 @@ class BodyNeedsPlugin(Star):
         except Exception as exc:
             logger.warning("[body] 自慰后静默失败：%s", exc)
 
-    async def _record_missed(
-        self,
-        persona_id: str,
-        now: datetime,
-        event: AstrMessageEvent,
+    async def _forward_window_message(
+        self, persona_id: str, event: AstrMessageEvent, reason: str
     ) -> None:
-        """Remember a message that arrived while she was asleep."""
-        text = str(getattr(event, "message_str", "") or "").strip()
-        if not text:
-            return
-        entry = {
-            "at": now.timestamp(),
-            "umo": str(getattr(event, "unified_msg_origin", "") or ""),
-            "text": text[:80],
-        }
-        async with self._lock:
-            state = self.store.load(persona_id, now)
-            if (
-                state.missed
-                and state.missed[-1].get("text") == entry["text"]
-                and entry["at"] - float(state.missed[-1].get("at") or 0) < 5
-            ):
-                return
-            state.missed = (state.missed + [entry])[-12:]
-            self.store.save(state)
+        """Hand one quiet-window message to persona_presence as raw input.
+
+        body_needs does not decide whether the message called her or what it
+        meant; the persona plugin keeps the transcript and does that when she
+        returns.
+
+        Args:
+            persona_id: Persona that is currently away.
+            event: Message that arrived while she was away.
+            reason: "sleep" or "busy".
+        """
+        try:
+            star = self.context.get_registered_star("astrbot_plugin_persona_presence")
+            plugin = getattr(star, "star_cls", None) if star else None
+            handler = getattr(plugin, "on_body_window_message", None)
+            if callable(handler):
+                await handler(persona_id, event, reason)
+        except Exception as exc:
+            logger.debug("[body] 转发静默消息失败：%s", exc)
+
+    async def _notify_body_return(
+        self, persona_id: str, reason: str, trigger_umo: str = ""
+    ) -> None:
+        """Tell persona_presence that the quiet window ended.
+
+        Args:
+            persona_id: Persona that returned.
+            reason: "sleep" or "busy".
+            trigger_umo: Chat whose message detected the return.
+        """
+        try:
+            star = self.context.get_registered_star("astrbot_plugin_persona_presence")
+            plugin = getattr(star, "star_cls", None) if star else None
+            handler = getattr(plugin, "on_body_return", None)
+            if callable(handler):
+                await handler(persona_id, reason, trigger_umo)
+        except Exception as exc:
+            logger.debug("[body] 通知 persona 回顾失败：%s", exc)
 
     def sleep_snapshot(self) -> dict[str, Any]:
         """Return the current sleep status for the other plugins.
