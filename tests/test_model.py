@@ -1928,3 +1928,49 @@ def test_urethra_irritation_tracks_concentrated_urine() -> None:
     advance(dry, now + timedelta(hours=2), profile, settings)
     advance(wet, now + timedelta(hours=2), profile, settings)
     assert dry.urethra_irritation > wet.urethra_irritation
+
+
+def test_pubic_hair_and_areola_vary_by_persona() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    traits = {
+        (
+            round(constitution(pid).pubic_hair_density, 3),
+            round(constitution(pid).areola_size, 3),
+        )
+        for pid in ("a", "b", "c", "d", "e")
+    }
+    assert len(traits) > 1
+    view = cycle_view(make_state(now), now, make_profile(age=25), Settings())
+    assert view is not None
+    assert view.pubic_hair in {"sparse", "medium", "bushy", "shaved"}
+    assert view.areola in {"small", "medium", "large"}
+    assert view.areola_tint in {"pink", "rose", "brown"}
+    assert isinstance(view.montgomery, bool)
+    assert view.nipple in {"soft", "erect"}
+
+
+def test_oral_detail_tracks_brushing_and_illness() -> None:
+    now = datetime(2026, 11, 18, 12, 0, tzinfo=TZ)
+    profile = make_profile()
+    settings = Settings()
+    state = make_state(now)
+    state.oral = 80.0
+    state.plaque = 70.0
+    state.gum_irritation = 30.0
+    state.tongue_coat = 50.0
+    apply_action(state, "brush", now, profile, settings)
+    assert state.plaque == 2.0
+    assert state.gum_irritation < 30.0
+    assert state.tongue_coat < 50.0
+
+    poor = make_state(now)
+    poor.hydration = 25.0
+    poor.dry_mouth = 60.0
+    poor.illness = "cold"
+    poor.illness_severity = 50.0
+    # Just drank, so the autonomous self-care loop will not top her up again
+    # inside this short window and hide the dry-mouth effect.
+    poor.last_drink_at = now.timestamp()
+    advance(poor, now + timedelta(minutes=45), profile, settings)
+    assert poor.saliva < 62.0
+    assert poor.throat > 0.0

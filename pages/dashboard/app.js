@@ -582,6 +582,15 @@ function renderCycle(persona) {
     if (cycle.breast_fullness_label) {
       rows.push(["乳房", cycle.breast_fullness_label]);
     }
+    rows.push(["阴毛", (cycle.pubic_hair_label || "—") +
+      (cycle.pubic_hair === "shaved"
+        ? ""
+        : " · " + (cycle.pubic_hair_style_label || "—"))]);
+    rows.push(["乳晕", (cycle.areola_label || "—") +
+        " · " +
+        (cycle.areola_tint_label || "—") +
+        (cycle.montgomery ? " · 蒙氏腺明显" : "")]);
+    rows.push(["乳头", cycle.nipple_label || "—"]);
     if (cycle.race) {
       rows.push([
         "种族",
@@ -690,6 +699,15 @@ function renderCycle(persona) {
     ],
     ["盆腔", cycle.pelvic_pressure_label || "—"],
     ["乳房", cycle.breast_fullness_label || "—"],
+    ["阴毛", (cycle.pubic_hair_label || "—") +
+      (cycle.pubic_hair === "shaved"
+        ? ""
+        : " · " + (cycle.pubic_hair_style_label || "—"))],
+    ["乳晕", (cycle.areola_label || "—") +
+        " · " +
+        (cycle.areola_tint_label || "—") +
+        (cycle.montgomery ? " · 蒙氏腺明显" : "")],
+    ["乳头", cycle.nipple_label || "—"],
     ["经前", symptomBits.length ? symptomBits.join("、") : "—"],
     [
       "血块",

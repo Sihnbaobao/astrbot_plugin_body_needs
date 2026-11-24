@@ -477,3 +477,17 @@ def test_organ_line_reports_a_notable_rectum_urethra_and_anus() -> None:
     assert "直肠：" in block
     assert "尿道：" in block
     assert "肛门：" in block
+
+
+def test_private_prompt_describes_hair_areola_and_mouth_detail() -> None:
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.plaque = 55.0
+    state.gum_irritation = 30.0
+    state.tongue_coat = 40.0
+    block = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "阴毛：" in block
+    assert "乳晕：" in block
+    assert "乳头：" in block
+    assert "口腔：牙齿" in block
+    assert "舌苔" in block

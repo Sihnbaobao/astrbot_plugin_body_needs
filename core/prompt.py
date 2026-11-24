@@ -65,7 +65,6 @@ MUCUS_COLOR_LABELS = {
 }
 CERVIX_POSITION_LABELS = {"low": "偏低", "mid": "中位", "high": "偏高"}
 CERVIX_FIRMNESS_LABELS = {"firm": "偏硬", "medium": "中等", "soft": "偏软"}
-VULVA_LABELS = {"comfortable": "清爽", "damp": "有点潮", "wet": "湿"}
 LABIA_MAJORA_LABELS = {"plump": "饱满", "full": "微微分开", "parted": "张开"}
 LABIA_MINORA_LABELS = {"tucked": "贴合", "peek": "微露", "flared": "外翻"}
 CLITORIS_LABELS = {"hidden": "藏着", "peek": "微露", "engorged": "充血挺起"}
@@ -79,6 +78,21 @@ VAGINA_TONE_LABELS = {
 }
 VAGINA_WARMTH_LABELS = {"warm": "温热", "hot": "发烫"}
 VAGINA_OPEN_LABELS = {"closed": "闭合", "parted": "微张", "open": "张开"}
+PUBIC_HAIR_LABELS = {
+    "sparse": "稀疏",
+    "medium": "适中",
+    "bushy": "浓密",
+    "shaved": "剃光",
+}
+PUBIC_STYLE_LABELS = {
+    "natural": "自然",
+    "trimmed": "修剪过",
+    "landing_strip": "留一小条",
+    "shaved": "剃净",
+}
+AREOLA_LABELS = {"small": "小", "medium": "中等", "large": "大"}
+AREOLA_TINT_LABELS = {"pink": "淡粉", "rose": "粉褐", "brown": "深褐"}
+NIPPLE_LABELS = {"soft": "软着", "erect": "挺起"}
 PUBERTY_STAGE_LABELS = {
     "prepubertal": "发育前",
     "early": "发育早期",
@@ -143,6 +157,59 @@ def load_tone(value: float) -> str:
     if value >= 55:
         return "warn"
     return "ok"
+
+
+def plaque_label(value: float) -> str:
+    """Describe how much plaque is on the teeth."""
+    if value < 20:
+        return "干净"
+    if value < 45:
+        return "薄薄一层"
+    if value < 70:
+        return "有点厚"
+    return "厚"
+
+
+def gum_label(value: float) -> str:
+    """Describe the gums, which react to plaque and illness."""
+    if value < 15:
+        return "健康"
+    if value < 35:
+        return "刷牙会出血"
+    return "红肿"
+
+
+def saliva_label(value: float) -> str:
+    """Describe saliva flow, not thirst."""
+    if value < 25:
+        return "发干"
+    if value < 40:
+        return "偏少"
+    if value < 70:
+        return "正常"
+    if value < 85:
+        return "偏多"
+    return "很多"
+
+
+def tongue_label(value: float) -> str:
+    """Describe the tongue coating."""
+    if value < 18:
+        return "薄白"
+    if value < 40:
+        return "有点厚"
+    if value < 65:
+        return "厚腻"
+    return "发黄厚腻"
+
+
+def throat_label(value: float) -> str:
+    """Describe throat soreness or dryness."""
+    if value < 15:
+        return "正常"
+    if value < 40:
+        return "发干"
+    return "有点痛"
 
 
 def rectum_label(value: float) -> str:
@@ -1065,6 +1132,50 @@ def _genital_text(view: CycleView) -> str:
     )
 
 
+def _traits_text(view: CycleView) -> str:
+    """Return the private line for pubic hair, areola and nipples.
+
+    These are stable per persona (seeded from the constitution), so two
+    personas do not share one default body; pregnancy and lactation darken and
+    enlarge the areola, and arousal hardens the nipple.
+
+    Args:
+        view: Current cycle view.
+
+    Returns:
+        One Chinese sentence.
+    """
+    if view.pubic_hair == "shaved":
+        hair = "剃光"
+    else:
+        hair = (
+            PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair)
+            + "、"
+            + PUBIC_STYLE_LABELS.get(view.pubic_hair_style, view.pubic_hair_style)
+        )
+    areola = AREOLA_LABELS.get(view.areola, view.areola)
+    tint = AREOLA_TINT_LABELS.get(view.areola_tint, view.areola_tint)
+    nipple = NIPPLE_LABELS.get(view.nipple, view.nipple)
+    glands = "、蒙氏腺明显" if view.montgomery else ""
+    return f"阴毛：{hair}；乳晕：{areola}、{tint}{glands}；乳头：{nipple}。"
+
+
+def _oral_text(state: BodyState) -> str:
+    """Return the private line for the mouth beyond the oral meter.
+
+    Args:
+        state: Current body state.
+
+    Returns:
+        One Chinese sentence about teeth, gums, tongue, saliva and throat.
+    """
+    return (
+        f"口腔：牙齿{plaque_label(state.plaque)}、牙龈{gum_label(state.gum_irritation)}、"
+        f"舌苔{tongue_label(state.tongue_coat)}、唾液{saliva_label(state.saliva)}、"
+        f"咽部{throat_label(state.throat)}。"
+    )
+
+
 def _organ_text(state: BodyState, view: CycleView | None) -> str:
     """Return one compact private line about the organ-load proxies.
 
@@ -1404,6 +1515,7 @@ def build_prompt_block(
                 lines.append(mood_line)
             lines.append(_mucus_text(view))
             lines.append(_genital_text(view))
+            lines.append(_traits_text(view))
             lines.append(_organ_text(state, view))
             warm = "，排卵后偏高" if view.progesterone > 25.0 else ""
             lines.append(f"基础体温：{view.bbt:.2f}℃{warm}")
@@ -1417,6 +1529,14 @@ def build_prompt_block(
     if show_private:
         for scent_line in _scent_lines(state, view, profile, now, settings):
             lines.append(scent_line)
+        if settings.enable_hygiene and (
+            state.plaque >= 35
+            or state.gum_irritation >= 25
+            or state.throat >= 25
+            or state.tongue_coat >= 35
+            or state.saliva <= 40
+        ):
+            lines.append(_oral_text(state))
         if view is None:
             organ_line = _organ_text(state, view)
             if organ_line:
@@ -1645,12 +1765,21 @@ def build_status_text(
                     lines.append(mood_line)
                 lines.append(_mucus_text(view))
                 lines.append(_genital_text(view))
+                lines.append(_traits_text(view))
                 lines.append(_organ_text(state, view))
             if view.fertile:
                 lines.append("身体：这几天更容易受孕。")
         if private:
             for scent_line in _scent_lines(state, view, profile, now, settings):
                 lines.append(scent_line)
+            if settings.enable_hygiene and (
+                state.plaque >= 35
+                or state.gum_irritation >= 25
+                or state.throat >= 25
+                or state.tongue_coat >= 35
+                or state.saliva <= 40
+            ):
+                lines.append(_oral_text(state))
             if view is None:
                 organ_line = _organ_text(state, view)
                 if organ_line:
@@ -1956,8 +2085,6 @@ def build_web_state(
                 view.cervix_firmness, view.cervix_firmness
             ),
             "cervix_open": view.cervix_open,
-            "vulva": view.vulva,
-            "vulva_label": VULVA_LABELS.get(view.vulva, view.vulva),
             "labia_majora": view.labia_majora,
             "labia_majora_label": LABIA_MAJORA_LABELS.get(
                 view.labia_majora, view.labia_majora
@@ -1984,6 +2111,21 @@ def build_web_state(
             "vagina_open_label": VAGINA_OPEN_LABELS.get(
                 view.vagina_open, view.vagina_open
             ),
+            "pubic_hair": view.pubic_hair,
+            "pubic_hair_label": PUBIC_HAIR_LABELS.get(view.pubic_hair, view.pubic_hair),
+            "pubic_hair_style": view.pubic_hair_style,
+            "pubic_hair_style_label": PUBIC_STYLE_LABELS.get(
+                view.pubic_hair_style, view.pubic_hair_style
+            ),
+            "areola": view.areola,
+            "areola_label": AREOLA_LABELS.get(view.areola, view.areola),
+            "areola_tint": view.areola_tint,
+            "areola_tint_label": AREOLA_TINT_LABELS.get(
+                view.areola_tint, view.areola_tint
+            ),
+            "nipple": view.nipple,
+            "nipple_label": NIPPLE_LABELS.get(view.nipple, view.nipple),
+            "montgomery": bool(view.montgomery),
             "pelvic_pressure": view.pelvic_pressure,
             "pelvic_pressure_label": pelvic_label(view.pelvic_pressure),
             "breast_fullness": view.breast_fullness,
@@ -2202,6 +2344,59 @@ def build_web_state(
         "weather",
         "illness",
     ]
+    if settings.enable_hygiene:
+        details.extend(
+            [
+                {
+                    "key": "plaque",
+                    "label": "牙菌斑",
+                    "value": round(state.plaque, 1),
+                    "unit": "%",
+                    "level": plaque_label(state.plaque),
+                    "tone": "hot"
+                    if state.plaque >= 70
+                    else ("warn" if state.plaque >= 45 else "ok"),
+                },
+                {
+                    "key": "gum",
+                    "label": "牙龈",
+                    "value": round(state.gum_irritation, 1),
+                    "unit": "%",
+                    "level": gum_label(state.gum_irritation),
+                    "tone": "hot"
+                    if state.gum_irritation >= 55
+                    else ("warn" if state.gum_irritation >= 30 else "ok"),
+                },
+                {
+                    "key": "tongue",
+                    "label": "舌苔",
+                    "value": round(state.tongue_coat, 1),
+                    "unit": "%",
+                    "level": tongue_label(state.tongue_coat),
+                    "tone": "hot"
+                    if state.tongue_coat >= 65
+                    else ("warn" if state.tongue_coat >= 40 else "ok"),
+                },
+                {
+                    "key": "saliva",
+                    "label": "唾液",
+                    "value": round(state.saliva, 1),
+                    "unit": "%",
+                    "level": saliva_label(state.saliva),
+                    "tone": "warn" if state.saliva < 40 or state.saliva >= 85 else "ok",
+                },
+                {
+                    "key": "throat",
+                    "label": "咽部",
+                    "value": round(state.throat, 1),
+                    "unit": "%",
+                    "level": throat_label(state.throat),
+                    "tone": "hot"
+                    if state.throat >= 55
+                    else ("warn" if state.throat >= 25 else "ok"),
+                },
+            ]
+        )
     details.sort(
         key=lambda item: (
             detail_order.index(item["key"]) if item["key"] in detail_order else 99
@@ -2228,6 +2423,11 @@ def build_web_state(
         "sodium": "饮食与能量",
         "weather": "环境与状态",
         "illness": "环境与状态",
+        "plaque": "清洁与体味",
+        "gum": "清洁与体味",
+        "tongue": "清洁与体味",
+        "saliva": "清洁与体味",
+        "throat": "清洁与体味",
     }
     for item in details:
         item["group"] = detail_groups.get(str(item.get("key") or ""), "其他")

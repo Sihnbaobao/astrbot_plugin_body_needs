@@ -202,6 +202,13 @@ class Constitution:
     self_rate: float
     skin_oil_rate: float = 1.0
     skin_clarity: float = 70.0
+    # Stable appearance traits: everyone differs, so they are seeded per
+    # persona instead of being one global default.
+    pubic_hair_density: float = 0.5
+    pubic_hair_style: str = "natural"
+    areola_size: float = 0.5
+    areola_tone: float = 0.5
+    montgomery: bool = False
 
 
 def constitution(persona_id: str) -> Constitution:
@@ -223,6 +230,13 @@ def constitution(persona_id: str) -> Constitution:
         self_rate=0.3 * (16.0 ** _roll(persona_id, "body", "release")),
         skin_oil_rate=0.65 + 0.7 * _roll(persona_id, "body", "skin-oil"),
         skin_clarity=55.0 + 35.0 * _roll(persona_id, "body", "skin-clarity"),
+        pubic_hair_density=0.15 + 0.85 * _roll(persona_id, "body", "pubic-density"),
+        pubic_hair_style=("natural", "trimmed", "landing_strip", "shaved")[
+            int(_roll(persona_id, "body", "pubic-style") * 4)
+        ],
+        areola_size=0.15 + 0.85 * _roll(persona_id, "body", "areola-size"),
+        areola_tone=_roll(persona_id, "body", "areola-tone"),
+        montgomery=_roll(persona_id, "body", "montgomery") > 0.45,
     )
 
 
@@ -290,6 +304,13 @@ class BodyState:
     urine: float = 18.0
     skin: float = 18.0
     oral: float = 20.0
+    # Mouth detail: saliva flow, plaque, gum irritation, tongue coating and
+    # throat soreness each move on their own instead of hiding inside "oral".
+    saliva: float = 62.0
+    plaque: float = 22.0
+    gum_irritation: float = 6.0
+    tongue_coat: float = 12.0
+    throat: float = 0.0
     gut: float = 8.0
     bowel: float = 0.0
     # Rectum fill is the share of the gut content that has already reached the
@@ -444,6 +465,11 @@ class BodyState:
             "libido": self.libido,
             "release_count": self.release_count,
             "oral": self.oral,
+            "saliva": self.saliva,
+            "plaque": self.plaque,
+            "gum_irritation": self.gum_irritation,
+            "tongue_coat": self.tongue_coat,
+            "throat": self.throat,
             "stomach": self.stomach,
             "glucose": self.glucose,
             "urine": self.urine,
@@ -600,6 +626,11 @@ class BodyState:
             "urine",
             "skin",
             "oral",
+            "saliva",
+            "plaque",
+            "gum_irritation",
+            "tongue_coat",
+            "throat",
             "gut",
             "bowel",
             "rectum",
@@ -694,6 +725,11 @@ class BodyState:
         state.rectum = _clamp(state.rectum)
         state.urethra_irritation = _clamp(state.urethra_irritation)
         state.anus_irritation = _clamp(state.anus_irritation)
+        state.saliva = _clamp(state.saliva)
+        state.plaque = _clamp(state.plaque)
+        state.gum_irritation = _clamp(state.gum_irritation)
+        state.tongue_coat = _clamp(state.tongue_coat)
+        state.throat = _clamp(state.throat)
         state.illness = str(data.get("illness") or "")
         state.pain_site = str(data.get("pain_site") or "")
         state.weather = str(data.get("weather") or "clear")
@@ -917,7 +953,6 @@ class CycleView:
     cervix_position: str = "low"
     cervix_firmness: str = "firm"
     cervix_open: bool = False
-    vulva: str = "comfortable"
     # The vulva is not one label: labia, clitoris, vestibule and perineum each
     # change on their own, and the vagina has its own tone, warmth and opening.
     labia_majora: str = "plump"
@@ -928,6 +963,12 @@ class CycleView:
     vagina_tone: str = "firm"
     vagina_warmth: str = "warm"
     vagina_open: str = "closed"
+    pubic_hair: str = "medium"
+    pubic_hair_style: str = "natural"
+    areola: str = "medium"
+    areola_tint: str = "rose"
+    nipple: str = "soft"
+    montgomery: bool = False
     pelvic_pressure: float = 0.0
     breast_fullness: float = 0.0
     follicle: float = 0.0
@@ -2036,6 +2077,7 @@ def _endocrine_maturity(age: float | None, persona_id: str) -> tuple[float, str]
 def _mucus_detail(
     state: BodyState,
     *,
+    profile: Profile,
     estrogen: float,
     progesterone: float,
     phase: str,
@@ -2129,12 +2171,6 @@ def _mucus_detail(
             texture = "spotting"
 
     wetness = float(state.wetness)
-    if wetness >= 65.0 or volume >= 78.0:
-        vulva = "wet"
-    elif wetness >= 42.0 or volume >= 52.0:
-        vulva = "damp"
-    else:
-        vulva = "comfortable"
 
     # Arousal is not stored on its own: wetness and libido already move
     # together, and the cycle adds its own congestion around ovulation.
@@ -2201,6 +2237,38 @@ def _mucus_detail(
     else:
         vagina_open = "closed"
 
+    # Hair and areola are stable per persona, not per day: they come from the
+    # constitution so two personas do not share one default body.
+    const = constitution(profile.persona_id)
+    pubic_hair_style = const.pubic_hair_style
+    if pubic_hair_style == "shaved":
+        pubic_hair = "shaved"
+    elif const.pubic_hair_density < 0.35:
+        pubic_hair = "sparse"
+    elif const.pubic_hair_density < 0.7:
+        pubic_hair = "medium"
+    else:
+        pubic_hair = "bushy"
+
+    areola_size = const.areola_size
+    areola_tone = const.areola_tone
+    if weeks >= 12 or state.lactating:
+        areola_size = min(1.0, areola_size + 0.2)
+        areola_tone = min(1.0, areola_tone + 0.25)
+    if areola_size < 0.38:
+        areola = "small"
+    elif areola_size < 0.7:
+        areola = "medium"
+    else:
+        areola = "large"
+    if areola_tone < 0.35:
+        areola_tint = "pink"
+    elif areola_tone < 0.7:
+        areola_tint = "rose"
+    else:
+        areola_tint = "brown"
+    nipple = "erect" if arousal >= 58.0 or state.lactating else "soft"
+
     pelvic = _clamp(
         state.uterine_congestion * 0.7
         + flow * 5.0
@@ -2214,7 +2282,6 @@ def _mucus_detail(
         "cervix_position": position,
         "cervix_firmness": firmness,
         "cervix_open": opened,
-        "vulva": vulva,
         "labia_majora": labia_majora,
         "labia_minora": labia_minora,
         "clitoris": clitoris,
@@ -2223,6 +2290,12 @@ def _mucus_detail(
         "vagina_tone": vagina_tone,
         "vagina_warmth": vagina_warmth,
         "vagina_open": vagina_open,
+        "pubic_hair": pubic_hair,
+        "pubic_hair_style": pubic_hair_style,
+        "areola": areola,
+        "areola_tint": areola_tint,
+        "nipple": nipple,
+        "montgomery": bool(const.montgomery),
         "pelvic_pressure": round(pelvic, 1),
     }
 
@@ -2250,6 +2323,7 @@ def cycle_view(
             count = "，三胎"
         detail = _mucus_detail(
             state,
+            profile=profile,
             estrogen=75.0,
             progesterone=80.0,
             phase="pregnant",
@@ -2286,6 +2360,7 @@ def cycle_view(
     elif age < _menarche_age(profile.persona_id):
         detail = _mucus_detail(
             state,
+            profile=profile,
             estrogen=8.0,
             progesterone=3.0,
             phase="premenarche",
@@ -2318,6 +2393,7 @@ def cycle_view(
     elif age >= _menopause_age(profile.persona_id):
         detail = _mucus_detail(
             state,
+            profile=profile,
             estrogen=12.0,
             progesterone=3.0,
             phase="menopause",
@@ -2478,6 +2554,7 @@ def cycle_view(
     spotting = state.ovulation_spotting_until > now.timestamp()
     detail = _mucus_detail(
         state,
+        profile=profile,
         estrogen=estrogen,
         progesterone=progesterone,
         phase=phase,
@@ -2554,6 +2631,20 @@ def _clear_bowel(state: BodyState, at: float) -> None:
         + (5.0 if state.hydration < 45.0 else 0.0)
     )
     state.last_bowel_at = at
+
+
+def _brush_mouth(state: BodyState, at: float) -> None:
+    """Brush the teeth and score plaque, gums and tongue coating.
+
+    Args:
+        state: Body state to update.
+        at: Timestamp of the brushing.
+    """
+    state.oral = 2.0
+    state.plaque = 2.0
+    state.gum_irritation = max(0.0, state.gum_irritation - 4.0)
+    state.tongue_coat = max(0.0, state.tongue_coat - 18.0)
+    state.last_brush_at = at
 
 
 def _add_care(state: BodyState, at: datetime, kind: str) -> None:
@@ -3073,8 +3164,7 @@ def _routine(
             and due(brush_am, 150)
             and moment.timestamp() - state.last_brush_at > 2 * 3600
         ):
-            state.oral = 2.0
-            state.last_brush_at = moment.timestamp()
+            _brush_mouth(state, moment.timestamp())
             state.flags[brush_key] = moment.timestamp()
             _add_care(state, moment, "brush")
         bed_brush_key = f"self-brush-bed:{day}"
@@ -3083,8 +3173,7 @@ def _routine(
             and 0 < minutes_to_bed <= 40
             and moment.timestamp() - state.last_brush_at > 2 * 3600
         ):
-            state.oral = 2.0
-            state.last_brush_at = moment.timestamp()
+            _brush_mouth(state, moment.timestamp())
             state.flags[bed_brush_key] = moment.timestamp()
             _add_care(state, moment, "brush")
         shower_target = (
@@ -4050,6 +4139,43 @@ def advance(
 
         oral_rate = ORAL_AWAKE * awake_fraction + ORAL_SLEEP * sleep_fraction
         state.oral = _clamp(state.oral + oral_rate * step_hours)
+        plaque_target = _clamp(12.0 + state.oral * 0.55)
+        state.plaque += (plaque_target - state.plaque) * (
+            1.0 - math.exp(-step_hours / 12.0)
+        )
+        gum_target = _clamp(
+            4.0 + max(0.0, state.plaque - 45.0) * 0.35 + (6.0 if state.illness else 0.0)
+        )
+        state.gum_irritation += (gum_target - state.gum_irritation) * (
+            1.0 - math.exp(-step_hours / 24.0)
+        )
+        saliva_target = _clamp(
+            68.0
+            - state.dry_mouth * 0.35
+            - state.caffeine * 0.12
+            + (state.hydration - 50.0) * 0.2
+            - (10.0 if state.sleeping else 0.0)
+        )
+        state.saliva += (saliva_target - state.saliva) * (
+            1.0 - math.exp(-step_hours / 2.0)
+        )
+        tongue_target = _clamp(
+            10.0
+            + state.indigestion * 0.25
+            + max(0.0, 45.0 - state.diet_long) * 0.2
+            + (18.0 if state.illness else 0.0)
+        )
+        state.tongue_coat += (tongue_target - state.tongue_coat) * (
+            1.0 - math.exp(-step_hours / 8.0)
+        )
+        throat_target = _clamp(
+            state.dry_mouth * 0.3
+            + state.illness_severity * 0.35
+            + state.caffeine * 0.08
+        )
+        state.throat += (throat_target - state.throat) * (
+            1.0 - math.exp(-step_hours / 6.0)
+        )
 
         if state.illness:
             days = (
@@ -4508,6 +4634,7 @@ def apply_action(
         state.glucose = _clamp(state.glucose + 28.0)
         state.hydration = _clamp(state.hydration + 2.0)
         state.oral = _clamp(state.oral + 4.0)
+        state.saliva = _clamp(state.saliva + 4.0)
         state.iron = _clamp(state.iron + 8.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_eat_at = now_ts
@@ -4529,6 +4656,8 @@ def apply_action(
         state.hydration = _clamp(state.hydration + 32.0)
         state.urine = _clamp(state.urine + 12.0)
         state.oral = _clamp(state.oral - 1.5)
+        state.saliva = _clamp(state.saliva + 8.0)
+        state.throat = max(0.0, state.throat - 4.0)
         state.breath_scent = max(0.0, state.breath_scent - 6.0)
         state.last_drink_at = now_ts
         state.last_drink_ml = 300.0
@@ -4549,9 +4678,8 @@ def apply_action(
         state.last_shower_at = now_ts
         _add_care(state, now, "shower")
     elif action == "brush":
-        state.oral = 2.0
+        _brush_mouth(state, now_ts)
         state.breath_scent = 2.0
-        state.last_brush_at = now_ts
         _add_care(state, now, "brush")
     elif action == "toilet":
         if state.bowel >= 20.0:
