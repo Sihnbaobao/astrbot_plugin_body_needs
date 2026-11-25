@@ -328,6 +328,26 @@ async def test_persona_request_is_ignored_during_cooldown(
 
 
 @pytest.mark.asyncio
+async def test_persona_request_allows_a_second_round_in_afterglow(
+    monkeypatch, tmp_path
+) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    state = BodyState(persona_id="test")
+    state.last_self_at = now.timestamp() - 600
+    state.afterglow_until = now.timestamp() + 600
+    state.afterglow_want = 70.0
+    request = plugin.data_dir / "body_request.json"
+    request.write_text('{"action": "release"}', encoding="utf-8")
+    assert plugin._consume_body_request(state, profile, now) is True
+    assert state.release_count == 1
+    assert not request.exists()
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
 async def test_persona_request_stays_in_its_own_session(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
     await plugin.initialize()

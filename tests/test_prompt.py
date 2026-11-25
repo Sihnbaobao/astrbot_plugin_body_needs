@@ -363,6 +363,21 @@ def test_private_block_includes_mucus_and_organs() -> None:
     assert "宫颈" not in group
 
 
+def test_afterglow_line_only_in_private() -> None:
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.afterglow_until = now.timestamp() + 600
+    state.afterglow_want = 70.0
+
+    private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
+    assert "还想再来一次" in private
+
+    group = build_prompt_block(
+        state, now, make_profile(), Settings(group_detail="full"), private=False
+    )
+    assert "还想再来一次" not in group
+
+
 def test_private_prompt_uses_sensations_with_numbers() -> None:
     now = datetime(2026, 11, 18, 14, 32, tzinfo=TZ)
     state = make_state(now)

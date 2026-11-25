@@ -1824,6 +1824,37 @@ def test_libido_ceiling_forces_an_outlet(monkeypatch) -> None:
     assert state.release_count == 1
 
 
+def test_release_can_leave_a_second_wind(monkeypatch) -> None:
+    import core.model as model
+
+    monkeypatch.setattr(model, "_roll", lambda *args, **kwargs: 0.0)
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.libido = 100.0
+    state.location = "home"
+    const = model.constitution("pity")
+    model._maybe_release(state, now, make_profile(), Settings(), const, 0.25, 0.0)
+    assert state.release_count == 1
+    assert state.afterglow_until > state.last_self_at
+    assert state.afterglow_want >= 55
+    assert state.libido >= 85.0
+
+
+def test_release_can_settle_without_a_second_wind(monkeypatch) -> None:
+    import core.model as model
+
+    monkeypatch.setattr(model, "_roll", lambda *args, **kwargs: 0.99)
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.libido = 100.0
+    state.location = "home"
+    const = model.constitution("pity")
+    model._maybe_release(state, now, make_profile(), Settings(), const, 0.25, 0.0)
+    assert state.release_count == 1
+    assert state.afterglow_want < 55
+    assert state.libido <= 81.0
+
+
 def test_release_schedules_a_next_opportunity(monkeypatch) -> None:
     import core.model as model
 
@@ -1835,7 +1866,7 @@ def test_release_schedules_a_next_opportunity(monkeypatch) -> None:
     const = model.constitution("pity")
     model._maybe_release(state, now, make_profile(), Settings(), const, 0.25, 0.0)
     assert state.release_count == 1
-    assert state.next_self_at >= state.last_self_at + 20 * 60
+    assert state.next_self_at >= state.last_self_at + 4 * 60
 
     model._maybe_release(
         state,

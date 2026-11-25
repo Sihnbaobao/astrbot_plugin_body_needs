@@ -1462,7 +1462,7 @@ def _scent_detail(
             return "还没有记录。"
         hours = max(0.0, (now.timestamp() - last) / 3600.0)
         return (
-            f"事后味 {round(state.intimate_scent)}：距上次释放约 {round(hours)} 小时；"
+            f"事后味 {round(state.intimate_scent)}：距上次自慰约 {round(hours)} 小时；"
             f"刚结束最明显，洗澡会压掉。"
         )
     if key == "underarm":
@@ -1913,6 +1913,19 @@ def build_prompt_block(
                 lines.append("身体：经期不太想做，更想被抱着、被照顾。")
             elif state.libido >= 60:
                 lines.append("身体：经期也想要，只是更想慢慢来、被照顾。")
+        if state.afterglow_until > now.timestamp():
+            if state.afterglow_want >= 55:
+                if profile.gender == "male":
+                    lines.append(
+                        "事后：刚自慰完，身体还没缓过来，但脑子里那点念头还在。"
+                    )
+                else:
+                    lines.append(
+                        "事后：刚自慰完，身体还软着，但脑子里那点念头没完全散，"
+                        "可能还想再来一次。"
+                    )
+            else:
+                lines.append("事后：刚自慰完，身上还热着，暂时不太想动。")
 
     if show_private:
         noises = _noise_lines(state, now)

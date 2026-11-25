@@ -448,6 +448,8 @@ class BodyState:
     last_release_at: float = 0.0
     last_self_at: float = 0.0
     next_self_at: float = 0.0
+    afterglow_until: float = 0.0
+    afterglow_want: float = 0.0
     intimacy_count: int = 0
     insemination_count: int = 0
     last_intimacy_at: float = 0.0
@@ -608,6 +610,8 @@ class BodyState:
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
             "next_self_at": self.next_self_at,
+            "afterglow_until": self.afterglow_until,
+            "afterglow_want": self.afterglow_want,
             "intimacy_count": self.intimacy_count,
             "insemination_count": self.insemination_count,
             "last_intimacy_at": self.last_intimacy_at,
@@ -710,6 +714,8 @@ class BodyState:
             "last_release_at",
             "last_self_at",
             "next_self_at",
+            "afterglow_until",
+            "afterglow_want",
             "refractory_until",
             "last_meal_size",
             "last_drink_ml",
@@ -3652,8 +3658,23 @@ def _maybe_release(
     ):
         return
 
-    state.libido = _clamp(state.libido - 20.0)
-    state.wetness = max(0.0, state.wetness - 30.0)
+    before = state.libido
+    rounds = _release_rounds(state, profile, moment)
+    if profile.gender == "female":
+        still_chance = 0.22 + max(0.0, before - 45.0) / 55.0 * 0.5
+        if rounds > 1:
+            still_chance += 0.1
+    else:
+        still_chance = 0.06 + max(0.0, before - 70.0) / 30.0 * 0.2
+    if state.energy < 35.0:
+        still_chance *= 0.7
+    still_chance = min(0.85, still_chance)
+    still_wants = (
+        _roll(profile.persona_id, f"afterglow:{int(stamp)}", "want") < still_chance
+    )
+
+    state.libido = _clamp(before - (8.0 if still_wants else 20.0))
+    state.wetness = max(0.0, state.wetness - (20.0 if still_wants else 30.0))
     state.intimate_scent = max(state.intimate_scent, 40.0 + state.libido * 0.25)
     state.last_self_at = stamp
     state.release_count += 1
@@ -3666,7 +3687,6 @@ def _maybe_release(
     # She is busy with herself, not looking at the phone; every chat stays
     # silent until she is done. The length is hers, not a fixed script.
     kind = "bed" if state.bed_since else "self"
-    rounds = _release_rounds(state, profile, moment)
     extra = 0.0
     if rounds > 1:
         extra = (
@@ -3676,7 +3696,18 @@ def _maybe_release(
         state.wetness = max(0.0, state.wetness - 8.0)
     duration = min(25.0 * 60.0, _release_seconds(state, profile, moment, kind) + extra)
     state.release_until = max(state.release_until, stamp + duration)
-    delay = 20.0 + _roll(profile.persona_id, f"self-next:{int(stamp)}", "delay") * 40.0
+    state.afterglow_until = (
+        stamp
+        + duration
+        + (6.0 + _roll(profile.persona_id, f"afterglow:{int(stamp)}", "until") * 14.0)
+        * 60.0
+    )
+    state.afterglow_want = (
+        min(100.0, 55.0 + max(0.0, before - 50.0) * 0.7) if still_wants else 20.0
+    )
+    delay = (4.0 if still_wants else 20.0) + _roll(
+        profile.persona_id, f"self-next:{int(stamp)}", "delay"
+    ) * (10.0 if still_wants else 40.0)
     state.next_self_at = stamp + duration + delay * 60.0
     state.release_kind = kind
     _add_event(
@@ -5004,18 +5035,19 @@ def apply_action(
                 * 3600
             )
     elif action == "release":
+        libido_before = state.libido
+        duration = _release_seconds(state, profile, now, "self")
         state.libido = 0.0
         state.wetness = max(0.0, state.wetness - 30.0)
         state.intimate_scent = max(state.intimate_scent, 42.0)
         state.vulva_scent = max(state.vulva_scent, 40.0)
         state.last_self_at = now_ts
         state.release_count += 1
-        state.release_until = max(
-            state.release_until,
-            now_ts + _release_seconds(state, profile, now, "self"),
-        )
+        state.release_until = max(state.release_until, now_ts + duration)
+        state.afterglow_until = now_ts + duration + 10 * 60
+        state.afterglow_want = 60.0 if libido_before >= 65 else 30.0
         state.release_kind = "self"
-        state.next_self_at = max(state.next_self_at, state.release_until + 20 * 60)
+        state.next_self_at = max(state.next_self_at, state.afterglow_until + 10 * 60)
         _add_event(
             state,
             now,
