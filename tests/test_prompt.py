@@ -370,12 +370,12 @@ def test_afterglow_line_only_in_private() -> None:
     state.afterglow_want = 70.0
 
     private = build_prompt_block(state, now, make_profile(), Settings(), private=True)
-    assert "还想再来一次" in private
+    assert "有点想再来一次" in private
 
     group = build_prompt_block(
         state, now, make_profile(), Settings(group_detail="full"), private=False
     )
-    assert "还想再来一次" not in group
+    assert "有点想再来一次" not in group
 
 
 def test_private_prompt_uses_sensations_with_numbers() -> None:
