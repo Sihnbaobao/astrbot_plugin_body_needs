@@ -447,6 +447,7 @@ class BodyState:
     cramp_until: float = 0.0
     last_release_at: float = 0.0
     last_self_at: float = 0.0
+    next_self_at: float = 0.0
     intimacy_count: int = 0
     insemination_count: int = 0
     last_intimacy_at: float = 0.0
@@ -606,6 +607,7 @@ class BodyState:
             "cramp_until": self.cramp_until,
             "last_release_at": self.last_release_at,
             "last_self_at": self.last_self_at,
+            "next_self_at": self.next_self_at,
             "intimacy_count": self.intimacy_count,
             "insemination_count": self.insemination_count,
             "last_intimacy_at": self.last_intimacy_at,
@@ -707,6 +709,7 @@ class BodyState:
             "last_nap_at",
             "last_release_at",
             "last_self_at",
+            "next_self_at",
             "refractory_until",
             "last_meal_size",
             "last_drink_ml",
@@ -3288,6 +3291,9 @@ def _routine(
                     + _release_seconds(state, profile, moment, "shower"),
                 )
                 state.release_kind = "shower"
+                state.next_self_at = max(
+                    state.next_self_at, state.release_until + 20 * 60
+                )
                 _add_event(
                     state,
                     moment,
@@ -3599,8 +3605,21 @@ def _maybe_release(
     bucket = int(stamp // 900)
     if profile.gender == "male" and state.refractory_until > stamp:
         return
-    if state.last_self_at and stamp - state.last_self_at < 1800:
+    if state.care_until > stamp or state.busy_until > stamp:
         return
+    if state.release_until > stamp:
+        return
+    # The old hard 30-minute gate made every release land on the same
+    # half-hour grid. Schedule a varied next opportunity instead, and let the
+    # drive come back gradually after it.
+    if state.next_self_at <= 0.0 and state.last_self_at:
+        state.next_self_at = state.last_self_at + 600.0
+    if state.next_self_at > stamp:
+        return
+    recovery = 1.0
+    if state.last_self_at:
+        since = stamp - state.last_self_at
+        recovery = min(1.0, max(0.0, (since / 60.0 - 10.0) / 50.0))
 
     comfort = 1.0
     comfort -= min(0.4, max(0.0, state.sleep_debt - 6.0) / 12.0 * 0.4)
@@ -3623,7 +3642,10 @@ def _maybe_release(
     awake = sleep_fraction <= 0.5
     if awake and state.libido >= 60.0:
         chance += (min(100.0, state.libido) - 60.0) * 0.012
+    chance *= recovery
     if awake and state.libido >= 99.5:
+        # At the ceiling the drive wins, but the varied next_self_at still
+        # decides when the opportunity comes.
         chance = 1.0
     if _roll(profile.persona_id, f"self:{int(stamp // 900)}", "roll") >= min(
         1.0, chance
@@ -3654,6 +3676,8 @@ def _maybe_release(
         state.wetness = max(0.0, state.wetness - 8.0)
     duration = min(25.0 * 60.0, _release_seconds(state, profile, moment, kind) + extra)
     state.release_until = max(state.release_until, stamp + duration)
+    delay = 20.0 + _roll(profile.persona_id, f"self-next:{int(stamp)}", "delay") * 40.0
+    state.next_self_at = stamp + duration + delay * 60.0
     state.release_kind = kind
     _add_event(
         state,
@@ -4991,6 +5015,7 @@ def apply_action(
             now_ts + _release_seconds(state, profile, now, "self"),
         )
         state.release_kind = "self"
+        state.next_self_at = max(state.next_self_at, state.release_until + 20 * 60)
         _add_event(
             state,
             now,

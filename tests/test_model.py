@@ -1824,6 +1824,31 @@ def test_libido_ceiling_forces_an_outlet(monkeypatch) -> None:
     assert state.release_count == 1
 
 
+def test_release_schedules_a_next_opportunity(monkeypatch) -> None:
+    import core.model as model
+
+    monkeypatch.setattr(model, "_roll", lambda *args, **kwargs: 0.0)
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.libido = 100.0
+    state.location = "home"
+    const = model.constitution("pity")
+    model._maybe_release(state, now, make_profile(), Settings(), const, 0.25, 0.0)
+    assert state.release_count == 1
+    assert state.next_self_at >= state.last_self_at + 20 * 60
+
+    model._maybe_release(
+        state,
+        now + timedelta(minutes=10),
+        make_profile(),
+        Settings(),
+        const,
+        0.25,
+        0.0,
+    )
+    assert state.release_count == 1
+
+
 def test_high_but_not_full_libido_is_not_a_guarantee(monkeypatch) -> None:
     import core.model as model
 
