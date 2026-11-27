@@ -1184,6 +1184,13 @@ def render_event_detail(event: dict[str, Any], private: bool) -> str:
             f"结束后湿润感从{_wetness_word(before)}变成{_wetness_word(after)}，"
             "小腹还轻轻发紧，呼吸过了一会儿才平。"
         )
+        if str(facts.get("vagina_warmth") or "") == "hot":
+            bits.append("局部比平时更热，里面也更松软了一点。")
+        if (
+            int(_event_number(facts, "breast")) >= 2
+            or _event_number(facts, "breast_fullness") >= 55.0
+        ):
+            bits.append("胸口还有点胀。")
         if afterglow >= 55.0:
             bits.append("身上还热着，脑子里那点念头没完全散。")
         elif afterglow > 0:

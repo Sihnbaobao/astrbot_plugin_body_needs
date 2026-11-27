@@ -450,6 +450,7 @@ class BodyState:
     next_self_at: float = 0.0
     afterglow_until: float = 0.0
     afterglow_want: float = 0.0
+    last_diary_day: str = ""
     intimacy_count: int = 0
     insemination_count: int = 0
     last_intimacy_at: float = 0.0
@@ -612,6 +613,7 @@ class BodyState:
             "next_self_at": self.next_self_at,
             "afterglow_until": self.afterglow_until,
             "afterglow_want": self.afterglow_want,
+            "last_diary_day": self.last_diary_day,
             "intimacy_count": self.intimacy_count,
             "insemination_count": self.insemination_count,
             "last_intimacy_at": self.last_intimacy_at,
@@ -767,6 +769,7 @@ class BodyState:
         state.illness = str(data.get("illness") or "")
         state.pain_site = str(data.get("pain_site") or "")
         state.weather = str(data.get("weather") or "clear")
+        state.last_diary_day = str(data.get("last_diary_day") or "")
         state.dream = str(data.get("dream") or "")
         state.craving = str(data.get("craving") or "")
         state.temperature = _clamp(state.temperature, 34.0, 42.0)
@@ -2746,11 +2749,22 @@ def _bristol_form(state: BodyState) -> int:
     return max(1, min(7, score))
 
 
-def _fact_snapshot(state: BodyState) -> dict[str, Any]:
-    """Snapshot the organ facts that action events should remember."""
+def _fact_snapshot(state: BodyState, view: CycleView | None = None) -> dict[str, Any]:
+    """Snapshot the organ facts that action events should remember.
+
+    Args:
+        state: Current body state.
+        view: Optional cycle view for derived reproductive-tract labels.
+    """
     return {
         "wetness": round(state.wetness, 1),
         "libido": round(state.libido, 1),
+        "vagina_warmth": getattr(view, "vagina_warmth", "") if view else "",
+        "vagina_open": getattr(view, "vagina_open", "") if view else "",
+        "breast": getattr(view, "breast", 0) if view else 0,
+        "breast_fullness": (
+            round(float(getattr(view, "breast_fullness", 0.0)), 1) if view else 0.0
+        ),
         "bladder": round(state.bladder, 1),
         "bowel": round(state.bowel, 1),
         "rectum": round(state.rectum, 1),
@@ -2812,6 +2826,10 @@ def _release_facts(
         "duration_min": round(duration / 60.0, 1),
         "wetness_before": before.get("wetness", 0.0),
         "wetness_after": round(state.wetness, 1),
+        "vagina_warmth": before.get("vagina_warmth", ""),
+        "vagina_open": before.get("vagina_open", ""),
+        "breast": before.get("breast", 0),
+        "breast_fullness": before.get("breast_fullness", 0.0),
         "libido_before": before.get("libido", 0.0),
         "libido_after": round(state.libido, 1),
         "afterglow_want": round(state.afterglow_want, 1),
@@ -3881,7 +3899,7 @@ def _maybe_release(
         return
 
     before = state.libido
-    before_facts = _fact_snapshot(state)
+    before_facts = _fact_snapshot(state, cycle_view(state, moment, profile, settings))
     rounds = _release_rounds(state, profile, moment)
     if profile.gender == "female":
         still_chance = 0.22 + max(0.0, before - 45.0) / 55.0 * 0.5
@@ -5129,7 +5147,7 @@ def apply_action(
         raise ValueError("现在没有在哺乳")
 
     before = _meter_snapshot(state)
-    facts_before = _fact_snapshot(state)
+    facts_before = _fact_snapshot(state, cycle_view(state, now, profile, settings))
     action_facts: dict[str, Any] = {}
     now_ts = now.timestamp()
     const = constitution(profile.persona_id)

@@ -213,6 +213,7 @@ class BodyNeedsPlugin(Star):
         self._libido_scores: dict[str, dict[str, Any]] = {}
         self._libido_pending: set[str] = set()
         self._libido_cooldown: dict[str, tuple[str, float]] = {}
+        self._diary_pending: set[tuple[str, str]] = set()
         self._busy_until_seen: dict[str, float] = {}
         self._tick_task: asyncio.Task[None] | None = None
 
@@ -685,6 +686,97 @@ class BodyNeedsPlugin(Star):
         path.unlink(missing_ok=True)
         return True
 
+    def _diary_file(self) -> Path:
+        """Return the body diary cache path."""
+        return Path(self.data_dir) / "diary.json"
+
+    def _load_diaries(self) -> dict[str, Any]:
+        """Read the body diary cache, tolerating a missing or broken file."""
+        try:
+            data = json.loads(self._diary_file().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save_diary(self, persona_id: str, day: str, text: str) -> None:
+        """Store one day's diary and keep the newest 30 days."""
+        data = self._load_diaries()
+        bucket = data.get(persona_id)
+        if not isinstance(bucket, dict):
+            bucket = {}
+        bucket[day] = text
+        for old in sorted(bucket)[:-30]:
+            bucket.pop(old, None)
+        data[persona_id] = bucket
+        try:
+            self._diary_file().write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            logger.warning("[body] 身体日记写入失败：%s", exc)
+
+    def _maybe_daily_diary(
+        self, state: BodyState, profile: Profile, now: datetime
+    ) -> None:
+        """Write one daily diary on the first load after 06:00."""
+        today = now.date().isoformat()
+        if now.hour < 6 or state.last_diary_day == today:
+            return
+        existing = self._load_diaries().get(profile.persona_id, {})
+        if isinstance(existing, dict) and existing.get(today):
+            state.last_diary_day = today
+            return
+        details = recent_event_details(state, now, "auto", 10, True)
+        if details:
+            fallback = "今天身体记得的事：\n" + "\n".join(
+                f"- {text}" for text in details
+            )
+            self._save_diary(profile.persona_id, today, fallback)
+            self._schedule_diary_narration(profile.persona_id, today, details)
+        state.last_diary_day = today
+
+    def _schedule_diary_narration(
+        self, persona_id: str, day: str, details: list[str]
+    ) -> None:
+        """Ask the chat model to narrate the day once, in the background."""
+        key = (persona_id, day)
+        if key in self._diary_pending:
+            return
+        if not hasattr(self.context, "get_using_provider_async"):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._diary_pending.add(key)
+        loop.create_task(self._narrate_diary(persona_id, day, details))
+
+    async def _narrate_diary(
+        self, persona_id: str, day: str, details: list[str]
+    ) -> None:
+        """Rewrite one day's diary through the model, facts only."""
+        try:
+            provider = await self.context.get_using_provider_async()
+            if provider is None:
+                return
+            response = await provider.text_chat(
+                prompt="\n".join(f"- {text}" for text in details),
+                system_prompt=_DIARY_SYSTEM,
+                contexts=[],
+            )
+            text = str(getattr(response, "completion_text", "") or "").strip()
+            if not text:
+                chain = getattr(response, "result_chain", None)
+                if chain is not None and hasattr(chain, "get_plain_text"):
+                    text = str(chain.get_plain_text() or "").strip()
+            if text:
+                self._save_diary(persona_id, day, text)
+        except Exception as exc:
+            logger.debug("[body] 身体日记旁白失败：%s", exc)
+        finally:
+            self._diary_pending.discard((persona_id, day))
+
     async def _load_advanced(
         self,
         persona_id: str,
@@ -727,6 +819,7 @@ class BodyNeedsPlugin(Star):
                 interactive=active,
             )
             self._consume_body_request(state, profile, now, umo=umo)
+            self._maybe_daily_diary(state, profile, now)
             if active:
                 state.last_active_at = now.timestamp()
             if was_asleep and not state.sleeping:
@@ -1377,6 +1470,9 @@ class BodyNeedsPlugin(Star):
             state = await self._load_advanced(
                 persona_id, profile, now, umo=event.unified_msg_origin
             )
+            saved = self._load_diaries().get(profile.persona_id, {})
+            if isinstance(saved, dict) and saved.get(now.date().isoformat()):
+                return str(saved[now.date().isoformat()])
             details = recent_event_details(state, now, "auto", 8, True)
             if not details:
                 return "今天身体还没留下什么记录。"
@@ -1395,10 +1491,15 @@ class BodyNeedsPlugin(Star):
                         if chain is not None and hasattr(chain, "get_plain_text"):
                             text = str(chain.get_plain_text() or "").strip()
                     if text:
+                        self._save_diary(
+                            profile.persona_id, now.date().isoformat(), text
+                        )
                         return text
             except Exception as exc:
                 logger.debug("[body] 身体日记旁白失败：%s", exc)
-            return "今天身体记得的事：\n" + fact_text
+            fallback = "今天身体记得的事：\n" + fact_text
+            self._save_diary(profile.persona_id, now.date().isoformat(), fallback)
+            return fallback
         except Exception as exc:
             logger.warning("[body] body_diary 失败：%s", exc)
             return f"写身体日记失败：{exc}"

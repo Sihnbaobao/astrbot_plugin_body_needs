@@ -296,6 +296,36 @@ async def test_private_female_tool_exposes_ejaculated_flag(
 
 
 @pytest.mark.asyncio
+async def test_daily_diary_is_written_once(monkeypatch, tmp_path) -> None:
+    plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
+    await plugin.initialize()
+    profile = plugin._profile_for("test", "test", "她是一个成年女性。")
+    now = datetime(2026, 11, 18, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    state = BodyState(persona_id="test")
+    state.care = [
+        {
+            "t": now.timestamp() - 3600,
+            "kind": "toilet",
+            "facts": {
+                "kind": "toilet",
+                "bladder_before": 80,
+                "bladder_after": 2,
+                "urine_ml": 320,
+                "urine_color": 1,
+                "urethra": 5,
+                "urgency": "急",
+                "posture": "坐",
+            },
+        }
+    ]
+    plugin._maybe_daily_diary(state, profile, now)
+    assert state.last_diary_day == now.date().isoformat()
+    data = json.loads((plugin.data_dir / "diary.json").read_text(encoding="utf-8"))
+    assert "320 毫升" in data["test"][now.date().isoformat()]
+    await plugin.terminate()
+
+
+@pytest.mark.asyncio
 async def test_pending_persona_request_applies_release(monkeypatch, tmp_path) -> None:
     plugin, _ = make_plugin(monkeypatch, tmp_path, "她是一个成年女性。")
     await plugin.initialize()
