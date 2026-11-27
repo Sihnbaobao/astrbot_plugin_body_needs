@@ -721,7 +721,7 @@ class BodyNeedsPlugin(Star):
     ) -> None:
         """Write one daily diary on the first load after 06:00."""
         today = now.date().isoformat()
-        if now.hour < 6 or state.last_diary_day == today:
+        if now.hour < 6:
             return
         existing = self._load_diaries().get(profile.persona_id, {})
         if isinstance(existing, dict) and existing.get(today):
