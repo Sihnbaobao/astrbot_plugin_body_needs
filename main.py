@@ -55,8 +55,8 @@ from .core.store import Store
 PLUGIN_NAME = "astrbot_plugin_body_needs"
 BODY_MARKER = "【身体状态｜"
 _DIARY_SYSTEM = (
-    "你只根据给出的身体事实写一小段身体日记，2-4 句，第三人称或第一人称都可以。"
-    "不得新增动作、人物、对话或未给出的身体变化；直接输出日记正文，不要解释。"
+    "根据给出的身体事实写一小段身体日记，2-4 句，第三人称或第一人称都可以。"
+    "直接输出日记正文，不要解释。"
 )
 
 _LIBIDO_SYSTEM = (
