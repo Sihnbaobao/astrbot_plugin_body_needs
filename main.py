@@ -56,8 +56,7 @@ PLUGIN_NAME = "astrbot_plugin_body_needs"
 BODY_MARKER = "【身体状态｜"
 _DIARY_SYSTEM = (
     "你只根据给出的身体事实写一小段身体日记，2-4 句，第三人称或第一人称都可以。"
-    "不得新增动作、人物、对话或未给出的身体变化；用克制的身体感受和细节，"
-    "不要写成色情展示。直接输出日记正文，不要解释。"
+    "不得新增动作、人物、对话或未给出的身体变化；直接输出日记正文，不要解释。"
 )
 
 _LIBIDO_SYSTEM = (
@@ -1348,8 +1347,8 @@ class BodyNeedsPlugin(Star):
             FunctionTool(
                 name="body_diary",
                 description=(
-                    "把最近一天的身体记录整理成一小段日记。只在私聊使用，"
-                    "没有可用模型时退回事实摘要。"
+                    "把最近一天的身体记录整理成一小段日记。私聊给完整版，"
+                    "群聊只给摘要；没有可用模型时退回事实摘要。"
                 ),
                 parameters={"type": "object", "properties": {}, "required": []},
                 handler=self._tool_diary,
@@ -1463,42 +1462,48 @@ class BodyNeedsPlugin(Star):
 
     async def _tool_diary(self, event: AstrMessageEvent) -> str:
         """Tool handler: write a short body diary from recent facts."""
-        if not event.is_private_chat():
-            return "身体日记只在私聊里写。"
+        private = event.is_private_chat()
         try:
             persona_id, profile, now = await self._identity(event)
             state = await self._load_advanced(
                 persona_id, profile, now, umo=event.unified_msg_origin
             )
-            saved = self._load_diaries().get(profile.persona_id, {})
-            if isinstance(saved, dict) and saved.get(now.date().isoformat()):
-                return str(saved[now.date().isoformat()])
-            details = recent_event_details(state, now, "auto", 8, True)
+            if private:
+                saved = self._load_diaries().get(profile.persona_id, {})
+                if isinstance(saved, dict) and saved.get(now.date().isoformat()):
+                    return str(saved[now.date().isoformat()])
+            details = recent_event_details(state, now, "auto", 8, private)
             if not details:
-                return "今天身体还没留下什么记录。"
+                return "最近还没有可写的身体记录。"
             fact_text = "\n".join(f"- {text}" for text in details)
-            try:
-                provider = await self.context.get_using_provider_async()
-                if provider is not None:
-                    response = await provider.text_chat(
-                        prompt=fact_text,
-                        system_prompt=_DIARY_SYSTEM,
-                        contexts=[],
-                    )
-                    text = str(getattr(response, "completion_text", "") or "").strip()
-                    if not text:
-                        chain = getattr(response, "result_chain", None)
-                        if chain is not None and hasattr(chain, "get_plain_text"):
-                            text = str(chain.get_plain_text() or "").strip()
-                    if text:
-                        self._save_diary(
-                            profile.persona_id, now.date().isoformat(), text
+            if private:
+                try:
+                    provider = await self.context.get_using_provider_async()
+                    if provider is not None:
+                        response = await provider.text_chat(
+                            prompt=fact_text,
+                            system_prompt=_DIARY_SYSTEM,
+                            contexts=[],
                         )
-                        return text
-            except Exception as exc:
-                logger.debug("[body] 身体日记旁白失败：%s", exc)
+                        text = str(
+                            getattr(response, "completion_text", "") or ""
+                        ).strip()
+                        if not text:
+                            chain = getattr(response, "result_chain", None)
+                            if chain is not None and hasattr(chain, "get_plain_text"):
+                                text = str(chain.get_plain_text() or "").strip()
+                        if text:
+                            self._save_diary(
+                                profile.persona_id,
+                                now.date().isoformat(),
+                                text,
+                            )
+                            return text
+                except Exception as exc:
+                    logger.debug("[body] 身体日记旁白失败：%s", exc)
             fallback = "今天身体记得的事：\n" + fact_text
-            self._save_diary(profile.persona_id, now.date().isoformat(), fallback)
+            if private:
+                self._save_diary(profile.persona_id, now.date().isoformat(), fallback)
             return fallback
         except Exception as exc:
             logger.warning("[body] body_diary 失败：%s", exc)
