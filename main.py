@@ -728,12 +728,12 @@ class BodyNeedsPlugin(Star):
             state.last_diary_day = today
             return
         details = recent_event_details(state, now, "auto", 10, True)
-        if details:
-            fallback = "今天身体记得的事：\n" + "\n".join(
-                f"- {text}" for text in details
-            )
-            self._save_diary(profile.persona_id, today, fallback)
-            self._schedule_diary_narration(profile.persona_id, today, details)
+        if not details:
+            # Facts may arrive later in the day; try again on the next load.
+            return
+        fallback = "今天身体记得的事：\n" + "\n".join(f"- {text}" for text in details)
+        self._save_diary(profile.persona_id, today, fallback)
+        self._schedule_diary_narration(profile.persona_id, today, details)
         state.last_diary_day = today
 
     def _schedule_diary_narration(
