@@ -1061,6 +1061,316 @@ def _sleep_aftermath(state: BodyState, now: datetime, profile: Profile) -> list[
     return lines[:2]
 
 
+_SCENT_NAMES = {
+    "body": "身上的汗味",
+    "scalp": "发根的油味",
+    "breath": "口气",
+    "foot": "脚上的闷味",
+    "period": "淡淡的铁锈味",
+    "intimate": "事后留下的味道",
+    "underarm": "腋下的汗味",
+    "nipple": "胸口的味道",
+    "vulva": "私处的一点腥味",
+    "anus": "后侧的味道",
+    "milk": "奶味",
+}
+
+
+def _event_number(facts: dict[str, Any], key: str, default: float = 0.0) -> float:
+    """Read one numeric fact without trusting its type."""
+    try:
+        return float(facts.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _scent_words(snapshot: dict[str, Any], limit: int = 2) -> list[str]:
+    """Turn a scent snapshot into the few smells worth mentioning."""
+    rows: list[tuple[float, str]] = []
+    for key, name in _SCENT_NAMES.items():
+        try:
+            value = float(snapshot.get(key, 0.0))
+        except (TypeError, ValueError):
+            continue
+        threshold = 20.0 if key in ("intimate", "vulva", "period") else 32.0
+        if value >= threshold:
+            rows.append((value, name))
+    rows.sort(reverse=True)
+    return [name for _, name in rows[:limit]]
+
+
+def _wetness_word(value: float) -> str:
+    """Return a restrained label for vaginal wetness."""
+    if value < 15.0:
+        return "很干"
+    if value < 35.0:
+        return "有点润"
+    if value < 65.0:
+        return "明显湿了"
+    return "很湿"
+
+
+def _urine_color_word(value: float) -> str:
+    """Return a plain label for urine color."""
+    return {0: "很淡", 1: "淡黄", 2: "偏深", 3: "深黄"}.get(
+        int(max(0, min(3, value))), "淡黄"
+    )
+
+
+def _bristol_word(value: float) -> str:
+    """Return a Bristol-scale description."""
+    return {
+        1: "一颗颗硬球",
+        2: "干硬成块",
+        3: "表面有裂痕",
+        4: "正常成形",
+        5: "软块",
+        6: "糊状",
+        7: "水样",
+    }.get(int(max(1, min(7, value))), "正常成形")
+
+
+def render_event_detail(event: dict[str, Any], private: bool) -> str:
+    """Render one event or care entry from its recorded facts.
+
+    Args:
+        event: Event dict with at least a kind and optionally facts.
+        private: Whether private-only detail may be shown.
+
+    Returns:
+        A short description; group chats get a sanitized summary.
+    """
+    facts = event.get("facts")
+    if not isinstance(facts, dict):
+        facts = {}
+    kind = str(facts.get("kind") or event.get("kind") or "")
+    text = str(event.get("text") or "").strip()
+
+    if not private:
+        if kind in ("self_release", "intimacy"):
+            return ""
+        if kind == "toilet":
+            return "去了趟洗手间。"
+        if kind == "shower":
+            return "洗了个澡。"
+        if kind == "brush":
+            return "刷了牙。"
+        return text
+
+    if kind == "self_release":
+        place = {"bed": "床上", "bathroom": "浴室", "room": "房间里"}.get(
+            str(facts.get("place") or ""), "房间里"
+        )
+        method = {
+            "hand": "用手",
+            "toy": "用了玩具",
+            "shower": "在淋浴里",
+        }.get(str(facts.get("method") or ""), "自己解决")
+        pace = {
+            "slow": "一开始很慢，后来才快起来",
+            "quick": "节奏偏快",
+        }.get(str(facts.get("pace") or ""), "按自己的节奏")
+        rounds = int(_event_number(facts, "rounds", 1.0))
+        before = _event_number(facts, "wetness_before")
+        after = _event_number(facts, "wetness_after")
+        duration = _event_number(facts, "duration_min")
+        afterglow = _event_number(facts, "afterglow_want")
+        bits = [f"她在{place}{method}，{pace}。"]
+        if duration:
+            bits.append(f"前后大概 {round(duration)} 分钟。")
+        if rounds > 1:
+            bits.append("中间停了一下，后来又来了第二次。")
+        bits.append(
+            f"结束后湿润感从{_wetness_word(before)}变成{_wetness_word(after)}，"
+            "小腹还轻轻发紧，呼吸过了一会儿才平。"
+        )
+        if afterglow >= 55.0:
+            bits.append("身上还热着，脑子里那点念头没完全散。")
+        elif afterglow > 0:
+            bits.append("整个人松下来，暂时不太想动。")
+        smells = _scent_words(facts.get("scent") or {}, 2)
+        if smells:
+            bits.append("空气里留着" + "、".join(smells) + "。")
+        appearance = facts.get("appearance") or []
+        if isinstance(appearance, list) and appearance:
+            bits.append(
+                "看起来" + "、".join(str(item) for item in appearance[:3]) + "。"
+            )
+        return "".join(bits)
+
+    if kind == "toilet":
+        bits = []
+        if "bladder_before" in facts:
+            volume = _event_number(facts, "urine_ml")
+            color = _urine_color_word(_event_number(facts, "urine_color", 1.0))
+            urgency = str(facts.get("urgency") or "")
+            stream = "先急后缓" if urgency == "急" else "不快不慢"
+            bits.append(
+                f"小腹的胀感先松下来，尿流出来时{stream}，"
+                f"大概 {round(volume)} 毫升，颜色{color}。"
+            )
+            if _event_number(facts, "urethra") >= 15.0:
+                bits.append("尿道口有一阵轻微的热和刺感。")
+            bits.append(
+                f"她是{str(facts.get('posture') or '坐')}着的，结束后膀胱空下来。"
+            )
+        if "bowel_before" in facts:
+            straining = str(facts.get("straining") or "一般")
+            bits.append(
+                "直肠的压力往下走，肛门先绷紧再慢慢松开，"
+                f"排出来的是{_bristol_word(_event_number(facts, 'bristol', 4.0))}。"
+            )
+            if straining == "明显":
+                bits.append("过程有点费劲，腹部用了力。")
+            if _event_number(facts, "anus") >= 20.0:
+                bits.append("擦的时候肛门周围还有点热、有点刺。")
+        return "".join(bits) or text
+
+    if kind == "shower":
+        before = facts.get("scent_before") or {}
+        after = facts.get("scent_after") or {}
+        cleaned = []
+        for key, name in _SCENT_NAMES.items():
+            try:
+                old = float(before.get(key, 0.0))
+                new = float(after.get(key, 0.0))
+            except (TypeError, ValueError):
+                continue
+            if old >= 30.0 and new < old * 0.6:
+                cleaned.append(name)
+        bits = ["热水冲下来，皮肤上的汗和油被冲掉。"]
+        if cleaned:
+            bits.append("洗完之后" + "、".join(cleaned[:3]) + "淡了下去。")
+        if _event_number(facts, "skin_before") >= 50.0:
+            bits.append("擦干之后皮肤摸起来清爽了很多。")
+        return "".join(bits)
+
+    if kind == "brush":
+        saliva = _event_number(facts, "saliva")
+        tongue = _event_number(facts, "tongue")
+        bits = []
+        if saliva >= 65.0:
+            bits.append("刷牙时唾液偏多，泡沫容易溢出来。")
+        elif saliva <= 35.0:
+            bits.append("嘴里有点干，牙膏的泡沫不多。")
+        if tongue >= 30.0:
+            bits.append("舌面刷下来一层薄薄的白苔。")
+        if _event_number(facts, "breath_before") >= 30.0:
+            bits.append("刷完之后口气清爽了，嘴里还留着薄荷味。")
+        return "".join(bits) or text
+
+    if kind == "intimacy":
+        before = _event_number(facts, "wetness_before")
+        after = _event_number(facts, "wetness_after")
+        bits = [
+            f"做完之后湿润感从{_wetness_word(before)}变成{_wetness_word(after)}，"
+            "身上还留着一点热。"
+        ]
+        smells = _scent_words(facts.get("scent") or {}, 2)
+        if smells:
+            bits.append("空气里混着" + "、".join(smells) + "。")
+        return "".join(bits)
+
+    return text
+
+
+def recent_event_details(
+    state: BodyState,
+    now: datetime,
+    kind: str = "auto",
+    limit: int = 3,
+    private: bool = True,
+) -> list[str]:
+    """Return rendered details for recent events and care entries.
+
+    Args:
+        state: Current body state.
+        now: Current local time.
+        kind: One fact kind, or "auto" for any.
+        limit: Maximum number of descriptions.
+        private: Whether private detail may be shown.
+
+    Returns:
+        Newest-first descriptions, without empty entries.
+    """
+    cutoff = now.timestamp() - 24 * 3600
+    rows: list[tuple[float, dict[str, Any]]] = []
+    for item in state.events:
+        facts = item.get("facts")
+        if not isinstance(facts, dict):
+            continue
+        fact_kind = str(facts.get("kind") or "")
+        if kind != "auto" and fact_kind != kind:
+            continue
+        try:
+            stamp = datetime.fromisoformat(str(item.get("at"))).timestamp()
+        except (TypeError, ValueError):
+            continue
+        if stamp >= cutoff:
+            rows.append((stamp, item))
+    for item in state.care:
+        facts = item.get("facts")
+        if not isinstance(facts, dict):
+            continue
+        fact_kind = str(facts.get("kind") or "")
+        if kind != "auto" and fact_kind != kind:
+            continue
+        try:
+            stamp = float(item.get("t"))
+        except (TypeError, ValueError):
+            continue
+        if stamp >= cutoff:
+            rows.append((stamp, item))
+    rows.sort(key=lambda row: row[0], reverse=True)
+    result: list[str] = []
+    seen: set[tuple[int, str]] = set()
+    for stamp, item in rows:
+        key = (int(stamp), str(item.get("kind") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        text = render_event_detail(item, private)
+        if text:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _recent_detail_line(state: BodyState, now: datetime) -> str:
+    """Return one compact detailed memory from the last two hours."""
+    for item in state.events[-6:]:
+        facts = item.get("facts")
+        if not isinstance(facts, dict) or facts.get("kind") in (
+            "self_release",
+            "intimacy",
+        ):
+            continue
+        try:
+            stamp = datetime.fromisoformat(str(item.get("at"))).timestamp()
+        except (TypeError, ValueError):
+            continue
+        if now.timestamp() - stamp > 2 * 3600 or stamp > now.timestamp():
+            continue
+        text = render_event_detail(item, True)
+        if text:
+            return "身体记忆：" + text[:180]
+    for item in state.care[-6:]:
+        facts = item.get("facts")
+        if not isinstance(facts, dict):
+            continue
+        try:
+            stamp = float(item.get("t"))
+        except (TypeError, ValueError):
+            continue
+        if now.timestamp() - stamp > 2 * 3600 or stamp > now.timestamp():
+            continue
+        text = render_event_detail(item, True)
+        if text:
+            return "身体记忆：" + text[:180]
+    return ""
+
+
 def _interoception_lines(state: BodyState, now: datetime, private: bool) -> list[str]:
     """Return lived hunger, thirst and bladder sensations for a private chat.
 
@@ -1932,6 +2242,9 @@ def build_prompt_block(
             lines.append("打嗝：还没停，说话偶尔会断一下。")
         if state.cramp_until > now.timestamp():
             lines.append("腿：小腿还有点抽着，走路会留意。")
+        detail = _recent_detail_line(state, now)
+        if detail:
+            lines.append(detail)
 
     sleep = sleep_view(state, now, profile, settings) if settings.enable_sleep else None
     if sleep is not None and sleep.asleep:

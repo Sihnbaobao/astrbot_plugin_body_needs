@@ -1824,6 +1824,40 @@ def test_libido_ceiling_forces_an_outlet(monkeypatch) -> None:
     assert state.release_count == 1
 
 
+def test_toilet_action_records_organ_facts() -> None:
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.bowel = 72.0
+    state.urine = 82.0
+    state.urine_color = 2
+    result = apply_action(state, "toilet", now, make_profile(), Settings())
+    assert result.facts is not None
+    assert result.facts["kind"] == "toilet"
+    assert result.facts["urine_ml"] > 0
+    assert result.facts["bristol"] >= 1
+    assert result.facts["bladder_after"] <= 2.0
+
+
+def test_self_release_event_records_facts(monkeypatch) -> None:
+    import core.model as model
+
+    monkeypatch.setattr(model, "_roll", lambda *args, **kwargs: 0.0)
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    state = make_state(now)
+    state.libido = 90.0
+    state.wetness = 60.0
+    state.location = "home"
+    const = model.constitution("pity")
+    model._maybe_release(state, now, make_profile(), Settings(), const, 0.25, 0.0)
+    events = [item for item in state.events if item["kind"] == "self_release"]
+    assert events
+    facts = events[-1]["facts"]
+    assert facts["kind"] == "self_release"
+    assert facts["wetness_before"] == 60.0
+    assert facts["method"] in ("hand", "toy")
+    assert facts["rounds"] >= 1
+
+
 def test_release_can_leave_a_second_wind(monkeypatch) -> None:
     import core.model as model
 

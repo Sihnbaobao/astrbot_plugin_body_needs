@@ -363,6 +363,55 @@ def test_private_block_includes_mucus_and_organs() -> None:
     assert "宫颈" not in group
 
 
+def test_event_detail_renders_facts_and_hides_private_in_group() -> None:
+    from core.prompt import recent_event_details, render_event_detail
+
+    now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
+    release = {
+        "at": now.isoformat(),
+        "kind": "self_release",
+        "text": "自慰了一次",
+        "facts": {
+            "kind": "self_release",
+            "place": "bed",
+            "method": "hand",
+            "pace": "slow",
+            "rounds": 1,
+            "duration_min": 8,
+            "wetness_before": 62,
+            "wetness_after": 34,
+            "afterglow_want": 70,
+            "scent": {"intimate": 40, "body": 35},
+            "appearance": ["脸颊发热"],
+        },
+    }
+    detail = render_event_detail(release, True)
+    assert "湿润感" in detail
+    assert "8 分钟" in detail
+    assert render_event_detail(release, False) == ""
+
+    toilet = {
+        "t": now.timestamp(),
+        "kind": "toilet",
+        "facts": {
+            "kind": "toilet",
+            "bladder_before": 80,
+            "urine_ml": 320,
+            "urine_color": 2,
+            "urethra": 20,
+            "urgency": "急",
+            "posture": "坐",
+        },
+    }
+    assert "320 毫升" in render_event_detail(toilet, True)
+    assert render_event_detail(toilet, False) == "去了趟洗手间。"
+
+    state = make_state(now)
+    state.care = [toilet]
+    details = recent_event_details(state, now, "toilet", 1, True)
+    assert details and "320 毫升" in details[0]
+
+
 def test_afterglow_line_only_in_private() -> None:
     now = datetime(2026, 11, 18, 22, 0, tzinfo=TZ)
     state = make_state(now)

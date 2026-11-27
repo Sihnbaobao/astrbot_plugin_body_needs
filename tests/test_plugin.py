@@ -165,6 +165,8 @@ async def test_inject_body_and_tools(monkeypatch, tmp_path) -> None:
     assert {tool.name for tool in req.func_tool.tools} == {
         "body_status",
         "body_action",
+        "body_diary",
+        "body_recall",
         "body_sense",
     }
     # A second pass in the same tool loop replaces rather than duplicates.

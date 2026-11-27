@@ -48,11 +48,18 @@ from .core.prompt import (
     build_sense_text,
     build_status_text,
     build_web_state,
+    recent_event_details,
 )
 from .core.store import Store
 
 PLUGIN_NAME = "astrbot_plugin_body_needs"
 BODY_MARKER = "【身体状态｜"
+_DIARY_SYSTEM = (
+    "你只根据给出的身体事实写一小段身体日记，2-4 句，第三人称或第一人称都可以。"
+    "不得新增动作、人物、对话或未给出的身体变化；用克制的身体感受和细节，"
+    "不要写成色情展示。直接输出日记正文，不要解释。"
+)
+
 _LIBIDO_SYSTEM = (
     "你是一个角色分析器，只输出 JSON。阅读人格设定，判断这个虚构角色的生理欲望基线"
     "（独处时的自慰倾向）。0 = 极低，50 = 普通成年人，100 = 很高。"
@@ -1246,6 +1253,51 @@ class BodyNeedsPlugin(Star):
         )
         tools.add_tool(
             FunctionTool(
+                name="body_diary",
+                description=(
+                    "把最近一天的身体记录整理成一小段日记。只在私聊使用，"
+                    "没有可用模型时退回事实摘要。"
+                ),
+                parameters={"type": "object", "properties": {}, "required": []},
+                handler=self._tool_diary,
+            )
+        )
+        tools.add_tool(
+            FunctionTool(
+                name="body_recall",
+                description=(
+                    "回忆最近的身体事件细节：自慰、如厕、洗澡、刷牙、做爱。"
+                    "私聊给完整描述，群聊只给摘要。"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "kind": {
+                            "type": "string",
+                            "description": "要回忆哪一类",
+                            "enum": [
+                                "auto",
+                                "self_release",
+                                "toilet",
+                                "shower",
+                                "brush",
+                                "intimacy",
+                            ],
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "最多几条，默认 2",
+                            "minimum": 1,
+                            "maximum": 5,
+                        },
+                    },
+                    "required": [],
+                },
+                handler=self._tool_recall,
+            )
+        )
+        tools.add_tool(
+            FunctionTool(
                 name="body_sense",
                 description=(
                     "看看、摸摸或闻闻自己现在的身体。私聊给完整感受，"
@@ -1315,6 +1367,69 @@ class BodyNeedsPlugin(Star):
         except Exception as exc:
             logger.warning("[body] body_status 失败：%s", exc)
             return f"读取身体状态失败：{exc}"
+
+    async def _tool_diary(self, event: AstrMessageEvent) -> str:
+        """Tool handler: write a short body diary from recent facts."""
+        if not event.is_private_chat():
+            return "身体日记只在私聊里写。"
+        try:
+            persona_id, profile, now = await self._identity(event)
+            state = await self._load_advanced(
+                persona_id, profile, now, umo=event.unified_msg_origin
+            )
+            details = recent_event_details(state, now, "auto", 8, True)
+            if not details:
+                return "今天身体还没留下什么记录。"
+            fact_text = "\n".join(f"- {text}" for text in details)
+            try:
+                provider = await self.context.get_using_provider_async()
+                if provider is not None:
+                    response = await provider.text_chat(
+                        prompt=fact_text,
+                        system_prompt=_DIARY_SYSTEM,
+                        contexts=[],
+                    )
+                    text = str(getattr(response, "completion_text", "") or "").strip()
+                    if not text:
+                        chain = getattr(response, "result_chain", None)
+                        if chain is not None and hasattr(chain, "get_plain_text"):
+                            text = str(chain.get_plain_text() or "").strip()
+                    if text:
+                        return text
+            except Exception as exc:
+                logger.debug("[body] 身体日记旁白失败：%s", exc)
+            return "今天身体记得的事：\n" + fact_text
+        except Exception as exc:
+            logger.warning("[body] body_diary 失败：%s", exc)
+            return f"写身体日记失败：{exc}"
+
+    async def _tool_recall(
+        self,
+        event: AstrMessageEvent,
+        kind: str = "auto",
+        limit: int = 2,
+        **_: Any,
+    ) -> str:
+        """Tool handler: recall recent body-event details."""
+        try:
+            persona_id, profile, now = await self._identity(event)
+            state = await self._load_advanced(
+                persona_id, profile, now, umo=event.unified_msg_origin
+            )
+            safe_limit = max(1, min(5, int(limit)))
+            details = recent_event_details(
+                state,
+                now,
+                str(kind or "auto"),
+                safe_limit,
+                event.is_private_chat(),
+            )
+            if not details:
+                return "最近没有这类身体记录。"
+            return "最近的身体记忆：\n" + "\n".join(f"- {text}" for text in details)
+        except Exception as exc:
+            logger.warning("[body] body_recall 失败：%s", exc)
+            return f"回忆身体记录失败：{exc}"
 
     async def _tool_sense(
         self, event: AstrMessageEvent, sense: str = "look", **_: Any

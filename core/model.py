@@ -1021,6 +1021,8 @@ class ActionResult:
     detail: str
     before: dict[str, float]
     after: dict[str, float]
+    facts: dict[str, Any] | None = None
+    facts: dict[str, Any] | None = None
 
 
 ACTION_LABELS = {
@@ -2693,9 +2695,193 @@ def _brush_mouth(state: BodyState, at: float) -> None:
     state.last_brush_at = at
 
 
-def _add_care(state: BodyState, at: datetime, kind: str) -> None:
+def _scent_snapshot(state: BodyState) -> dict[str, float]:
+    """Return the current scent intensities by source."""
+    return {
+        "body": round(state.scent, 1),
+        "scalp": round(state.scalp_scent, 1),
+        "breath": round(state.breath_scent, 1),
+        "foot": round(state.foot_scent, 1),
+        "period": round(state.period_scent, 1),
+        "intimate": round(state.intimate_scent, 1),
+        "underarm": round(state.underarm_scent, 1),
+        "nipple": round(state.nipple_scent, 1),
+        "vulva": round(state.vulva_scent, 1),
+        "anus": round(state.anus_scent, 1),
+        "milk": round(state.milk, 1),
+    }
+
+
+def _appearance_snapshot(state: BodyState) -> list[str]:
+    """Return the visible body details worth remembering after an action."""
+    bits: list[str] = []
+    if state.temperature >= 37.0:
+        bits.append("脸颊发热")
+    elif state.temperature < 36.3:
+        bits.append("脸色有点白")
+    if state.sweat >= 20.0:
+        bits.append("皮肤有点潮")
+    if state.skin_oil >= 55.0:
+        bits.append("额头有点油")
+    if state.eye_strain >= 55.0:
+        bits.append("眼睛有点干")
+    if state.dry_mouth >= 40.0:
+        bits.append("嘴唇发干")
+    if state.scalp_scent >= 45.0:
+        bits.append("头发有点塌")
+    if state.sleep_debt >= 8.0:
+        bits.append("眼皮有点沉")
+    return bits[:4]
+
+
+def _bristol_form(state: BodyState) -> int:
+    """Return a rough Bristol score from fiber and hydration."""
+    score = 4
+    if state.hydration < 45.0:
+        score -= 1
+    if state.fiber < 35.0:
+        score -= 1
+    if state.hydration > 75.0 and state.fiber > 65.0:
+        score += 1
+    return max(1, min(7, score))
+
+
+def _fact_snapshot(state: BodyState) -> dict[str, Any]:
+    """Snapshot the organ facts that action events should remember."""
+    return {
+        "wetness": round(state.wetness, 1),
+        "libido": round(state.libido, 1),
+        "bladder": round(state.bladder, 1),
+        "bowel": round(state.bowel, 1),
+        "rectum": round(state.rectum, 1),
+        "urine_color": state.urine_color,
+        "urethra": round(state.urethra_irritation, 1),
+        "anus": round(state.anus_irritation, 1),
+        "saliva": round(state.saliva, 1),
+        "tongue": round(state.tongue_coat, 1),
+        "breath": round(state.breath_scent, 1),
+        "oral": round(state.oral, 1),
+        "skin": round(state.skin, 1),
+        "temperature": round(state.temperature, 1),
+        "sweat": round(state.sweat, 1),
+        "scent": _scent_snapshot(state),
+        "appearance": _appearance_snapshot(state),
+    }
+
+
+def _release_scene(
+    state: BodyState, profile: Profile, stamp: float
+) -> tuple[str, str, str]:
+    """Pick a stable place, method and pace for one release."""
+    place = "bed" if state.bed_since else "room"
+    if state.care_kind == "shower":
+        place = "bathroom"
+    method = (
+        "shower"
+        if state.care_kind == "shower"
+        else (
+            "toy"
+            if _roll(profile.persona_id, f"scene:{int(stamp)}", "toy") < 0.35
+            else "hand"
+        )
+    )
+    pace = (
+        "slow"
+        if _roll(profile.persona_id, f"scene:{int(stamp)}", "pace") < 0.5
+        else "quick"
+    )
+    return place, method, pace
+
+
+def _release_facts(
+    state: BodyState,
+    profile: Profile,
+    stamp: float,
+    before: dict[str, Any],
+    rounds: int,
+    duration: float,
+) -> dict[str, Any]:
+    """Build the event facts for one self-release."""
+    place, method, pace = _release_scene(state, profile, stamp)
+    return {
+        "kind": "self_release",
+        "place": place,
+        "method": method,
+        "pace": pace,
+        "rounds": rounds,
+        "duration_min": round(duration / 60.0, 1),
+        "wetness_before": before.get("wetness", 0.0),
+        "wetness_after": round(state.wetness, 1),
+        "libido_before": before.get("libido", 0.0),
+        "libido_after": round(state.libido, 1),
+        "afterglow_want": round(state.afterglow_want, 1),
+        "scent": _scent_snapshot(state),
+        "appearance": _appearance_snapshot(state),
+    }
+
+
+def _brush_facts(state: BodyState, before: dict[str, Any]) -> dict[str, Any]:
+    """Build the event facts for one brushing."""
+    return {
+        "kind": "brush",
+        "oral_before": before.get("oral", 0.0),
+        "oral_after": round(state.oral, 1),
+        "saliva": round(state.saliva, 1),
+        "tongue": round(state.tongue_coat, 1),
+        "breath_before": before.get("breath", 0.0),
+        "breath_after": round(state.breath_scent, 1),
+    }
+
+
+def _toilet_facts(
+    state: BodyState, before: dict[str, Any], kind: str
+) -> dict[str, Any]:
+    """Build the event facts for one toilet visit."""
+    facts: dict[str, Any] = {
+        "kind": "toilet",
+        "place": "home" if state.location == "home" else "out",
+        "posture": "坐" if state.location == "home" else "蹲",
+    }
+    if kind in ("urine", "both"):
+        facts.update(
+            {
+                "bladder_before": before.get("bladder", 0.0),
+                "bladder_after": round(state.urine, 1),
+                "urine_ml": round(
+                    max(0.0, float(before.get("bladder", 0.0)) - state.urine) * 4.0
+                ),
+                "urine_color": state.urine_color,
+                "urethra": round(state.urethra_irritation, 1),
+                "urgency": "急" if float(before.get("bladder", 0.0)) >= 75 else "一般",
+            }
+        )
+    if kind in ("bowel", "both"):
+        facts.update(
+            {
+                "bowel_before": before.get("bowel", 0.0),
+                "bowel_after": round(state.bowel, 1),
+                "rectum_before": before.get("rectum", 0.0),
+                "bristol": _bristol_form(state),
+                "straining": (
+                    "明显" if state.fiber < 35.0 and state.hydration < 55.0 else "一般"
+                ),
+                "anus": round(state.anus_irritation, 1),
+            }
+        )
+    return facts
+
+
+def _add_care(
+    state: BodyState,
+    at: datetime,
+    kind: str,
+    facts: dict[str, Any] | None = None,
+) -> None:
     """Append one self-care action for the page timeline."""
-    state.care.append({"t": at.timestamp(), "kind": kind})
+    item: dict[str, Any] = {"t": at.timestamp(), "kind": kind}
+    if facts:
+        item["facts"] = facts
+    state.care.append(item)
     if len(state.care) > 120:
         state.care = state.care[-120:]
 
@@ -2706,11 +2892,15 @@ def _add_event(
     kind: str,
     text: str,
     key: str = "",
+    facts: dict[str, Any] | None = None,
 ) -> None:
     """Append a notable event once per key and remember the key."""
     if key and state.flags.get(key):
         return
-    state.events.append({"at": at.isoformat(), "kind": kind, "text": text})
+    item: dict[str, Any] = {"at": at.isoformat(), "kind": kind, "text": text}
+    if facts:
+        item["facts"] = facts
+    state.events.append(item)
     if key:
         state.flags[key] = at.timestamp()
 
@@ -2957,13 +3147,25 @@ def _routine(
     if state.bed_since:
         # In bed: she may still get up if it is urgent, but nothing else.
         if state.urine >= 90.0:
+            before = _fact_snapshot(state)
             state.urine = 2.0
             state.last_toilet_at = moment.timestamp()
-            _add_care(state, moment, "toilet")
+            _add_care(
+                state,
+                moment,
+                "toilet",
+                facts=_toilet_facts(state, before, "urine"),
+            )
         if state.bowel >= 85.0:
+            before = _fact_snapshot(state)
             _clear_bowel(state, moment.timestamp())
             state.last_toilet_at = moment.timestamp()
-            _add_care(state, moment, "toilet")
+            _add_care(
+                state,
+                moment,
+                "toilet",
+                facts=_toilet_facts(state, before, "bowel"),
+            )
             _add_event(
                 state,
                 moment,
@@ -3196,15 +3398,17 @@ def _routine(
         and due(pick(wake_minutes + 10, 20, "toilet-wake"), 120)
         and state.urine >= 8.0
     ):
+        before = _fact_snapshot(state)
         state.urine = 2.0
         state.last_toilet_at = moment.timestamp()
         state.flags[toilet_key] = moment.timestamp()
-        _add_care(state, moment, "toilet")
+        _add_care(state, moment, "toilet", facts=_toilet_facts(state, before, "urine"))
         _maybe_toilet_release(state, moment, profile, settings, "urine")
     elif state.urine >= 45.0 and (not defer_care or state.urine >= 88.0):
+        before = _fact_snapshot(state)
         state.urine = 2.0
         state.last_toilet_at = moment.timestamp()
-        _add_care(state, moment, "toilet")
+        _add_care(state, moment, "toilet", facts=_toilet_facts(state, before, "urine"))
         _maybe_toilet_release(state, moment, profile, settings, "urine")
 
     if settings.enable_hygiene:
@@ -3218,18 +3422,20 @@ def _routine(
             and due(brush_am, 150)
             and moment.timestamp() - state.last_brush_at > 2 * 3600
         ):
+            before = _fact_snapshot(state)
             _brush_mouth(state, moment.timestamp())
             state.flags[brush_key] = moment.timestamp()
-            _add_care(state, moment, "brush")
+            _add_care(state, moment, "brush", facts=_brush_facts(state, before))
         bed_brush_key = f"self-brush-bed:{day}"
         if (
             not state.flags.get(bed_brush_key)
             and 0 < minutes_to_bed <= 40
             and moment.timestamp() - state.last_brush_at > 2 * 3600
         ):
+            before = _fact_snapshot(state)
             _brush_mouth(state, moment.timestamp())
             state.flags[bed_brush_key] = moment.timestamp()
-            _add_care(state, moment, "brush")
+            _add_care(state, moment, "brush", facts=_brush_facts(state, before))
         shower_target = (
             pick(wake_minutes + 40, 60, "shower-am")
             if morning_person
@@ -3250,6 +3456,7 @@ def _routine(
             and state.skin >= 15.0
             and not state.flags.get(f"self-shower:{day}")
         ):
+            before = _fact_snapshot(state)
             state.skin = 2.0
             state.scent = max(0.0, state.scent - 45.0)
             state.foot_scent = max(0.0, state.foot_scent - 60.0)
@@ -3262,8 +3469,22 @@ def _routine(
             state.vulva_scent = max(0.0, state.vulva_scent - 60.0)
             state.anus_scent = max(0.0, state.anus_scent - 65.0)
             state.last_shower_at = moment.timestamp()
-            _add_care(state, moment, "shower")
-            _add_event(state, moment, "self_care", "洗了个澡", key=f"self-shower:{day}")
+            shower_facts = {
+                "kind": "shower",
+                "scent_before": before["scent"],
+                "scent_after": _scent_snapshot(state),
+                "skin_before": before["skin"],
+                "skin_after": round(state.skin, 1),
+            }
+            _add_care(state, moment, "shower", facts=shower_facts)
+            _add_event(
+                state,
+                moment,
+                "self_care",
+                "洗了个澡",
+                key=f"self-shower:{day}",
+                facts=shower_facts,
+            )
             # A real shower takes a while; whether the phone is in there or not,
             # she is not going to type under the water.
             shower_minutes = (
@@ -3343,9 +3564,10 @@ def _routine(
         and state.bowel >= 50.0
     )
     if morning_urge or meal_reflex or state.bowel >= 65.0:
+        before = _fact_snapshot(state)
         _clear_bowel(state, moment.timestamp())
         state.last_toilet_at = moment.timestamp()
-        _add_care(state, moment, "toilet")
+        _add_care(state, moment, "toilet", facts=_toilet_facts(state, before, "bowel"))
         _add_event(
             state,
             moment,
@@ -3659,6 +3881,7 @@ def _maybe_release(
         return
 
     before = state.libido
+    before_facts = _fact_snapshot(state)
     rounds = _release_rounds(state, profile, moment)
     if profile.gender == "female":
         still_chance = 0.22 + max(0.0, before - 45.0) / 55.0 * 0.5
@@ -3716,6 +3939,7 @@ def _maybe_release(
         "self_release",
         "自慰了两次，身体松下来" if rounds > 1 else "自慰了一次，身体松下来",
         key=f"self-release:{int(stamp)}",
+        facts=_release_facts(state, profile, stamp, before_facts, rounds, duration),
     )
 
 
@@ -4905,6 +5129,8 @@ def apply_action(
         raise ValueError("现在没有在哺乳")
 
     before = _meter_snapshot(state)
+    facts_before = _fact_snapshot(state)
+    action_facts: dict[str, Any] = {}
     now_ts = now.timestamp()
     const = constitution(profile.persona_id)
     if action == "eat":
@@ -4959,11 +5185,27 @@ def apply_action(
         state.urethra_irritation = max(0.0, state.urethra_irritation - 20.0)
         state.sleep_debt = _clamp(state.sleep_debt - 0.3, 0.0, 24.0)
         state.last_shower_at = now_ts
-        _add_care(state, now, "shower")
+        action_facts = {
+            "kind": "shower",
+            "scent_before": facts_before["scent"],
+            "scent_after": _scent_snapshot(state),
+            "skin_before": facts_before["skin"],
+            "skin_after": round(state.skin, 1),
+        }
+        _add_care(state, now, "shower", facts=action_facts)
     elif action == "brush":
         _brush_mouth(state, now_ts)
         state.breath_scent = 2.0
-        _add_care(state, now, "brush")
+        action_facts = {
+            "kind": "brush",
+            "oral_before": facts_before["oral"],
+            "oral_after": round(state.oral, 1),
+            "saliva": round(state.saliva, 1),
+            "tongue": round(state.tongue_coat, 1),
+            "breath_before": facts_before["breath"],
+            "breath_after": round(state.breath_scent, 1),
+        }
+        _add_care(state, now, "brush", facts=action_facts)
     elif action == "toilet":
         if state.bowel >= 20.0:
             _clear_bowel(state, now_ts)
@@ -4972,7 +5214,12 @@ def apply_action(
             state.urethra_irritation + 5.0 + max(0.0, state.urine_color - 1) * 6.0
         )
         state.last_toilet_at = now_ts
-        _add_care(state, now, "toilet")
+        action_facts = _toilet_facts(
+            state,
+            facts_before,
+            "both" if facts_before["bowel"] >= 20.0 else "urine",
+        )
+        _add_care(state, now, "toilet", facts=action_facts)
     elif action == "nap":
         state.sleep_debt = _clamp(state.sleep_debt - 2.5, 0.0, 24.0)
         state.last_nap_at = now_ts
@@ -4984,6 +5231,16 @@ def apply_action(
         state.intimacy_count += 1
         state.last_intimacy_at = now_ts
         state.wetness = max(0.0, state.wetness - 25.0)
+        action_facts = {
+            "kind": "intimacy",
+            "wetness_before": facts_before["wetness"],
+            "wetness_after": round(state.wetness, 1),
+            "libido_before": facts_before["libido"],
+            "libido_after": round(state.libido, 1),
+            "scent": _scent_snapshot(state),
+            "appearance": _appearance_snapshot(state),
+            "ejaculated": bool(ejaculated),
+        }
         if ejaculated:
             state.insemination_count += 1
             state.last_insemination_at = now_ts
@@ -4993,6 +5250,7 @@ def apply_action(
             "intimacy",
             "做爱了一次" + ("，受精了" if ejaculated else ""),
             key=f"intimacy:{int(now_ts)}",
+            facts=action_facts,
         )
         can_conceive = (
             ejaculated
@@ -5047,6 +5305,7 @@ def apply_action(
         state.afterglow_until = now_ts + duration + 10 * 60
         state.afterglow_want = 60.0 if libido_before >= 65 else 30.0
         state.release_kind = "self"
+        action_facts = _release_facts(state, profile, now_ts, facts_before, 1, duration)
         state.next_self_at = max(state.next_self_at, state.afterglow_until + 10 * 60)
         _add_event(
             state,
@@ -5054,6 +5313,7 @@ def apply_action(
             "self_release",
             "自慰了一次，身体松下来",
             key=f"self-release-action:{int(now_ts)}",
+            facts=action_facts,
         )
         if profile.gender == "male":
             state.refractory_until = (
@@ -5108,4 +5368,5 @@ def apply_action(
         detail=detail,
         before=before,
         after=after,
+        facts=action_facts or None,
     )
