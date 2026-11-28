@@ -1531,8 +1531,10 @@ def test_private_and_group_full_mention_cycle_mood_but_basic_does_not() -> None:
         state, now, profile, Settings(group_detail="basic"), False
     )
     assert "经前" in private
-    assert "经前" in full
+    assert "经前" not in full
+    assert "耐心" in full
     assert "经前" not in basic
+    assert "耐心" not in basic
 
 
 def test_period_libido_is_lower_than_ovulation() -> None:

@@ -158,9 +158,10 @@ def test_group_full_shows_cycle_but_not_intimate() -> None:
     block = build_prompt_block(
         make_state(now), now, make_profile(), settings, private=False
     )
-    assert "经期：第 2 天" in block
+    assert "经期" not in block
+    assert "身体：这两天有点不舒服" in block
     assert "性欲" not in block
-    assert "可以提非性相关" in block
+    assert "只是背景" in block
     assert "不必提经期" not in block
 
 
@@ -173,7 +174,7 @@ def test_group_full_keeps_sleep_debt_and_mood() -> None:
         state, now, make_profile(), Settings(group_detail="full"), private=False
     )
     assert "睡眠债" in block
-    assert "经前" in block
+    assert "经前" not in block
     assert "耐心" in block
 
 

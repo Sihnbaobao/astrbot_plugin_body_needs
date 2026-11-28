@@ -940,7 +940,9 @@ def _symptom_text(view: CycleView) -> str:
     return "、".join(bits)
 
 
-def _cycle_text(view: CycleView, include_mucus: bool = True) -> str:
+def _cycle_text(
+    view: CycleView, include_mucus: bool = True, private: bool = True
+) -> str:
     """Build the one-line cycle description used in prompts and cards.
 
     Args:
@@ -949,6 +951,18 @@ def _cycle_text(view: CycleView, include_mucus: bool = True) -> str:
             prompts pass False because they get the detailed mucus line
             separately.
     """
+    if not private:
+        # Group chats get a lived-in sentence, not a clinical chart: no cycle
+        # day, no flow colour and no "经期" vocabulary to quote back.
+        if view.phase == "menstrual":
+            return "身体：这两天有点不舒服。"
+        if view.phase == "luteal":
+            return "身体：这几天容易累。"
+        if view.phase == "ovulation":
+            return "身体：这两天精神好一点。"
+        if view.phase == "pregnant":
+            return "身体：最近容易累，胃口有点变化。"
+        return ""
     if view.phase == "premenarche":
         return f"青春期：{view.note}"
     if view.phase == "menopause":
@@ -1584,7 +1598,7 @@ def _lactation_text(state: BodyState) -> str:
     return "哺乳：还好"
 
 
-def _cycle_mood_text(view: CycleView) -> str:
+def _cycle_mood_text(view: CycleView, private: bool = True) -> str:
     """Return a short private line about cycle-driven mood.
 
     Args:
@@ -1593,6 +1607,14 @@ def _cycle_mood_text(view: CycleView) -> str:
     Returns:
         A Chinese sentence, or an empty string outside the notable phases.
     """
+    if not private:
+        if view.phase == "menstrual":
+            return "情绪：不太想被打扰，耐心也薄一点。"
+        if view.phase == "luteal" and 0 < view.days_to_next <= 5:
+            return "情绪：耐心比平时薄，容易一点小事就烦。"
+        if view.phase == "ovulation":
+            return "情绪：心情好一些。"
+        return ""
     if view.phase == "luteal" and 0 < view.days_to_next <= 5:
         return "情绪：经前这几天耐心比平时薄，容易烦躁，也容易一点小事就委屈。"
     if view.phase == "menstrual":
@@ -2171,11 +2193,12 @@ def build_prompt_block(
         lines.append(
             _cycle_text(
                 view,
+                private=show_private,
             )
         )
         if state.hot_flash_until > now.timestamp():
             lines.append("身体：突然一阵潮热，后背有点汗。")
-        mood_line = _cycle_mood_text(view)
+        mood_line = _cycle_mood_text(view, private=show_private)
         if mood_line:
             lines.append(mood_line)
         if show_private:
@@ -2328,7 +2351,10 @@ def build_prompt_block(
         )
     if not private:
         if full_group:
-            rules += "群聊里可以提非性相关的身体状态，但不要提亲密细节。"
+            rules += (
+                "群聊里的身体状态只是背景，不是台词：不要主动报周期第几天、"
+                "指标或器官名，也不要提亲密细节；对方明确问起时，用日常说法。"
+            )
         else:
             rules += "群聊里不必提经期或身体私密细节。"
     if rules:

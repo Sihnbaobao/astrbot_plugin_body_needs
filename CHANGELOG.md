@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 0.59.1
+
+- 群聊 full 的周期行改成日常说法，不再给“经期第 2 天 / 经前 / 黄体期”这类临床词和天数；群聊规则也明确身体背景不是台词，不要主动报周期天数、指标或器官名。
+- 私聊保留精确周期信息。
+
 ## 0.59.0
 
 - `sleep.json` 和 `sleep_snapshot()` 新增 `release_until` / `release_kind`，并把洗澡、自慰和外部忙碌合并成统一的 `unavailable_until` / `unavailable_kind`。
