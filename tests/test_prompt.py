@@ -161,7 +161,7 @@ def test_group_full_shows_cycle_but_not_intimate() -> None:
     assert "经期" not in block
     assert "身体：这两天有点不舒服" in block
     assert "性欲" not in block
-    assert "只是背景" in block
+    assert "可以提非性相关" in block
     assert "不必提经期" not in block
 
 

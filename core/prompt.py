@@ -2351,10 +2351,7 @@ def build_prompt_block(
         )
     if not private:
         if full_group:
-            rules += (
-                "群聊里的身体状态只是背景，不是台词：不要主动报周期第几天、"
-                "指标或器官名，也不要提亲密细节；对方明确问起时，用日常说法。"
-            )
+            rules += "群聊里可以提非性相关的身体状态，但不要提亲密细节。"
         else:
             rules += "群聊里不必提经期或身体私密细节。"
     if rules:
