@@ -540,6 +540,8 @@ def test_sleep_snapshot_and_contract(monkeypatch, tmp_path) -> None:
     state.sleep_since = now.timestamp() - 1200
     state.sleep_wake_at = now.timestamp() + 2400
     state.sleep_kind = "night"
+    state.care_until = now.timestamp() + 600
+    state.care_kind = "shower"
     state.updated_at = now.timestamp()
     plugin.store.save(state)
 
@@ -547,12 +549,16 @@ def test_sleep_snapshot_and_contract(monkeypatch, tmp_path) -> None:
     assert snapshot["enabled"] is True
     assert snapshot["asleep"] is True
     assert snapshot["wake_at"] > now.timestamp()
+    assert snapshot["unavailable_until"] >= now.timestamp() + 599
+    assert snapshot["unavailable_kind"] == "shower"
 
     contract = tmp_path / "astrbot_plugin_body_needs" / "sleep.json"
     payload = json.loads(contract.read_text(encoding="utf-8"))
     entry = payload["personas"]["test"]
     assert entry["asleep"] is True
     assert entry["gate"] is True
+    assert entry["unavailable_until"] >= now.timestamp() + 599
+    assert entry["unavailable_kind"] == "shower"
     assert payload["current"] == "test"
 
 

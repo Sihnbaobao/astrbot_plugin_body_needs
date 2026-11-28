@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 0.59.0
+
+- `sleep.json` 和 `sleep_snapshot()` 新增 `release_until` / `release_kind`，并把洗澡、自慰和外部忙碌合并成统一的 `unavailable_until` / `unavailable_kind`。
+- 刷B站、QQ空间在不可用窗口内跳过；音乐可以继续听，但窗口内不往聊天里推送。
+
 ## 0.58.5
 
 - 删除日记旁白最后一条“不得新增动作、人物、对话或未给出的身体变化”的约束；现在只说明“根据给出的身体事实写一小段日记”。

@@ -1175,6 +1175,10 @@ class BodyNeedsPlugin(Star):
             "debt": 0.0,
             "busy_until": 0.0,
             "busy_kind": "",
+            "release_until": 0.0,
+            "release_kind": "",
+            "unavailable_until": 0.0,
+            "unavailable_kind": "",
         }
         try:
             self._refresh()
@@ -1199,6 +1203,22 @@ class BodyNeedsPlugin(Star):
             self.store.save(state)
             view = sleep_view(state, now, profile, self.settings)
             publish_sleep(self.data_dir, state, profile, self.settings, now)
+            care_until = state.care_until if state.care_kind else 0.0
+            release_until = state.release_until if state.release_kind else 0.0
+            unavailable_until = max(care_until, release_until, state.busy_until)
+            if unavailable_until <= now.timestamp():
+                unavailable_until = 0.0
+                unavailable_kind = ""
+            elif care_until >= max(release_until, state.busy_until):
+                unavailable_kind = state.care_kind or "care"
+            elif release_until >= state.busy_until:
+                unavailable_kind = (
+                    "self"
+                    if state.release_kind in ("self", "bed", "toilet")
+                    else (state.release_kind or "self")
+                )
+            else:
+                unavailable_kind = state.busy_kind or "busy"
             return {
                 "asleep": view.asleep,
                 "in_bed": view.in_bed,
@@ -1215,6 +1235,10 @@ class BodyNeedsPlugin(Star):
                 "debt": round(state.sleep_debt, 2),
                 "busy_until": state.busy_until,
                 "busy_kind": state.busy_kind,
+                "release_until": state.release_until,
+                "release_kind": state.release_kind,
+                "unavailable_until": unavailable_until,
+                "unavailable_kind": unavailable_kind,
             }
         except Exception as exc:
             logger.debug("[body] 读取睡眠状态失败：%s", exc)

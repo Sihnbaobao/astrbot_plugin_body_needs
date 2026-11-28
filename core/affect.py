@@ -257,6 +257,23 @@ def publish_sleep(
         pass
 
     view = sleep_view(state, now, profile, settings)
+    now_ts = now.timestamp()
+    care_until = state.care_until if state.care_kind else 0.0
+    release_until = state.release_until if state.release_kind else 0.0
+    unavailable_until = max(care_until, release_until, state.busy_until)
+    if unavailable_until <= now_ts:
+        unavailable_until = 0.0
+        unavailable_kind = ""
+    elif care_until >= max(release_until, state.busy_until):
+        unavailable_kind = state.care_kind or "care"
+    elif release_until >= state.busy_until:
+        unavailable_kind = (
+            "self"
+            if state.release_kind in ("self", "bed", "toilet")
+            else (state.release_kind or "self")
+        )
+    else:
+        unavailable_kind = state.busy_kind or "busy"
     snapshot = {
         "persona_id": state.persona_id,
         "name": profile.name,
@@ -272,6 +289,10 @@ def publish_sleep(
         "awake_since": state.last_wake_at,
         "busy_until": state.busy_until,
         "busy_kind": state.busy_kind,
+        "release_until": state.release_until,
+        "release_kind": state.release_kind,
+        "unavailable_until": unavailable_until,
+        "unavailable_kind": unavailable_kind,
         "enabled": bool(settings.enabled and settings.enable_sleep),
         "gate": bool(settings.enable_sleep_gate),
         "line": view.line,

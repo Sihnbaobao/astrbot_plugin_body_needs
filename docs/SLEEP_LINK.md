@@ -24,6 +24,12 @@ snapshot = plugin.sleep_snapshot()
 #   "debt": 8.4,
 #   "busy_until": 1790030000.0,
 #   "busy_kind": "看B站",
+#   "care_until": 0.0,        # 洗澡/护理结束
+#   "care_kind": "",
+#   "release_until": 1790030600.0,
+#   "release_kind": "self",  # self | bed | toilet | shower
+#   "unavailable_until": 1790030600.0,
+#   "unavailable_kind": "self",
 # }
 \x60\x60\x60
 
@@ -49,6 +55,12 @@ snapshot = plugin.sleep_snapshot()
       "awake_since": 1789980000.0,
       "busy_until": 1790030000.0,
       "busy_kind": "看B站",
+      "care_until": 0.0,
+      "care_kind": "",
+      "release_until": 1790030600.0,
+      "release_kind": "self",
+      "unavailable_until": 1790030600.0,
+      "unavailable_kind": "self",
       "enabled": true,
       "gate": true,
       "line": "睡下了（23:10 睡的，大概 07:20 醒）",
@@ -60,6 +72,8 @@ snapshot = plugin.sleep_snapshot()
 \x60\x60\x60
 
 读取规则：\x60enabled == false\x60 或 \x60wake_at\x60 已经过去都按醒着算；\x60in_bed\x60 不算睡着，只有 \x60asleep\x60 才静默。
+
+\x60unavailable_until\x60 / \x60unavailable_kind\x60 是身体给出的“此刻不方便做别的事”窗口：取洗澡（\x60care_until\x60）、自慰（\x60release_until\x60）和外部忙碌（\x60busy_until\x60）里最晚的一个。刷B站、发说说、逛空间看到这个窗口还没过就跳过；听歌可以继续，但不要往聊天里发。
 
 ## 插件写回：活动心跳
 

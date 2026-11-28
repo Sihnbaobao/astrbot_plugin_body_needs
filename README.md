@@ -352,7 +352,7 @@ persona_presence 的情绪资料片会读这份文件：按 `tension` 往“恼/
 
 睡眠也带着她的日常走：起床后刷牙、上厕所、吃早饭，午饭后移，晚饭在睡前 3 小时，洗澡按人格分成“起床后洗”或“睡前洗”。睡着时所有会话都不回复（指令除外）；躺在床上还没睡着时不算，可以迷迷糊糊回一句。睡着、自慰或洗澡期间，body 只把收到的原始消息转给 persona_presence，不判断哪条是在叫她、也不保存上下文；醒来或忙完后通知 persona 一次，由它自己挑候选、带上下文、决定要不要回和回哪条。body 不判断、不生成、不发送。
 
-同一个约定也发布给别的插件：data/plugin_data/astrbot_plugin_body_needs/sleep.json（asleep、in_bed、wake_at、bedtime、nap_at、busy_until），同进程还可以直接调用 sleep_snapshot()。字段和读取规则见 docs/SLEEP_LINK.md。
+同一个约定也发布给别的插件：data/plugin_data/astrbot_plugin_body_needs/sleep.json（asleep、in_bed、wake_at、bedtime、nap_at、busy_until，以及 care/release 合并出的 unavailable_until/unavailable_kind），同进程还可以直接调用 sleep_snapshot()。字段和读取规则见 docs/SLEEP_LINK.md。
 
 ## 身体的小动静和睡眠余韵
 
